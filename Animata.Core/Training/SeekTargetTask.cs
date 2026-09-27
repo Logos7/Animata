@@ -62,12 +62,14 @@ public readonly record struct EpisodeResult(float Cost, float FinalGap, float Co
 
 /// <summary>
 /// „Ciało do treningu”: jak zbudować stwora z danym sterownikiem i jak liczyć wysiłek z jego komend.
+/// <see cref="PrepareWorld"/> dokłada do świata próby to, czego ciało potrzebuje (np. podłogę dla stwora w fizyce).
 /// </summary>
 public sealed record SeekRig(
     string Name,
     Func<Guid, BrainModule, ActiveEntity> CreateCreature,
     Func<IReadOnlyDictionary<string, float>, float> Effort,
-    SeekTargetOptions DefaultOptions);
+    SeekTargetOptions DefaultOptions,
+    Action<World>? PrepareWorld = null);
 
 public static class SeekRigs
 {
@@ -113,9 +115,48 @@ public static class SeekRigs
             ContactWeight = 2
         });
 
-    /// <summary>Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów).</summary>
+    private static readonly ConcurrentDictionary<int, SeekRig> SnakeRigs = new();
+
+    /// <summary>
+    /// Wąż z <paramref name="aSegments"/> segmentami w fizyce: podłoga 60 × 60 m, bez przeszkód, cel 3–6 m, 12 s.
+    /// Wysiłek = średnia wielkość komend stawów.
+    /// </summary>
+    public static SeekRig SnakeWith(int aSegments)
+    {
+        if (!WorldObjectCatalog.IsValidSnakeLength(aSegments))
+            throw new ArgumentOutOfRangeException(nameof(aSegments), aSegments,
+                $"Wąż ma od {WorldObjectCatalog.MinSnakeSegments} do {WorldObjectCatalog.MaxSnakeSegments} segmentów.");
+        return SnakeRigs.GetOrAdd(aSegments, CreateSnakeRig);
+    }
+
+    private static SeekRig CreateSnakeRig(int aSegments) => new(
+        $"wąż ×{aSegments}",
+        (aTargetId, aController) =>
+            WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, aTargetId, aController, aSegments),
+        aCommand =>
+        {
+            if (aCommand.Count == 0)
+                return 0;
+            var total = 0f;
+            foreach (var value in aCommand.Values)
+                total += MathF.Min(MathF.Abs(value), 1);
+            return total / aCommand.Count;
+        },
+        new SeekTargetOptions
+        {
+            EpisodesPerGeneration = 6,
+            EpisodeSeconds = 12,
+            MinDistance = 3,
+            MaxDistance = 6,
+            ValidationEpisodes = 8
+        },
+        aWorld => aWorld.Add(Floor.At(60, 60)));
+
+    /// <summary>Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów, wąż — z tą samą liczbą segmentów).</summary>
     public static SeekRig For(Entity aCreature)
     {
+        if (aCreature is SnakeCreature snake)
+            return SnakeWith(snake.Segments);
         if (aCreature is not CarCreature car)
             return Disk;
         var whiskers = WorldObjectCatalog.WhiskerCountOf(car);
@@ -135,13 +176,18 @@ public static class SeekRigs
 /// </summary>
 public sealed class SeekTargetTask
 {
-    private readonly NeuralNetworkState _template;
+    private readonly ModuleState _template;
+    private readonly string _moduleName;
     private readonly IReadOnlyList<SeekEpisode> _validation;
 
-    /// <param name="aTemplate">Kształt sieci i powiązania portów; wagi szablonu są pomijane.</param>
-    public SeekTargetTask(NeuralNetworkState aTemplate, SeekRig aRig, SeekTargetOptions? aOptions = null)
+    /// <param name="aTemplate">
+    /// Kształt uczonego modułu: stan sieci (warstwy, porty, wyrażenia) albo CPG (liczba stawów); parametry szablonu są pomijane.
+    /// </param>
+    public SeekTargetTask(ModuleState aTemplate, SeekRig aRig, SeekTargetOptions? aOptions = null, string aModuleName = "Neural")
     {
         _template = aTemplate;
+        _moduleName = aModuleName;
+        ParameterCount = TrainableModules.ParameterCount(aTemplate);
         Rig = aRig;
         Options = aOptions ?? aRig.DefaultOptions;
         _validation = CreateValidationEpisodes(Options);
@@ -152,7 +198,7 @@ public sealed class SeekTargetTask
     public SeekRig Rig { get; }
     public SeekTargetOptions Options { get; }
 
-    public int ParameterCount => _template.ParameterCount;
+    public int ParameterCount { get; }
 
     public IReadOnlyList<SeekEpisode> EpisodesFor(int aGeneration) => CreateEpisodes(Options, aGeneration);
 
@@ -229,7 +275,8 @@ public sealed class SeekTargetTask
         if (aEpisodes.Count == 0)
             throw new ArgumentException("At least one episode is required.", nameof(aEpisodes));
 
-        var world = new World();
+        using var world = new World();
+        aRig.PrepareWorld?.Invoke(world);
         var target = WorldObjectCatalog.CreateTargetBall(Vector3.Zero);
         var creature = aRig.CreateCreature(target.Id, aController);
         world.Add(target);
@@ -253,8 +300,7 @@ public sealed class SeekTargetTask
                 world.Add(obstacle);
             }
 
-            creature.Body.Position = Vector3.Zero;
-            creature.Body.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, episode.Yaw);
+            creature.Place(Vector3.Zero, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, episode.Yaw));
             target.Body.Position = new Vector3(episode.TargetOffset, 0);
             brain.Reset();
 
@@ -280,7 +326,7 @@ public sealed class SeekTargetTask
         return results;
     }
 
-    private NeuralNetworkModule CreateModule(float[] aParameters) => NeuralNetworkModule.Create(_template, aParameters);
+    private BrainModule CreateModule(float[] aParameters) => TrainableModules.Create(_template, aParameters, _moduleName);
 
     private static bool Touches(Entity aCreature, List<Obstacle> aObstacles)
     {

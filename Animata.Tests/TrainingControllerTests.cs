@@ -113,7 +113,7 @@ public class TrainingControllerTests : IDisposable
     private static (ActiveEntity Creature, Brain Brain, NeuralNetworkModule Network) NeuralCar()
     {
         var creature = WorldObjectCatalog.CreateNeuralCar(default, 0, null);
-        return (creature, creature.Brain!, TrainingController.FindNetwork(creature)!);
+        return (creature, creature.Brain!, (NeuralNetworkModule)TrainingController.FindTrainable(creature)!);
     }
 
     private static float[] Parameters(BrainSnapshot aSnapshot)

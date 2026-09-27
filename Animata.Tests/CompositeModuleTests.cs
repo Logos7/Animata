@@ -139,11 +139,10 @@ public class CompositeModuleTests
     public void ActuatorDrivenFromTwoLevels_FailsValidation()
     {
         var (_, owner) = Stage();
-        var actuatorId = Guid.NewGuid();
         var graph = owner.Brain!.Graph;
-        graph.Add(new ActuatorModule(actuatorId, ["Turn"]));
+        graph.Add(new ActuatorModule("Drive", ["Turn"]));
         var composite = graph.Add(new CompositeModule());
-        composite.Inner.Add(new ActuatorModule(actuatorId, ["Turn"]));
+        composite.Inner.Add(new ActuatorModule("Drive", ["Turn"]));
 
         Assert.Throws<BrainException>(() => graph.Validate());
     }

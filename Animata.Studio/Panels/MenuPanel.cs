@@ -12,21 +12,21 @@ using Animata.Studio.Theme;
 
 namespace Animata.Studio.Panels;
 
-/// <summary>Menu główne: tytuł, wejście do sceny (kafel z żywą miniaturą), wygląd, skróty.</summary>
+/// <summary>Scena w menu: jej sesja i panel (jeden na scenę, żeby widok 3D przeżył powrót do menu).</summary>
+public sealed record MenuScene(StudioSession Session, Func<StudioPanel> Panel);
+
+/// <summary>Menu główne: tytuł, sceny (kafle z żywą miniaturą i „od nowa”), wygląd, skróty.</summary>
 public sealed class MenuPanel : StudioPanel
 {
-    private readonly Func<StudioPanel> _scene;
-    private SceneMiniMap? _miniMap;
-    private TextBlock? _sceneInfo;
-    private Button? _sceneTile;
+    private readonly IReadOnlyList<MenuScene> _scenes;
+    private readonly List<(MenuScene Scene, SceneMiniMap Map, TextBlock Info, Button Tile)> _tiles = [];
     private Button? _dark;
     private Button? _light;
     private readonly List<Border> _swatches = [];
 
-    /// <param name="aScene">Panel sceny (jeden na całą aplikację, żeby widok 3D przeżył powrót do menu).</param>
-    public MenuPanel(StudioSession aSession, Func<StudioPanel> aScene) : base(aSession, "Animata")
+    public MenuPanel(IReadOnlyList<MenuScene> aScenes) : base(aScenes[0].Session, "Animata")
     {
-        _scene = aScene;
+        _scenes = aScenes;
     }
 
     protected override Control Build()
@@ -39,14 +39,8 @@ public sealed class MenuPanel : StudioPanel
         tagline.TextWrapping = TextWrapping.Wrap;
         tagline.TextTrimming = TextTrimming.None;
         tagline.MaxWidth = 460;
-        var enter = Ui.Button("Wejdź do sceny", () => Enter(_scene(), _sceneTile), Icons.Enter, aAccent: true);
+        var enter = Ui.Button("Wejdź do sceny", () => Enter(_scenes[0].Panel(), _tiles.Count > 0 ? _tiles[0].Tile : null), Icons.Enter, aAccent: true);
         enter.Height = 40;
-        var reset = Ui.Button("Nowa scena demo", () =>
-        {
-            Session.ResetScene();
-            UpdateInfo();
-        });
-        reset.Height = 40;
         var hint = Ui.Text("Dwuklik dowolnego elementu wjeżdża do środka · Esc, Alt+← albo przycisk „wstecz” myszy wraca", 12.5, "Studio.Text3");
         hint.TextWrapping = TextWrapping.Wrap;
         hint.TextTrimming = TextTrimming.None;
@@ -54,34 +48,20 @@ public sealed class MenuPanel : StudioPanel
 
         var left = Ui.VStack(18,
             Ui.HStack(12, Ui.Icon(Icons.Logo, 40, "Studio.Accent", aThickness: 1.4), Ui.Header("Studio")),
-            title, tagline, Ui.HStack(10, enter, reset), hint);
+            title, tagline, enter, hint);
         left.VerticalAlignment = VerticalAlignment.Center;
         left.Margin = new Thickness(0, 0, 48, 0);
         root.Children.Add(left);
 
-        // Prawa kolumna: kafel sceny, wygląd, skróty.
-        _miniMap = new SceneMiniMap { World = Session.World, Height = 250 };
-        _sceneInfo = Ui.Text(string.Empty, 12.5, "Studio.Text3");
-        var tileText = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(20, 16) };
-        tileText.Children.Add(Ui.VStack(4, Ui.Text("Scena demo", 17, "Studio.Text", FontWeight.SemiBold), _sceneInfo));
-        var open = Ui.Chip("Otwórz");
-        Grid.SetColumn(open, 1);
-        tileText.Children.Add(open);
-        var tileContent = new DockPanel();
-        DockPanel.SetDock(tileText, Dock.Bottom);
-        tileContent.Children.Add(tileText);
-        tileContent.Children.Add(new Border { Child = _miniMap, ClipToBounds = true, CornerRadius = new CornerRadius(12, 12, 0, 0) });
-        _sceneTile = new Button
+        // Prawa kolumna: kafle scen, wygląd, skróty.
+        _tiles.Clear();
+        var tiles = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", _scenes.Select(_ => "*"))), ColumnSpacing = 16 };
+        for (var index = 0; index < _scenes.Count; index++)
         {
-            Content = tileContent,
-            Padding = new Thickness(0),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            CornerRadius = new CornerRadius(12),
-            Focusable = false
-        };
-        _sceneTile.Res(Button.BackgroundProperty, "Studio.Card");
-        _sceneTile.Click += (_, _) => Enter(_scene(), _sceneTile);
+            var tile = SceneTile(_scenes[index]);
+            Grid.SetColumn(tile, index);
+            tiles.Children.Add(tile);
+        }
 
         _dark = Ui.Button("Ciemny", () => StudioTheme.Apply(true, StudioTheme.AccentIndex));
         _light = Ui.Button("Jasny", () => StudioTheme.Apply(false, StudioTheme.AccentIndex));
@@ -117,7 +97,7 @@ public sealed class MenuPanel : StudioPanel
         var keys = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto") };
         (string Key, string What)[] shortcuts =
         [
-            ("Dwuklik", "wejdź w stwora, podgraf, kartę"),
+            ("Dwuklik · PPM", "wejdź w stwora, podgraf · menu wstawiania w 3D"),
             ("Esc · Alt+←", "wróć poziom wyżej"),
             ("Ctrl+G", "zgrupuj zaznaczone moduły w podgraf"),
             ("Ctrl+S · Z", "snapshot mózgu · cofnij do poprzedniego")
@@ -135,7 +115,7 @@ public sealed class MenuPanel : StudioPanel
             keys.Children.Add(what);
         }
 
-        var right = Ui.VStack(20, _sceneTile, Ui.Card(themeRow, 18), Ui.Card(keys, 18));
+        var right = Ui.VStack(20, tiles, Ui.Card(themeRow, 18), Ui.Card(keys, 18));
         right.VerticalAlignment = VerticalAlignment.Center;
         right.MaxWidth = 620;
         Grid.SetColumn(right, 1);
@@ -161,22 +141,64 @@ public sealed class MenuPanel : StudioPanel
         }
     }
 
+    /// <summary>Kafel sceny: żywa miniatura, nazwa, stan; pod spodem „od nowa”.</summary>
+    private Control SceneTile(MenuScene aScene)
+    {
+        var map = new SceneMiniMap { World = aScene.Session.World, Height = 190 };
+        var info = Ui.Text(string.Empty, 12.5, "Studio.Text3");
+        info.TextWrapping = TextWrapping.Wrap;
+        info.TextTrimming = TextTrimming.None;
+        var text = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(18, 14) };
+        text.Children.Add(Ui.VStack(4, Ui.Text(aScene.Session.Name, 17, "Studio.Text", FontWeight.SemiBold), info));
+        var open = Ui.Chip("Otwórz");
+        open.VerticalAlignment = VerticalAlignment.Top;
+        Grid.SetColumn(open, 1);
+        text.Children.Add(open);
+        var content = new DockPanel();
+        DockPanel.SetDock(text, Dock.Bottom);
+        content.Children.Add(text);
+        content.Children.Add(new Border { Child = map, ClipToBounds = true, CornerRadius = new CornerRadius(12, 12, 0, 0) });
+        var tile = new Button
+        {
+            Content = content,
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            CornerRadius = new CornerRadius(12),
+            Focusable = false
+        };
+        tile.Res(Button.BackgroundProperty, "Studio.Card");
+        tile.Click += (_, _) => Enter(aScene.Panel(), tile);
+        _tiles.Add((aScene, map, info, tile));
+
+        var reset = Ui.Button("Od nowa", () =>
+        {
+            aScene.Session.ResetScene();
+            UpdateInfo();
+        }, Icons.Shuffle, aGhost: true);
+        reset.HorizontalAlignment = HorizontalAlignment.Left;
+        return Ui.VStack(8, tile, reset);
+    }
+
     private void UpdateInfo()
     {
-        if (_miniMap is null || _sceneInfo is null)
-            return;
-        _miniMap.World = Session.World;
-        var creatures = Session.Creatures.Count();
-        var obstacles = Session.World.Entities.OfType<Obstacle>().Count();
-        var targets = Session.World.Entities.OfType<TargetBall>().Count();
-        var learning = Session.Creatures.Count(Session.IsTraining);
-        _sceneInfo.Text = $"{creatures} stwory · {targets} cele · {obstacles} słupki" + (learning > 0 ? $" · {learning} uczą się" : string.Empty);
+        foreach (var (scene, map, info, _) in _tiles)
+        {
+            var session = scene.Session;
+            map.World = session.World;
+            var creatures = session.Creatures.Count();
+            var obstacles = session.World.Entities.OfType<Obstacle>().Count();
+            var targets = session.World.Entities.OfType<TargetBall>().Count();
+            var learning = session.Creatures.Count(session.IsTraining);
+            info.Text = $"{creatures} stwory · {targets} cele · {obstacles} słupki" + (learning > 0 ? $" · {learning} uczą się" : string.Empty);
+        }
     }
 
     public override void Refresh(float aDelta)
     {
         UpdateInfo();
-        _miniMap?.InvalidateVisual();
+        foreach (var tile in _tiles)
+            tile.Map.InvalidateVisual();
     }
 
     public override void OnShown() => UpdateInfo();
@@ -185,7 +207,7 @@ public sealed class MenuPanel : StudioPanel
     {
         if (aEvent.Key != Key.Enter)
             return false;
-        Enter(_scene(), _sceneTile);
+        Enter(_scenes[0].Panel(), _tiles.Count > 0 ? _tiles[0].Tile : null);
         return true;
     }
 }

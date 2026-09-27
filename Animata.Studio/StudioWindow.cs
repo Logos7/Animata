@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Animata.Core.WorldObjects;
 using Animata.Studio.Navigation;
 using Animata.Studio.Panels;
 using Animata.Studio.Session;
@@ -9,17 +10,17 @@ using Animata.Studio.Session;
 namespace Animata.Studio;
 
 /// <summary>
-/// Okno Studia: jeden <see cref="PanelNavigator"/> na całą powierzchnię. Zegar (~30 Hz) przesuwa sesję
-/// (symulację i naukę) i odświeża aktywny panel. Klawisze idą najpierw do aktywnego panelu; nieobsłużone Esc
-/// i Alt+← (poza polami tekstowymi) cofają o poziom.
+/// Okno Studia: jeden <see cref="PanelNavigator"/> na całą powierzchnię i kilka scen (demo, wąż), każda z własną
+/// sesją i własnym panelem. Zegar (~30 Hz) przesuwa wszystkie sesje (symulację i naukę) i odświeża aktywny panel.
+/// Klawisze idą najpierw do aktywnego panelu; nieobsłużone Esc i Alt+← (poza polami tekstowymi) cofają o poziom.
 /// </summary>
 public sealed class StudioWindow : Window
 {
-    private readonly StudioSession _session = new();
+    private readonly List<(StudioSession Session, Func<SimulationPanel> Panel)> _scenes = [];
+    private readonly Dictionary<StudioSession, SimulationPanel> _panels = [];
     private readonly PanelNavigator _navigator = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     private readonly Stopwatch _clock = new();
-    private SimulationPanel? _scene;
 
     public StudioWindow()
     {
@@ -30,24 +31,46 @@ public sealed class StudioWindow : Window
         MinHeight = 700;
         Content = _navigator;
 
+        AddScene(new StudioSession("Scena demo", WorldObjectCatalog.CreateDemo));
+        AddScene(new StudioSession("Wąż", WorldObjectCatalog.CreateSnakeScene));
+
         _navigator.Navigated += UpdateTitle;
-        _session.SceneReset += () => _navigator.PopTo(0);
         KeyDown += OnKeyDown;
         _timer.Tick += (_, _) => Tick();
 
         Opened += (_, _) =>
         {
-            _navigator.Push(new MenuPanel(_session, () => _scene ??= new SimulationPanel(_session)));
-            // Fioletowe startują z losowych wag i od razu się uczą — każdy w swoim wątku.
-            _session.StartTrainingAll();
+            _navigator.Push(new MenuPanel(_scenes.Select(aScene => new MenuScene(aScene.Session, aScene.Panel)).ToList()));
+            // Stwory z uczonym modułem (fioletowe) startują z losowych parametrów i od razu się uczą — każdy w swoim wątku.
+            foreach (var (session, _) in _scenes)
+                session.StartTrainingAll();
             _clock.Start();
             _timer.Start();
         };
         Closed += (_, _) =>
         {
             _timer.Stop();
-            _session.Dispose();
-            _scene?.Dispose();
+            foreach (var (session, _) in _scenes)
+                session.Dispose();
+            foreach (var panel in _panels.Values)
+                panel.Dispose();
+        };
+    }
+
+    private void AddScene(StudioSession aSession)
+    {
+        _scenes.Add((aSession, () =>
+        {
+            if (!_panels.TryGetValue(aSession, out var panel))
+                _panels[aSession] = panel = new SimulationPanel(aSession);
+            return panel;
+        }));
+        // Nowa albo wczytana scena: panele głębiej (stwór, mózg) trzymają stare encje — wracamy do panelu sceny.
+        aSession.SceneReset += () =>
+        {
+            var index = _panels.TryGetValue(aSession, out var panel) ? _navigator.Stack.ToList().IndexOf(panel) : -1;
+            if (index >= 0)
+                _navigator.PopTo(index);
         };
     }
 
@@ -55,7 +78,8 @@ public sealed class StudioWindow : Window
     {
         var delta = (float)_clock.Elapsed.TotalSeconds;
         _clock.Restart();
-        _session.Tick();
+        foreach (var (session, _) in _scenes)
+            session.Tick();
         _navigator.Active?.Refresh(delta);
     }
 

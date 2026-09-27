@@ -11,10 +11,16 @@ namespace Animata.Core.Brains.Modules;
 public sealed class CompositeModule : BrainModule
 {
     public CompositeModule(IEnumerable<string>? aInputs = null, IEnumerable<string>? aOutputs = null)
+        : this(Guid.NewGuid(), Guid.NewGuid(), aInputs, aOutputs)
+    {
+    }
+
+    /// <summary>Z zadanymi Id granic (wczytywanie zapisanego mózgu — połączenia wnętrza odwołują się do tych Id).</summary>
+    public CompositeModule(Guid aInputId, Guid aOutputId, IEnumerable<string>? aInputs = null, IEnumerable<string>? aOutputs = null)
     {
         Name = "Podgraf";
-        Input = Inner.Add(new SubgraphInputModule());
-        Output = Inner.Add(new SubgraphOutputModule());
+        Input = Inner.Add(new SubgraphInputModule { Id = aInputId });
+        Output = Inner.Add(new SubgraphOutputModule { Id = aOutputId });
         foreach (var port in aInputs ?? [])
             AddInputPort(port);
         foreach (var port in aOutputs ?? [])

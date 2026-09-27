@@ -5,17 +5,19 @@ using Animata.Core.Entities;
 namespace Animata.Core.Training;
 
 /// <summary>
-/// Nauka stworów z siecią w scenie. Każdy stwór ma własny <see cref="BackgroundTrainer"/>: ewolucja idzie
-/// w ukrytych symulacjach, a do sieci w scenie trafiają tylko wagi kolejnych mistrzów (lepszych na stałej walidacji).
+/// Nauka stworów w scenie. Uczy się pierwszy uczony moduł mózgu (<see cref="ITrainableModule"/>: sieć neuronowa
+/// albo CPG węża). Każdy stwór ma własny <see cref="BackgroundTrainer"/>: ewolucja idzie w ukrytych symulacjach,
+/// a do modułu w scenie trafiają tylko parametry kolejnych mistrzów (lepszych na stałej walidacji).
 /// Auto-snapshoty („przed nauką”, „nauka: mistrz…”, „przed losowaniem”) idą przez <see cref="SnapshotHistory"/>,
 /// więc nie powstają serie identycznych snapshotów. Klasę woła się z jednego wątku (UI).
 /// </summary>
 public sealed class TrainingController : IDisposable
 {
-    private sealed class Session(Brain aBrain, NeuralNetworkModule aModule, BackgroundTrainer aTrainer, string aRig)
+    private sealed class Session(Brain aBrain, BrainModule aModule, BackgroundTrainer aTrainer, string aRig)
     {
         public Brain Brain { get; } = aBrain;
-        public NeuralNetworkModule Module { get; } = aModule;
+        public BrainModule Module { get; } = aModule;
+        public ITrainableModule Trainable { get; } = (ITrainableModule)aModule;
         public BackgroundTrainer Trainer { get; } = aTrainer;
         public string Rig { get; } = aRig;
         public int Version;
@@ -41,9 +43,9 @@ public sealed class TrainingController : IDisposable
 
     public bool IsTraining(Brain aBrain) => SessionOf(aBrain) is not null;
 
-    /// <summary>Pierwsza sieć w mózgu stwora albo null.</summary>
-    public static NeuralNetworkModule? FindNetwork(ActiveEntity aCreature) =>
-        aCreature.Brain?.Graph.Modules.OfType<NeuralNetworkModule>().FirstOrDefault();
+    /// <summary>Pierwszy uczony moduł (sieć albo CPG) na najwyższym poziomie mózgu stwora albo null.</summary>
+    public static BrainModule? FindTrainable(ActiveEntity aCreature) =>
+        aCreature.Brain?.Graph.Modules.FirstOrDefault(aModule => aModule is ITrainableModule);
 
     /// <summary>Ostatni postęp nauki stwora albo null (nie uczy się albo jeszcze nie ma pokolenia).</summary>
     public TrainingProgress? ProgressOf(Brain aBrain) => SessionOf(aBrain)?.Last;
@@ -54,13 +56,13 @@ public sealed class TrainingController : IDisposable
     /// </summary>
     public bool Start(ActiveEntity aCreature, int? aSeed = null)
     {
-        if (aCreature.Brain is not { } brain || FindNetwork(aCreature) is not { } module || IsTraining(brain))
+        if (aCreature.Brain is not { } brain || FindTrainable(aCreature) is not { } module || IsTraining(brain))
             return false;
 
         var seed = aSeed ?? (Environment.TickCount ^ aCreature.Id.GetHashCode());
         var rig = SeekRigs.For(aCreature);
-        var task = new SeekTargetTask((NeuralNetworkState)module.CaptureState(), rig, _options(rig, seed));
-        var evolution = new Evolution(module.Network.GetParameters(), new EvolutionOptions { Seed = seed });
+        var task = new SeekTargetTask(module.CaptureState()!, rig, _options(rig, seed), module.Name);
+        var evolution = new Evolution(((ITrainableModule)module).GetParameters(), new EvolutionOptions { Seed = seed });
         _history.Capture(brain, "przed nauką", module);
 
         var trainer = new BackgroundTrainer(evolution, task.Evaluate, _maxGenerations, task.Validate);
@@ -90,12 +92,12 @@ public sealed class TrainingController : IDisposable
     /// <summary>Losowe wagi i nauka od zera. Poprzedni stan zostaje w snapshocie (Z cofa).</summary>
     public bool RandomizeAndRestart(ActiveEntity aCreature, int? aSeed = null)
     {
-        if (aCreature.Brain is not { } brain || FindNetwork(aCreature) is not { } module)
+        if (aCreature.Brain is not { } brain || FindTrainable(aCreature) is not { } module)
             return false;
 
         Stop(brain);
         _history.Capture(brain, "przed losowaniem", module);
-        module.Network.Randomize();
+        ((ITrainableModule)module).Randomize();
         return Start(aCreature, aSeed);
     }
 
@@ -143,7 +145,7 @@ public sealed class TrainingController : IDisposable
         if (progress.ChampionGeneration != aSession.ShownChampion)
         {
             aSession.ShownChampion = progress.ChampionGeneration;
-            aSession.Module.Network.SetParameters(progress.Champion);
+            aSession.Trainable.SetParameters(progress.Champion);
         }
         return true;
     }

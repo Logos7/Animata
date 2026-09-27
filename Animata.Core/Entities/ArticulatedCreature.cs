@@ -1,0 +1,313 @@
+using System.Numerics;
+using Animata.Core.Bodies;
+using Animata.Core.Brains;
+using Animata.Core.Physics;
+using BepuPhysics;
+using BepuPhysics.Collidables;
+using BepuPhysics.Constraints;
+
+namespace Animata.Core.Entities;
+
+/// <summary>
+/// Stwór z części (<see cref="BodyPlan"/>) poruszający się w fizyce Bepu. Każda część to bryła, każdy staw to
+/// przegub kulowy (BallSocket) z serwem kątowym (AngularServo), które trzyma zadany skręt i pochylenie.
+/// Układ stwora (Body.Position / Rotation) wynika z korzenia: to poza, w której korzeń byłby w swojej pozie
+/// spoczynkowej — dla leżącego węża to punkt na ziemi pod głową, obrócony jak głowa.
+/// Ręczna zmiana Body.Position / Rotation (mysz, panel) albo <see cref="Place"/> stawia całe ciało w pozie
+/// spoczynkowej w nowym miejscu i zeruje prędkości.
+/// Tarcie kierunkowe części (<see cref="PartPlan.LateralFriction"/>, <see cref="PartPlan.BackwardFriction"/>) jest liczone
+/// tutaj, przed każdym krokiem fizyki, dla części, które w poprzednim kroku czegoś dotykały — to ono pozwala wężowi
+/// pełzać falowaniem.
+/// </summary>
+public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
+{
+    /// <summary>Kapsuła Bepu leży wzdłuż lokalnej osi Y, a część planu wzdłuż X: poza Bepu = poza części · ten obrót.</summary>
+    private static readonly Quaternion CapsuleFix = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI / 2);
+
+    private const float Gravity = 9.81f;
+
+    /// <summary>Sztywność serw stawów (częstotliwość sprężyny, Hz). Zmiana działa od następnej zmiany celu stawu.</summary>
+    public float ServoFrequency { get; set; } = 30;
+
+    private PhysicsWorld? _physics;
+    private BodyHandle[] _bodies = [];
+    private ConstraintHandle[] _servos = [];
+    private Vector3[] _positions = [];
+    private Quaternion[] _orientations = [];
+    private Quaternion[] _restRelative = [];
+    private int[] _parents = [];
+    private int[] _children = [];
+    private float[] _targetYaw = [];
+    private float[] _targetPitch = [];
+    private float[] _sentYaw = [];
+    private float[] _sentPitch = [];
+    private float[] _yaw = [];
+    private float[] _pitch = [];
+    private Vector3 _publishedPosition;
+    private Quaternion _publishedRotation = Quaternion.Identity;
+
+    public ArticulatedCreature(BodyPlan aPlan, Brain? aBrain = null) : base(new Body(), aBrain)
+    {
+        Plan = aPlan;
+        SetPlan(aPlan);
+    }
+
+    public BodyPlan Plan { get; private set; }
+
+    public Vector3 Color { get; set; } = new(0.36f, 0.72f, 0.42f);
+
+    public override float BoundingRadius => Plan.Root.Radius;
+
+    public override bool UsesPhysics => true;
+
+    public override EntityCategory Category => EntityCategory.Creature;
+
+    public int JointCount => Plan.Joints.Count;
+
+    /// <summary>Pozycje części w świecie (po ostatnim kroku fizyki albo z pozy spoczynkowej przed podpięciem).</summary>
+    public IReadOnlyList<Vector3> PartPositions => _positions;
+
+    /// <summary>Orientacje części w świecie (oś X części = jej długość).</summary>
+    public IReadOnlyList<Quaternion> PartOrientations => _orientations;
+
+    /// <summary>Zmierzony skręt stawu (rad, wokół osi Z rodzica).</summary>
+    public float JointYaw(int aJoint) => _yaw[aJoint];
+
+    /// <summary>Zmierzone pochylenie stawu (rad, wokół osi Y rodzica).</summary>
+    public float JointPitch(int aJoint) => _pitch[aJoint];
+
+    /// <summary>Zadaje staw: ułamki [-1, 1] zakresu (MaxYaw, MaxPitch z planu). Działa od następnego kroku fizyki.</summary>
+    public void SetJointTarget(int aJoint, float aYaw, float aPitch)
+    {
+        var joint = Plan.Joints[aJoint];
+        _targetYaw[aJoint] = Math.Clamp(float.IsFinite(aYaw) ? aYaw : 0, -1, 1) * joint.MaxYaw;
+        _targetPitch[aJoint] = Math.Clamp(float.IsFinite(aPitch) ? aPitch : 0, -1, 1) * joint.MaxPitch;
+    }
+
+    public override void Place(Vector3 aPosition, Quaternion aRotation)
+    {
+        Body.Position = aPosition;
+        Body.Rotation = MathF.Abs(aRotation.LengthSquared() - 1) > 1e-4f ? Quaternion.Normalize(aRotation) : aRotation;
+        for (var part = 0; part < Plan.Parts.Count; part++)
+        {
+            var (position, orientation) = RestPose(part);
+            _positions[part] = position;
+            _orientations[part] = orientation;
+            if (_physics is { } physics)
+            {
+                var body = physics.Body(_bodies[part]);
+                body.Pose = new RigidPose(position, orientation * FixOf(Plan.Parts[part]));
+                body.Velocity = default;
+            }
+        }
+        Array.Clear(_yaw);
+        Array.Clear(_pitch);
+        _publishedPosition = Body.Position;
+        _publishedRotation = Body.Rotation;
+    }
+
+    /// <summary>
+    /// Nowy plan ciała (np. inna liczba segmentów). Ciało staje w pozie spoczynkowej tam, gdzie jest stwór,
+    /// cele stawów się zerują. Aktuatory, sensory i mózg dopasowuje wołający.
+    /// </summary>
+    public void Rebuild(BodyPlan aPlan)
+    {
+        var physics = _physics;
+        if (physics is not null)
+            ((IPhysicalEntity)this).DetachPhysics(physics);
+        Plan = aPlan;
+        SetPlan(aPlan);
+        if (physics is not null)
+            ((IPhysicalEntity)this).AttachPhysics(physics);
+    }
+
+    // ---------- fizyka ----------
+
+    bool IPhysicalEntity.IsDynamic => true;
+
+    void IPhysicalEntity.AttachPhysics(PhysicsWorld aPhysics)
+    {
+        _physics = aPhysics;
+        var group = aPhysics.NewGroup();
+        for (var index = 0; index < Plan.Parts.Count; index++)
+        {
+            var part = Plan.Parts[index];
+            var (position, orientation) = RestPose(index);
+            var pose = new RigidPose(position, orientation * FixOf(part));
+            _bodies[index] = part.Shape switch
+            {
+                PartShape.Capsule => aPhysics.AddBody(new Capsule(part.Size.X, part.Size.Y), part.Mass, pose, group, index, part.Friction),
+                PartShape.Sphere => aPhysics.AddBody(new Sphere(part.Size.X), part.Mass, pose, group, index, part.Friction),
+                _ => aPhysics.AddBody(new Box(part.Size.X, part.Size.Y, part.Size.Z), part.Mass, pose, group, index, part.Friction)
+            };
+            _positions[index] = position;
+            _orientations[index] = orientation;
+        }
+
+        for (var index = 0; index < Plan.Joints.Count; index++)
+        {
+            var joint = Plan.Joints[index];
+            var parent = Plan.Parts[_parents[index]];
+            var child = Plan.Parts[_children[index]];
+            var parentBepu = parent.Orientation * FixOf(parent);
+            var childBepu = child.Orientation * FixOf(child);
+            var socket = new BallSocket
+            {
+                LocalOffsetA = Vector3.Transform(joint.Anchor - parent.Position, Quaternion.Inverse(parentBepu)),
+                LocalOffsetB = Vector3.Transform(joint.Anchor - child.Position, Quaternion.Inverse(childBepu)),
+                SpringSettings = new SpringSettings(30, 1)
+            };
+            aPhysics.AddConstraint(_bodies[_parents[index]], _bodies[_children[index]], socket);
+            _servos[index] = aPhysics.AddConstraint(_bodies[_parents[index]], _bodies[_children[index]], Servo(index, 0, 0));
+            _sentYaw[index] = 0;
+            _sentPitch[index] = 0;
+        }
+
+        _publishedPosition = Body.Position;
+        _publishedRotation = Body.Rotation;
+    }
+
+    void IPhysicalEntity.DetachPhysics(PhysicsWorld aPhysics)
+    {
+        foreach (var body in _bodies)
+            aPhysics.RemoveBody(body);
+        Array.Clear(_bodies);
+        Array.Clear(_servos);
+        _physics = null;
+    }
+
+    /// <summary>
+    /// Ręczna zmiana Body.Position / Rotation (mysz, panel) — całe ciało staje w nowym miejscu. Wołane przed krokiem
+    /// fizyki i przez renderer (żeby przeciągany w pauzie stwór od razu się przesuwał).
+    /// </summary>
+    public void ApplyExternalMove()
+    {
+        if (Body.Position != _publishedPosition || Body.Rotation != _publishedRotation)
+            Place(Body.Position, Body.Rotation);
+    }
+
+    void IPhysicalEntity.BeforePhysicsStep(PhysicsWorld aPhysics, float aDelta)
+    {
+        ApplyExternalMove();
+
+        for (var joint = 0; joint < _servos.Length; joint++)
+        {
+            if (_targetYaw[joint] == _sentYaw[joint] && _targetPitch[joint] == _sentPitch[joint])
+                continue;
+            aPhysics.UpdateConstraint(_servos[joint], Servo(joint, _targetYaw[joint], _targetPitch[joint]));
+            _sentYaw[joint] = _targetYaw[joint];
+            _sentPitch[joint] = _targetPitch[joint];
+        }
+
+        // Łuski: tarcie Coulomba w bok i do tyłu wzdłuż podłoża — prędkość maleje najwyżej o μ·g·Δt (do zera).
+        for (var index = 0; index < _bodies.Length; index++)
+        {
+            var part = Plan.Parts[index];
+            if ((part.LateralFriction <= 0 && part.BackwardFriction <= 0) || !aPhysics.IsTouching(_bodies[index]))
+                continue;
+            var axis = Vector3.Transform(Vector3.UnitX, _orientations[index]);
+            var flat = new Vector2(axis.X, axis.Y);
+            if (flat.LengthSquared() < 1e-6f)
+                continue;
+            flat = Vector2.Normalize(flat);
+            var body = aPhysics.Body(_bodies[index]);
+            var velocity = new Vector2(body.Velocity.Linear.X, body.Velocity.Linear.Y);
+            var along = Vector2.Dot(velocity, flat);
+            var lateral = velocity - flat * along;
+            var change = -lateral * Limit(lateral.Length(), part.LateralFriction * Gravity * aDelta);
+            if (along < 0)
+                change -= flat * (along * Limit(-along, part.BackwardFriction * Gravity * aDelta));
+            body.Velocity.Linear += new Vector3(change, 0);
+        }
+    }
+
+    void IPhysicalEntity.AfterPhysicsStep(PhysicsWorld aPhysics)
+    {
+        for (var index = 0; index < _bodies.Length; index++)
+        {
+            var pose = aPhysics.Body(_bodies[index]).Pose;
+            _positions[index] = pose.Position;
+            _orientations[index] = Quaternion.Normalize(pose.Orientation * Quaternion.Inverse(FixOf(Plan.Parts[index])));
+        }
+
+        for (var joint = 0; joint < _yaw.Length; joint++)
+        {
+            var relative = Quaternion.Inverse(_orientations[_parents[joint]]) * _orientations[_children[joint]];
+            var bend = relative * Quaternion.Inverse(_restRelative[joint]);
+            var axis = Vector3.Transform(Vector3.UnitX, bend);
+            _yaw[joint] = MathF.Atan2(axis.Y, axis.X);
+            _pitch[joint] = MathF.Atan2(-axis.Z, MathF.Sqrt(axis.X * axis.X + axis.Y * axis.Y));
+        }
+
+        // Układ stwora z korzenia: poza, w której korzeń byłby w swojej pozie spoczynkowej.
+        var root = Plan.Root;
+        var rotation = Quaternion.Normalize(_orientations[0] * Quaternion.Inverse(root.Orientation));
+        Body.Rotation = rotation;
+        Body.Position = _positions[0] - Vector3.Transform(root.Position, rotation);
+        _publishedPosition = Body.Position;
+        _publishedRotation = Body.Rotation;
+    }
+
+    // ---------- pomocnicze ----------
+
+    private void SetPlan(BodyPlan aPlan)
+    {
+        var parts = aPlan.Parts.Count;
+        var joints = aPlan.Joints.Count;
+        _bodies = new BodyHandle[parts];
+        _positions = new Vector3[parts];
+        _orientations = new Quaternion[parts];
+        _servos = new ConstraintHandle[joints];
+        _restRelative = new Quaternion[joints];
+        _parents = new int[joints];
+        _children = new int[joints];
+        _targetYaw = new float[joints];
+        _targetPitch = new float[joints];
+        _sentYaw = new float[joints];
+        _sentPitch = new float[joints];
+        _yaw = new float[joints];
+        _pitch = new float[joints];
+        for (var index = 0; index < joints; index++)
+        {
+            var joint = aPlan.Joints[index];
+            _parents[index] = aPlan.IndexOf(joint.Parent);
+            _children[index] = aPlan.IndexOf(joint.Child);
+            _restRelative[index] = Quaternion.Inverse(aPlan.Parts[_parents[index]].Orientation) * aPlan.Parts[_children[index]].Orientation;
+        }
+        for (var index = 0; index < parts; index++)
+            (_positions[index], _orientations[index]) = RestPose(index);
+    }
+
+    /// <summary>Poza spoczynkowa części w świecie przy obecnej pozie stwora.</summary>
+    private (Vector3 Position, Quaternion Orientation) RestPose(int aPart)
+    {
+        var part = Plan.Parts[aPart];
+        return (Body.Position + Vector3.Transform(part.Position, Body.Rotation),
+            Quaternion.Normalize(Body.Rotation * part.Orientation));
+    }
+
+    /// <summary>
+    /// Serwo stawu: cel B = A · T w lokalnym układzie Bepu rodzica, gdzie T = Fa⁻¹ · Rz(skręt) · Ry(pochylenie) · R0 · Fb
+    /// (R0 — względny obrót w pozie spoczynkowej, F — poprawka osi kapsuły).
+    /// </summary>
+    private AngularServo Servo(int aJoint, float aYaw, float aPitch)
+    {
+        var joint = Plan.Joints[aJoint];
+        var parent = Plan.Parts[_parents[aJoint]];
+        var child = Plan.Parts[_children[aJoint]];
+        var bend = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitY, aPitch);
+        var target = Quaternion.Inverse(FixOf(parent)) * bend * _restRelative[aJoint] * FixOf(child);
+        return new AngularServo
+        {
+            TargetRelativeRotationLocalA = Quaternion.Normalize(target),
+            SpringSettings = new SpringSettings(ServoFrequency, 1),
+            ServoSettings = new ServoSettings(float.MaxValue, 0, joint.Strength)
+        };
+    }
+
+    private static Quaternion FixOf(PartPlan aPart) => aPart.Shape == PartShape.Capsule ? CapsuleFix : Quaternion.Identity;
+
+    /// <summary>Jaką część prędkości <paramref name="aSpeed"/> zabrać, gdy wolno zabrać najwyżej <paramref name="aMaxChange"/>.</summary>
+    private static float Limit(float aSpeed, float aMaxChange) =>
+        aSpeed <= 1e-6f ? 0 : MathF.Min(1, MathF.Max(0, aMaxChange) / aSpeed);
+}

@@ -46,6 +46,10 @@ public static class Icons
     public const string Target = "M13 8A5 5 0 1 1 3 8A5 5 0 1 1 13 8M10 8A2 2 0 1 1 6 8A2 2 0 1 1 10 8";
     public const string Pillar = "M4 4A4 1.5 0 1 1 12 4A4 1.5 0 1 1 4 4M4 4V12A4 1.5 0 0 0 12 12V4";
     public const string Home = "M2.5 7.5L8 3L13.5 7.5M4 6.5V13H12V6.5";
+    public const string Save = "M3 2.5H11L13.5 5V13.5H2.5V2.5ZM5 2.5V6H10V2.5M5 13.5V9.5H11V13.5";
+    public const string Open = "M2 4.5V13H13L14.5 7H4.5L2 13M2 4.5H6L7.5 6H12.5V7";
+    public const string Snake = "M2 11C4 11 4 7 6 7S8 11 10 11S12 7 14 7M14 7L14.8 6.2";
+    public const string Floor = "M1.5 10.5L5 6.5H14.5L11 10.5ZM1.5 10.5V12H11V10.5M11 12L14.5 8V6.5";
     public const string Logo = "M12.5 8A4.5 4.5 0 1 1 3.5 8A4.5 4.5 0 1 1 12.5 8M12.3 6.4L15.5 4.5M13 8H15.8M12.3 9.6L15.5 11.5";
 }
 
@@ -332,6 +336,8 @@ public static class Ui
     {
         Core.WorldObjects.CarCreature car => Color.FromRgb((byte)(car.Color.X * 255), (byte)(car.Color.Y * 255), (byte)(car.Color.Z * 255)),
         Core.WorldObjects.CylinderCreature cylinder => Color.FromRgb((byte)(cylinder.Color.X * 255), (byte)(cylinder.Color.Y * 255), (byte)(cylinder.Color.Z * 255)),
+        Core.Entities.ArticulatedCreature body => Color.FromRgb((byte)(body.Color.X * 255), (byte)(body.Color.Y * 255), (byte)(body.Color.Z * 255)),
+        Core.WorldObjects.Floor => Color.FromRgb(62, 82, 98),
         Core.WorldObjects.TargetBall => StudioPalette.Target,
         Core.WorldObjects.Obstacle => StudioPalette.Obstacle,
         _ => StudioTheme.Palette.Text3

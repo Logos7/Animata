@@ -33,6 +33,7 @@ public sealed class CreaturePanel : StudioPanel
     private int _snapshotCount = -1;
     private float _snapshotCheck;
     private int _builtWhiskers;
+    private int _builtSegments;
 
     public CreaturePanel(StudioSession aSession, ActiveEntity aCreature) : base(aSession, StudioSession.NameOf(aCreature))
     {
@@ -44,6 +45,7 @@ public sealed class CreaturePanel : StudioPanel
     {
         _updaters.Clear();
         _builtWhiskers = WorldObjectCatalog.WhiskerCountOf(_creature);
+        _builtSegments = (_creature as SnakeCreature)?.Segments ?? 0;
         var controllers = _brain.Graph.Modules.Where(aModule => aModule is not SensorModule and not ActuatorModule)
             .Select(GraphCanvas.TitleOf).ToList();
         var titleExtra = Ui.HStack(8, Ui.Dot(Ui.ColorOf(_creature)),
@@ -98,6 +100,15 @@ public sealed class CreaturePanel : StudioPanel
 
         // ---------- aktuatory, nauka, snapshoty ----------
         var effects = Ui.VStack(14, Ui.Header("Aktuatory"));
+        if (_creature is SnakeCreature snake)
+            effects.Children.Add(Ui.Card(Ui.VStack(10, CardHead(Icons.Snake, "Długość", "SnakeCreature"),
+                Ui.Row("Segmenty", PanelParts.SegmentPicker(Session, snake), 34),
+                new TextBlock
+                {
+                    Text = "Ciało przebudowuje się w miejscu; CPG zachowuje wyuczony chód (jego parametry nie zależą od długości).",
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap
+                }.Res(TextBlock.ForegroundProperty, "Studio.Text3"))));
         foreach (var actuator in _creature.Body.Actuators)
             effects.Children.Add(ActuatorCard(actuator));
         if (PanelParts.HasNetwork(_creature))
@@ -148,7 +159,7 @@ public sealed class CreaturePanel : StudioPanel
 
     private Control SensorCard(Sensor aSensor)
     {
-        var module = _brain.Graph.Descendants().OfType<SensorModule>().FirstOrDefault(aModule => aModule.SensorId == aSensor.Id);
+        var module = _brain.Graph.Descendants().OfType<SensorModule>().FirstOrDefault(aModule => aModule.Slot == aSensor.Slot);
         IReadOnlyDictionary<string, float> Read() =>
             module is not null && _brain.Graph.GraphOf(module)?.LastOutputs(module) is { } outputs
                 ? outputs
@@ -250,7 +261,7 @@ public sealed class CreaturePanel : StudioPanel
 
     private Control ActuatorCard(Actuator aActuator)
     {
-        var module = _brain.Graph.Descendants().OfType<ActuatorModule>().FirstOrDefault(aModule => aModule.ActuatorId == aActuator.Id);
+        var module = _brain.Graph.Descendants().OfType<ActuatorModule>().FirstOrDefault(aModule => aModule.Slot == aActuator.Slot);
         var content = Ui.VStack(12, CardHead(Icons.Wheel, module is not null ? GraphCanvas.TitleOf(module) : "Napęd",
             aActuator.GetType().Name.Replace("Actuator", string.Empty)));
         var rows = new List<(string Port, Gauge Gauge, TextBlock Value)>();
@@ -300,6 +311,7 @@ public sealed class CreaturePanel : StudioPanel
     {
         Core.WorldObjects.CarCreature car => $"CarCreature · {car.Length:0.##} × {car.Width:0.##} × {car.Height:0.##} m · obrys r {car.BoundingRadius:0.##}",
         Core.WorldObjects.CylinderCreature cylinder => $"CylinderCreature · r {cylinder.Radius:0.##} · h {cylinder.Height:0.##} m",
+        SnakeCreature snake => $"SnakeCreature · {snake.Segments} segm. · {snake.JointCount} stawów · fizyka Bepu",
         _ => _creature.GetType().Name
     };
 
@@ -359,7 +371,8 @@ public sealed class CreaturePanel : StudioPanel
     public override void Refresh(float aDelta)
     {
         // Liczba wąsów zmieniona (tu, w scenie albo w grafie) — karty, schemat i podgląd grafu od nowa.
-        if (WorldObjectCatalog.WhiskerCountOf(_creature) != _builtWhiskers)
+        if (WorldObjectCatalog.WhiskerCountOf(_creature) != _builtWhiskers ||
+            ((_creature as SnakeCreature)?.Segments ?? 0) != _builtSegments)
             Child = Build();
         foreach (var update in _updaters)
             update();

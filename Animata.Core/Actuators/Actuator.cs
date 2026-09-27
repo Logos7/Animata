@@ -10,6 +10,14 @@ public abstract class Actuator
 {
     public Guid Id { get; init; } = Guid.NewGuid();
 
+    /// <summary>
+    /// Nazwa miejsca w ciele („Wheels”, „Spine”). Mózg łączy się z aktuatorem po tej nazwie, nie po Id.
+    /// Domyślnie nazwa typu.
+    /// </summary>
+    public string Slot { get; set; }
+
+    protected Actuator() => Slot = GetType().Name;
+
     /// <summary>Porty komend, które aktuator rozumie.</summary>
     public abstract IReadOnlyList<string> InputPorts { get; }
 

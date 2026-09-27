@@ -139,7 +139,7 @@ public class WhiskerTests
         Assert.Same(controller, car.Brain.Graph.Modules.OfType<AvoidAndSeekModule>().Single());
         Assert.Equal(9, controller.RayAngles.Count);
         Assert.Equal(3, controller.AvoidGain);
-        var source = car.Brain.Graph.Modules.OfType<SensorModule>().Single(aModule => aModule.SensorId == sensor.Id);
+        var source = car.Brain.Graph.Modules.OfType<SensorModule>().Single(aModule => aModule.Slot == sensor.Slot);
         Assert.Equal(9, source.OutputPorts.Count);
         for (var ray = 0; ray < 9; ray++)
             Assert.Contains(car.Brain.Graph.Connections, aLink =>

@@ -33,8 +33,13 @@ and let it run on.
 
 ## What works today
 
-- **World and bodies.** Entities on a plane with circle collisions. Two body types: a disc with differential drive and
-  a car with front-wheel steering and a real turning radius.
+- **World and bodies.** Entities on a floor (a fixed box nothing can move). Simple bodies — a disc with differential
+  drive and a car with front-wheel steering and a real turning radius — slide with circle collisions. Bodies built
+  from blocks (parts and joints, a `BodyPlan`) live in real 3D rigid-body physics (BepuPhysics 2).
+- **A snake that learns to crawl.** Any number of capsule segments (2–24, changeable on a living snake) linked by
+  ball joints with servos (yaw and pitch — full 3D). Scales give it more grip sideways than forwards, so a wave
+  running from head to tail pushes it along. A CPG module (a travelling wave with six learnable parameters) drives
+  the joints; evolution teaches a random CPG to crawl to the target in a few generations.
 - **Senses.** An eye that tracks a target (distance, gap, direction in the creature's own frame) and whiskers: rays
   that report how close obstacles are. A car can have any odd number of whiskers from 1 to 25, spread over 120°;
   the number can be changed on a living car (scene, creature view or graph inspector): the same brain is rewired in
@@ -48,7 +53,10 @@ and let it run on.
   *champion*, the best candidate on a fixed validation set, so creatures change rarely and only for the better.
 - **Snapshots.** Any brain's parameters can be captured, compared and restored. Training writes its own snapshots and
   undo walks back through them.
-- **Studio.** A desktop app you *zoom into*: double-click a creature and the window turns into its panel (senses, body,
+- **Saving worlds.** A whole world goes to JSON and back: entities, bodies, target links and complete brains
+  (modules, wiring, subgraphs, node positions, parameters and snapshots). Brains connect to bodies by slot name
+  (`Eye`, `Whiskers`, `Spine`), not by id.
+- **Studio.** A desktop app with two scenes (demo, snake) that run side by side, which you *zoom into*: double-click a creature and the window turns into its panel (senses, body,
   actuators, brain). Click the brain and you are in a live graph editor; double-click a subgraph and you go one level
   deeper. Pause, step, change speed and edit while it runs.
 
@@ -81,13 +89,14 @@ Roughly in this direction, one experiment at a time:
 - articulated bodies: joints, limbs and muscles, starting with simple walkers;
 - full 3D movement: climbing, falling, balance; terrain and trees;
 - a living ecosystem: food, energy, reproduction and inheritance of body and brain;
-- saving and loading whole worlds, and moving creatures between them.
+- moving creatures (body and brain) between worlds; a body editor for building creatures from blocks;
+- climbing: snakes on slopes and trees.
 
 ## Projects
 
 | Project | What it is |
 | --- | --- |
-| `Animata.Core` | Model, bodies, sensors, actuators, brains, collisions, training, snapshots, graph editing. No UI. |
+| `Animata.Core` | Model, bodies (incl. bodies from blocks), sensors, actuators, brains, collisions, physics (BepuPhysics 2), training, snapshots, graph editing, saving. No UI. |
 | `Animata.Rendering.HelixToolkit` | 3D scene: meshes, picking, dragging, whisker rays, fly camera. |
 | `Animata.Studio` | Desktop app: zoomable panels, scene, creature view, brain graph editor, themes. |
 | `Animata.Tests` | xUnit tests for the core. |
@@ -110,11 +119,12 @@ dotnet run --project Animata.Studio
 | Everywhere | Esc · Alt+← · mouse Back | Zoom out one level |
 | Scene, creature, graph | Space | Pause / resume the world |
 | Scene | LMB drag | Move entities |
-| Scene | RMB click | Context menu: insert a car (1–25 whiskers), cylinder, target or post where you clicked; on an entity: enter, change whiskers, delete |
+| Scene | RMB click | Context menu: insert a car (1–25 whiskers), cylinder, snake (2–24 segments), target or post where you clicked; on an entity: enter, change whiskers or segments, delete |
 | Scene | RMB drag · WSADQE · wheel | Look around · fly · fly forward/back (the wheel works like W/S) |
 | Scene | Ins · O · T · Del | Add target · add post · aim all eyes at the selected target · delete |
 | Scene | L · K | Start/stop training · random weights and retrain |
 | Scene, creature | Ctrl+S · Z | Snapshot the brain · step back through snapshots |
+| Scene | Save · Load (toolbar) | Write the whole world to a `.animata.json` file · replace the scene with a saved one |
 | Brain graph | Drag output → input | Connect ports (grabbing a used input re-routes its wire) |
 | Brain graph | Ctrl+G · Ctrl+Shift+G | Group selection into a subgraph · ungroup |
 | Brain graph | Del · F · Ctrl+A | Delete · fit view · select all |

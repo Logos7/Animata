@@ -1,4 +1,5 @@
 using System.Numerics;
+using Animata.Core.Bodies;
 using Animata.Core.Entities;
 using Animata.Core.WorldObjects;
 using HelixToolkit.Avalonia.SharpDX;
@@ -17,7 +18,7 @@ internal static class SceneMeshes
     /// <summary>Nadwozie autka wisi na kołach: dół na wysokości promienia koła.</summary>
     public const float CarClearance = WheelRadius;
 
-    public static bool CanDraw(Entity aEntity) => aEntity is CylinderCreature or TargetBall or CarCreature or Obstacle;
+    public static bool CanDraw(Entity aEntity) => aEntity is CylinderCreature or TargetBall or CarCreature or Obstacle or Floor;
 
     public static global::HelixToolkit.SharpDX.MeshGeometry3D CreateGeometry(Entity aEntity)
     {
@@ -37,6 +38,9 @@ internal static class SceneMeshes
             case Obstacle obstacle:
                 mesh.AddCylinder(Vector3.Zero, new Vector3(0, 0, obstacle.Height), obstacle.Radius, 32, true, true);
                 break;
+            case Floor floor:
+                mesh.AddBox(Vector3.Zero, floor.Size.X, floor.Size.Y, floor.Size.Z);
+                break;
         }
 
         return mesh.ToMeshGeometry3D();
@@ -49,6 +53,7 @@ internal static class SceneMeshes
         TargetBall target => new Vector3(target.Radius, 0, 0),
         CarCreature car => new Vector3(car.Length, car.Width, car.Height),
         Obstacle obstacle => new Vector3(obstacle.Radius, obstacle.Height, 0),
+        Floor floor => floor.Size,
         _ => Vector3.Zero
     };
 
@@ -58,6 +63,8 @@ internal static class SceneMeshes
         CarCreature car => BodyMaterial(car.Color, aSelected),
         Obstacle => aSelected ? Material(0.8f, 0.8f, 0.85f) : Material(0.5f, 0.5f, 0.55f),
         TargetBall => aSelected ? Material(1f, 1f, 0.4f) : Material(1f, 0.67f, 0.2f),
+        ArticulatedCreature body => BodyMaterial(body.Color, aSelected),
+        Floor => Material(0.20f, 0.27f, 0.33f),
         _ => Material(0.5f, 0.5f, 0.5f)
     };
 
@@ -72,6 +79,36 @@ internal static class SceneMeshes
     {
         var color = aSelected ? Vector3.Lerp(aColor, Vector3.One, 0.45f) : aColor;
         return Material(color.X, color.Y, color.Z);
+    }
+
+    /// <summary>
+    /// Siatka części ciała w jej własnym układzie (środek w 0, długość wzdłuż X) — do stworów z części.
+    /// Pierwsza część (głowa) dostaje kropkę na przodzie, żeby było widać, dokąd patrzy.
+    /// </summary>
+    public static global::HelixToolkit.SharpDX.MeshGeometry3D CreatePartGeometry(PartPlan aPart, bool aHead)
+    {
+        var mesh = new MeshBuilder();
+        switch (aPart.Shape)
+        {
+            case PartShape.Capsule:
+            {
+                var half = aPart.Size.Y / 2;
+                var radius = aPart.Size.X;
+                mesh.AddCylinder(new Vector3(-half, 0, 0), new Vector3(half, 0, 0), radius, 20, false, false);
+                mesh.AddSphere(new Vector3(-half, 0, 0), radius);
+                mesh.AddSphere(new Vector3(half, 0, 0), radius);
+                if (aHead)
+                    mesh.AddSphere(new Vector3(half + radius * 0.8f, 0, radius * 0.45f), radius * 0.28f);
+                break;
+            }
+            case PartShape.Sphere:
+                mesh.AddSphere(Vector3.Zero, aPart.Size.X);
+                break;
+            default:
+                mesh.AddBox(Vector3.Zero, aPart.Size.X, aPart.Size.Y, aPart.Size.Z);
+                break;
+        }
+        return mesh.ToMeshGeometry3D();
     }
 
     /// <summary>Autko: nadwozie nad kołami, 4 koła, kulka na nosie pokazująca przód (+X).</summary>

@@ -8,7 +8,7 @@ namespace Animata.Core.Brains.Modules;
 /// Wyjścia modułu: porty z <see cref="Outputs"/> (sygnał tanh * Scale + Offset).
 /// Po zmianie Ports/Inputs/Outputs w podpiętym grafie wołaj BrainGraph.Invalidate().
 /// </summary>
-public sealed class NeuralNetworkModule : BrainModule
+public sealed class NeuralNetworkModule : BrainModule, ITrainableModule
 {
     private readonly Dictionary<string, float> _variables = [];
     private readonly Dictionary<string, float> _results = [];
@@ -17,6 +17,14 @@ public sealed class NeuralNetworkModule : BrainModule
     public NeuralNetworkModule(NeuralNetwork aNetwork) => Network = aNetwork;
 
     public NeuralNetwork Network { get; }
+
+    public int ParameterCount => Network.ParameterCount;
+
+    public float[] GetParameters() => Network.GetParameters();
+
+    public void SetParameters(ReadOnlySpan<float> aParameters) => Network.SetParameters(aParameters);
+
+    public void Randomize(Random? aRandom = null) => Network.Randomize(aRandom);
 
     /// <summary>Nazwy portów wejściowych modułu (zmienne dostępne w wyrażeniach).</summary>
     public List<string> Ports { get; } = [];

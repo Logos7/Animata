@@ -33,6 +33,9 @@ public sealed class RouterModule : BrainModule
 
     public int Channels => _channelPorts.Length;
 
+    /// <summary>Porty jednego kanału (i zarazem wyjścia).</summary>
+    public IReadOnlyList<string> Ports => _ports;
+
     /// <summary>Kanał wybrany w ostatnim Evaluate (do podglądu).</summary>
     public int ActiveChannel { get; private set; }
 

@@ -4,8 +4,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
+using Animata.Core.Persistence;
 using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
@@ -50,7 +52,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     private bool _propertiesBuilt;
     private bool? _pausedShown;
 
-    public SimulationPanel(StudioSession aSession) : base(aSession, "Scena demo")
+    public SimulationPanel(StudioSession aSession) : base(aSession, aSession.Name)
     {
         _renderer.SelectionChanged += _ =>
         {
@@ -103,6 +105,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         training.Click += (_, _) => Session.ToggleTraining(TrainingScope());
         var right = Ui.HStack(6,
             Ui.IconButton(Icons.Moon, "Jasny / ciemny motyw", StudioTheme.Toggle),
+            Ui.Separator(),
+            Ui.Button("Zapisz", () => _ = SaveWorldAsync(), Icons.Save, aGhost: true),
+            Ui.Button("Wczytaj", () => _ = LoadWorldAsync(), Icons.Open, aGhost: true),
             Ui.Separator(),
             Ui.Button("Snapshot", SaveSnapshot, Icons.Camera, aShortcut: "Ctrl+S"),
             Ui.Button("Cofnij", StepBack, Icons.Undo, aShortcut: "Z"),
@@ -252,7 +257,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             AddGroup("Stwory", entities.OfType<ActiveEntity>());
             AddGroup("Cele", entities.OfType<TargetBall>());
             AddGroup("Przeszkody", entities.OfType<Obstacle>());
-            AddGroup("Inne", entities.Where(aEntity => aEntity is not ActiveEntity and not TargetBall and not Obstacle));
+            AddGroup("Podłoże", entities.OfType<Floor>());
+            AddGroup("Inne", entities.Where(aEntity => aEntity is not ActiveEntity and not TargetBall and not Obstacle and not Floor));
             UpdateListSelection();
         }
 
@@ -351,6 +357,24 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             _properties.Children.Add(enter);
         }
 
+        if (entity is Floor floor)
+        {
+            var nameField = Ui.Field(entity.Name, aText =>
+            {
+                entity.Name = aText.Trim();
+                _listKey = string.Empty;
+                return true;
+            }, aMono: false);
+            nameField.Watermark = StudioSession.NameOf(entity);
+            _properties.Children.Add(Ui.VStack(4, Ui.Header("Podłoga"), Ui.Row("Nazwa", nameField),
+                Ui.Row("Środek", $"{Ui.F(floor.Body.Position.X)}, {Ui.F(floor.Body.Position.Y)}, {Ui.F(floor.Body.Position.Z)} m", true),
+                Ui.Row("Wymiary", $"{Ui.F(floor.Size.X)} × {Ui.F(floor.Size.Y)} × {Ui.F(floor.Size.Z)} m", true),
+                Ui.Row("Góra", $"z = {Ui.F(floor.Top)} m", true)));
+            _properties.Children.Add(Wrap(Ui.Text("Nieruszalna: nie przesuwa jej mysz, panel, kolizje ani fizyka. " +
+                "W fizyce to statyczne pudło, po którym chodzą stwory z części (wąż).", 12.5, "Studio.Text3")));
+            return;
+        }
+
         // Nazwa i transformacja.
         var name = Ui.Field(entity.Name, aText =>
         {
@@ -397,10 +421,12 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             details.Children.Add(Ui.Row("Zmysły", string.Join(", ", active.Body.Sensors.Select(SensorName))));
             if (active is CarCreature car)
                 details.Children.Add(Ui.Row("Wąsy", PanelParts.WhiskerPicker(Session, car, () => _propertiesBuilt = false)));
+            if (active is SnakeCreature snake)
+                details.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(Session, snake, () => _propertiesBuilt = false)));
             details.Children.Add(Ui.Row("Napęd", string.Join(", ", active.Body.Actuators.Select(aActuator => aActuator.GetType().Name.Replace("Actuator", string.Empty)))));
             _properties.Children.Add(details);
 
-            if (TrainingController.FindNetwork(active) is not null)
+            if (TrainingController.FindTrainable(active) is not null)
                 _properties.Children.Add(PanelParts.TrainingCard(Session, active, _updaters));
         }
         else
@@ -464,7 +490,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
     /// <summary>Zaznaczony stwór z siecią albo — bez zaznaczenia stwora z siecią — wszystkie stwory z siecią.</summary>
     private List<ActiveEntity> TrainingScope() =>
-        _renderer.SelectedEntity is ActiveEntity selected && TrainingController.FindNetwork(selected) is not null && Session.World.Contains(selected)
+        _renderer.SelectedEntity is ActiveEntity selected && TrainingController.FindTrainable(selected) is not null && Session.World.Contains(selected)
             ? [selected]
             : Session.NeuralCreatures.ToList();
 
@@ -548,6 +574,13 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 var count = WorldObjectCatalog.WhiskerCountOf(car);
                 menu.Items.Add(WhiskerMenu($"Wąsy: {count}", Icons.Whiskers, count, aCount => SetWhiskers(car, aCount)));
             }
+            if (entity is SnakeCreature snake)
+                menu.Items.Add(CountMenu($"Segmenty: {snake.Segments}", Icons.Snake, SegmentChoices, snake.Segments, StudioSession.Segments,
+                    aCount =>
+                    {
+                        if (Session.World.Contains(snake) && Session.SetSegments(snake, aCount))
+                            _propertiesBuilt = false;
+                    }));
             if (entity is TargetBall ball)
                 menu.Items.Add(Item("Wszystkie oczy na tę kulkę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
             menu.Items.Add(Item("Usuń", Icons.Trash, () => RemoveEntity(entity), Key.Delete));
@@ -561,6 +594,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             aCount => SelectNew(Session.AddCreature(CreatureKind.NeuralCar, at, aCount))));
         menu.Items.Add(Item("Walec — sterownik", Icons.Brain, () => SelectNew(Session.AddCreature(CreatureKind.ControllerCylinder, at))));
         menu.Items.Add(Item("Walec — sieć neuronowa", Icons.Neural, () => SelectNew(Session.AddCreature(CreatureKind.NeuralCylinder, at))));
+        menu.Items.Add(CountMenu("Wąż — uczy się pełzać (CPG)", Icons.Snake, SegmentChoices, 0, StudioSession.Segments,
+            aCount => SelectNew(Session.AddCreature(CreatureKind.Snake, at, aSegments: aCount)), WorldObjectCatalog.DefaultSnakeSegments));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Kulka (cel)", Icons.Target, () => SelectNew(Session.AddTarget(at)), Key.Insert));
         menu.Items.Add(Item("Słupek", Icons.Pillar, () => SelectNew(Session.AddObstacle(at)), Key.O));
@@ -577,22 +612,94 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         return item;
     }
 
+    /// <summary>Liczby segmentów w menu (pełny zakres jest na liście we właściwościach).</summary>
+    private static readonly int[] SegmentChoices = [2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24];
+
     /// <summary>Podmenu liczby wąsów (1, 3, …, 25); <paramref name="aCurrent"/> dostaje znacznik (0 — żadna).</summary>
-    private static MenuItem WhiskerMenu(string aHeader, string aIcon, int aCurrent, Action<int> aChoose)
+    private static MenuItem WhiskerMenu(string aHeader, string aIcon, int aCurrent, Action<int> aChoose) =>
+        CountMenu(aHeader, aIcon, WorldObjectCatalog.WhiskerCounts, aCurrent, StudioSession.Whiskers, aChoose, WorldObjectCatalog.DefaultWhiskers);
+
+    /// <summary>Podmenu liczb (wąsy, segmenty); bieżąca ma znacznik, domyślna dopisek.</summary>
+    private static MenuItem CountMenu(string aHeader, string aIcon, IEnumerable<int> aCounts, int aCurrent, Func<int, string> aLabel,
+        Action<int> aChoose, int aDefault = 0)
     {
         var parent = new MenuItem { Header = aHeader, Icon = Ui.Icon(aIcon, 14) };
-        foreach (var count in WorldObjectCatalog.WhiskerCounts)
+        foreach (var count in aCounts)
         {
             var chosen = count;
             var item = new MenuItem
             {
-                Header = StudioSession.Whiskers(count) + (count == WorldObjectCatalog.DefaultWhiskers ? " (domyślnie)" : string.Empty),
+                Header = aLabel(count) + (count == aDefault ? " (domyślnie)" : string.Empty),
                 Icon = count == aCurrent ? Ui.Icon(Icons.Check, 14, "Studio.Accent") : null
             };
             item.Click += (_, _) => aChoose(chosen);
             parent.Items.Add(item);
         }
         return parent;
+    }
+
+    // ---------- zapis i odczyt ----------
+
+    private static readonly FilePickerFileType WorldFileType = new("Świat Animaty")
+    {
+        Patterns = ["*" + WorldFile.Extension, "*.json"]
+    };
+
+    private async Task SaveWorldAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+            return;
+        try
+        {
+            var document = Session.Save();
+            var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Zapisz świat",
+                SuggestedFileName = Session.Name + WorldFile.Extension,
+                DefaultExtension = WorldFile.Extension,
+                FileTypeChoices = [WorldFileType],
+                ShowOverwritePrompt = true
+            });
+            if (file is null)
+                return;
+            await using var stream = await file.OpenWriteAsync();
+            await using var writer = new StreamWriter(stream);
+            await writer.WriteAsync(WorldFile.ToJson(document));
+            Session.Status = $"zapisano: {file.Name}";
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException or UnauthorizedAccessException)
+        {
+            Session.Status = $"nie zapisano: {exception.Message}";
+        }
+    }
+
+    private async Task LoadWorldAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+            return;
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Wczytaj świat",
+            AllowMultiple = false,
+            FileTypeFilter = [WorldFileType]
+        });
+        if (files.Count == 0)
+            return;
+        try
+        {
+            await using var stream = await files[0].OpenReadAsync();
+            using var reader = new StreamReader(stream);
+            var document = WorldFile.FromJson(await reader.ReadToEndAsync());
+            _renderer.Select(null);
+            Session.Load(document);
+            _listKey = string.Empty;
+            _propertiesBuilt = false;
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException or System.Text.Json.JsonException
+            or InvalidOperationException or ArgumentException or UnauthorizedAccessException)
+        {
+            Session.Status = $"nie wczytano: {exception.Message}";
+        }
     }
 
     private void SetWhiskers(ActiveEntity aCreature, int aCount)
@@ -611,6 +718,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     private void RemoveEntity(Entity aEntity)
     {
         Session.Remove(aEntity);
+        if (aEntity.IsFixed)
+            return;
         _renderer.Select(null);
         _renderer.Sync(Session.World);
     }

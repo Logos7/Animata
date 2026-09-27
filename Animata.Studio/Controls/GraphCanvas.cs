@@ -187,6 +187,7 @@ public sealed class GraphCanvas : ThemedControl
         RouterModule router => $"kanał {router.ActiveChannel}",
         ConstantModule constant => Ui.F(constant.Value),
         AvoidAndSeekModule or ApproachTargetModule => "sterownik",
+        CpgModule cpg => $"CPG · {cpg.Joints} stawów",
         _ => string.Empty
     };
 
@@ -201,6 +202,7 @@ public sealed class GraphCanvas : ThemedControl
         SubgraphOutputModule => Icons.BoundaryOut,
         RouterModule => Icons.Router,
         ConstantModule => Icons.Constant,
+        CpgModule => Icons.Snake,
         _ => Icons.Brain
     };
 
@@ -208,7 +210,7 @@ public sealed class GraphCanvas : ThemedControl
     {
         SensorModule or CompositeModule or SubgraphInputModule or SubgraphOutputModule => StudioTheme.Palette.Accent,
         ActuatorModule => StudioTheme.Palette.WireCommand,
-        NeuralNetworkModule => StudioPalette.Neural,
+        NeuralNetworkModule or CpgModule => StudioPalette.Neural,
         AvoidAndSeekModule or ApproachTargetModule => StudioPalette.Controller,
         _ => StudioTheme.Palette.Text3
     };

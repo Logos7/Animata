@@ -7,21 +7,30 @@ namespace Animata.Core.Worlds;
 /// Świat. Tick przebiega w fazach, żeby kolejność encji na liście nie miała znaczenia:
 /// 1. Think — wszystkie mózgi czytają sensory i liczą komendy (świat jest jeszcze niezmieniony),
 /// 2. Act — wszystkie mózgi wysyłają komendy do aktuatorów,
-/// 3. Collisions — rozsunięcie nakładających się encji,
-/// 4. Update — procesy ciał,
-/// 5. dodania i usunięcia zlecone w trakcie ticku są stosowane na końcu.
+/// 3. Physics — krok Bepu (tylko gdy świat ma fizykę, patrz <see cref="Physics"/>),
+/// 4. Collisions — rozsunięcie nakładających się encji bez fizyki (okręgi w XY),
+/// 5. Update — procesy ciał,
+/// 6. dodania i usunięcia zlecone w trakcie ticku są stosowane na końcu.
+/// Świat z fizyką trzyma pamięć natywną — trzeba go zwolnić (<see cref="Dispose"/>).
 /// </summary>
-public sealed class World
+public sealed class World : IDisposable
 {
     private readonly List<Entity> _entities = [];
     private readonly Dictionary<Guid, Entity> _index = [];
     private readonly List<Entity> _pendingAdds = [];
     private readonly HashSet<Entity> _pendingRemovals = [];
+    private readonly List<IPhysicalEntity> _attached = [];
     private bool _updating;
 
     public IReadOnlyList<Entity> Entities => _entities;
 
     public CollisionSystem Collisions { get; } = new();
+
+    /// <summary>
+    /// Fizyka brył (Bepu) albo null. Powstaje przy dodaniu pierwszej encji dynamicznej (<see cref="IPhysicalEntity.IsDynamic"/>);
+    /// wtedy podpinają się też wszystkie statyczne encje fizyczne (podłoga, słupki).
+    /// </summary>
+    public PhysicsWorld? Physics { get; private set; }
 
     public Entity? Find(Guid aId) => _index.GetValueOrDefault(aId);
 
@@ -74,6 +83,15 @@ public sealed class World
                 if (entity is ActiveEntity { Brain: { } brain } active)
                     brain.Act(active, this, aDelta);
 
+            if (Physics is { } physics)
+            {
+                foreach (var entity in _attached)
+                    entity.BeforePhysicsStep(physics, aDelta);
+                physics.Step(aDelta);
+                foreach (var entity in _attached)
+                    entity.AfterPhysicsStep(physics);
+            }
+
             Collisions.Resolve(_entities);
 
             foreach (var entity in _entities)
@@ -98,15 +116,44 @@ public sealed class World
         _pendingAdds.Clear();
     }
 
+    public void Dispose()
+    {
+        foreach (var entity in _attached)
+            if (Physics is { } physics)
+                entity.DetachPhysics(physics);
+        _attached.Clear();
+        Physics?.Dispose();
+        Physics = null;
+    }
+
     private void AddNow(Entity aEntity)
     {
         _entities.Add(aEntity);
         _index.Add(aEntity.Id, aEntity);
+        if (aEntity is not IPhysicalEntity physical)
+            return;
+        if (Physics is null && physical.IsDynamic)
+        {
+            Physics = new PhysicsWorld();
+            foreach (var entity in _entities)
+                if (entity is IPhysicalEntity other && !ReferenceEquals(other, physical))
+                    Attach(other);
+        }
+        if (Physics is not null)
+            Attach(physical);
+    }
+
+    private void Attach(IPhysicalEntity aEntity)
+    {
+        aEntity.AttachPhysics(Physics!);
+        _attached.Add(aEntity);
     }
 
     private void RemoveNow(Entity aEntity)
     {
         _entities.Remove(aEntity);
         _index.Remove(aEntity.Id);
+        if (aEntity is IPhysicalEntity physical && _attached.Remove(physical) && Physics is not null)
+            physical.DetachPhysics(Physics);
     }
 }

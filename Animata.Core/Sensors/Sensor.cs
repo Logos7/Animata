@@ -11,6 +11,14 @@ public abstract class Sensor
 {
     public Guid Id { get; init; } = Guid.NewGuid();
 
+    /// <summary>
+    /// Nazwa miejsca w ciele („Eye”, „Whiskers”). Mózg łączy się z sensorem po tej nazwie, nie po Id,
+    /// więc ten sam mózg pasuje do każdego ciała z sensorami w tych samych slotach. Domyślnie nazwa typu.
+    /// </summary>
+    public string Slot { get; set; }
+
+    protected Sensor() => Slot = GetType().Name;
+
     /// <summary>Porty odczytów, które sensor zawsze zwraca.</summary>
     public abstract IReadOnlyList<string> OutputPorts { get; }
 

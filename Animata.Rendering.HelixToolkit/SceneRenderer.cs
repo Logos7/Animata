@@ -3,7 +3,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Animata.Core.Bodies;
 using Animata.Core.Entities;
+using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
 using HelixToolkit.Avalonia.SharpDX;
 using HelixToolkit.Geometry;
@@ -12,7 +14,8 @@ using HelixToolkit.SharpDX;
 namespace Animata.Rendering.HelixToolkit;
 
 /// <summary>
-/// Widok świata w Helixie: modele encji (synchronizowane co klatkę z <see cref="Sync"/>), wąsy, zaznaczanie
+/// Widok świata w Helixie: modele encji (synchronizowane co klatkę z <see cref="Sync"/>; stwór z części — model na część,
+/// podłoga — pudło z encji <see cref="Floor"/>), wąsy, zaznaczanie
 /// i przeciąganie encji lewym przyciskiem myszy, kamera latająca (<see cref="FlyCameraController"/>),
 /// klik prawym przyciskiem (bez obracania kamerą) — <see cref="ContextRequested"/>.
 /// </summary>
@@ -25,6 +28,7 @@ public sealed class SceneRenderer : IDisposable
     private readonly WhiskerRenderer _whiskers;
     private readonly Dictionary<Guid, MeshGeometryModel3D> _models = [];
     private readonly Dictionary<Guid, ModelState> _states = [];
+    private readonly Dictionary<Guid, PartModels> _parts = [];
     private readonly HashSet<Guid> _current = [];
     private World? _world;
     private Entity? _selected;
@@ -67,13 +71,6 @@ public sealed class SceneRenderer : IDisposable
             Direction = new Vector3(-0.5f, 0.7f, -1)
         });
 
-        var ground = new MeshBuilder();
-        ground.AddBox(new Vector3(0, 0, -0.08f), 22, 16, 0.12f);
-        _viewport.Items.Add(new MeshGeometryModel3D
-        {
-            Geometry = ground.ToMeshGeometry3D(),
-            Material = SceneMeshes.Material(0.20f, 0.27f, 0.33f)
-        });
     }
 
     public Control View => _viewport;
@@ -107,6 +104,13 @@ public sealed class SceneRenderer : IDisposable
         _current.Clear();
         foreach (var entity in aWorld.Entities)
         {
+            if (entity is ArticulatedCreature articulated)
+            {
+                SyncParts(articulated);
+                _current.Add(entity.Id);
+                continue;
+            }
+
             if (!_models.TryGetValue(entity.Id, out var model))
             {
                 if (!SceneMeshes.CanDraw(entity))
@@ -143,6 +147,12 @@ public sealed class SceneRenderer : IDisposable
             _models.Remove(id);
             _states.Remove(id);
         }
+        foreach (var id in _parts.Keys.Where(aId => !_current.Contains(aId)).ToArray())
+        {
+            foreach (var model in _parts[id].Models)
+                _viewport.Items.Remove(model);
+            _parts.Remove(id);
+        }
 
         _whiskers.Sync(aWorld);
     }
@@ -153,11 +163,11 @@ public sealed class SceneRenderer : IDisposable
     {
         if (ReferenceEquals(_selected, aEntity))
             return;
-        if (_selected is not null && _models.TryGetValue(_selected.Id, out var oldModel))
-            oldModel.Material = SceneMeshes.MaterialFor(_selected, false);
+        if (_selected is not null)
+            Paint(_selected, false);
         _selected = aEntity;
-        if (aEntity is not null && _models.TryGetValue(aEntity.Id, out var model))
-            model.Material = SceneMeshes.MaterialFor(aEntity, true);
+        if (aEntity is not null)
+            Paint(aEntity, true);
         SelectionChanged?.Invoke(aEntity);
     }
 
@@ -200,7 +210,7 @@ public sealed class SceneRenderer : IDisposable
             EntityActivated?.Invoke(selected);
             return;
         }
-        if (selected is not null && TryGroundPoint(point, selected.Body.Position.Z, out var ground))
+        if (selected is not null && !selected.IsFixed && TryGroundPoint(point, selected.Body.Position.Z, out var ground))
         {
             _dragOffset = selected.Body.Position - ground;
             _dragPointer = aEvent.Pointer;
@@ -248,6 +258,52 @@ public sealed class SceneRenderer : IDisposable
         Select(entity);
         Vector3? ground = TryGroundPoint(aPoint, 0, out var point) ? point : null;
         ContextRequested?.Invoke(new SceneContext(aPoint, ground, entity));
+    }
+
+    private void Paint(Entity aEntity, bool aSelected)
+    {
+        var material = SceneMeshes.MaterialFor(aEntity, aSelected);
+        if (_models.TryGetValue(aEntity.Id, out var model))
+            model.Material = material;
+        if (_parts.TryGetValue(aEntity.Id, out var parts))
+            foreach (var part in parts.Models)
+                part.Material = material;
+    }
+
+    /// <summary>Modele części stwora: przebudowa przy nowym planie ciała, co klatkę pozy części z fizyki.</summary>
+    private void SyncParts(ArticulatedCreature aCreature)
+    {
+        aCreature.ApplyExternalMove();
+        if (!_parts.TryGetValue(aCreature.Id, out var parts) || !ReferenceEquals(parts.Plan, aCreature.Plan))
+        {
+            if (parts is not null)
+                foreach (var old in parts.Models)
+                    _viewport.Items.Remove(old);
+            parts = new PartModels(aCreature.Plan);
+            var material = SceneMeshes.MaterialFor(aCreature, ReferenceEquals(aCreature, _selected));
+            for (var index = 0; index < aCreature.Plan.Parts.Count; index++)
+            {
+                var model = new MeshGeometryModel3D
+                {
+                    Geometry = SceneMeshes.CreatePartGeometry(aCreature.Plan.Parts[index], index == 0),
+                    Material = material
+                };
+                parts.Models.Add(model);
+                _viewport.Items.Add(model);
+            }
+            _parts[aCreature.Id] = parts;
+        }
+
+        var positions = aCreature.PartPositions;
+        var orientations = aCreature.PartOrientations;
+        for (var index = 0; index < parts.Models.Count && index < positions.Count; index++)
+            parts.Models[index].Transform = Matrix4x4.CreateFromQuaternion(orientations[index]) * Matrix4x4.CreateTranslation(positions[index]);
+    }
+
+    private sealed class PartModels(BodyPlan aPlan)
+    {
+        public BodyPlan Plan { get; } = aPlan;
+        public List<MeshGeometryModel3D> Models { get; } = [];
     }
 
     private bool TryRay(Point aPoint, out Vector3 aOrigin, out Vector3 aDirection) =>

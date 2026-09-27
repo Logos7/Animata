@@ -15,6 +15,35 @@ namespace Animata.Studio.Panels;
 public static class PanelParts
 {
     /// <summary>
+    /// Lista liczby segmentów węża (2…24). Zmiana w miejscu (<see cref="StudioSession.SetSegments"/>): ten sam wąż i mózg,
+    /// parametry CPG zostają. Po niej — już po obsłudze zdarzenia listy — woła <paramref name="aChanged"/>.
+    /// </summary>
+    public static Control SegmentPicker(StudioSession aSession, SnakeCreature aSnake, Action? aChanged = null)
+    {
+        var picker = new ComboBox
+        {
+            ItemsSource = Enumerable.Range(WorldObjectCatalog.MinSnakeSegments,
+                WorldObjectCatalog.MaxSnakeSegments - WorldObjectCatalog.MinSnakeSegments + 1).ToArray(),
+            SelectedItem = aSnake.Segments,
+            MinWidth = 96
+        };
+        ToolTip.SetTip(picker, "Liczba segmentów węża. Ciało przebudowuje się w miejscu, CPG zachowuje wyuczony chód.");
+        picker.Tapped += (_, aEvent) => aEvent.Handled = true;
+        picker.SelectionChanged += (_, _) =>
+        {
+            if (picker.SelectedItem is not int count || count == aSnake.Segments)
+                return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!aSession.SetSegments(aSnake, count))
+                    picker.SelectedItem = aSnake.Segments;
+                aChanged?.Invoke();
+            });
+        };
+        return picker;
+    }
+
+    /// <summary>
     /// Lista liczby wąsów (1, 3, …, 25) stwora z wąsami. Zmiana idzie w miejscu (<see cref="StudioSession.SetWhiskers"/>),
     /// po niej — już po obsłudze zdarzenia listy — woła <paramref name="aChanged"/> (np. przebudowa panelu).
     /// </summary>
@@ -90,5 +119,5 @@ public static class PanelParts
         return Ui.Card(Ui.VStack(10, head, sparkline, legend, Ui.Row("Mistrz", champion), buttons), 14);
     }
 
-    public static bool HasNetwork(ActiveEntity aCreature) => TrainingController.FindNetwork(aCreature) is not null;
+    public static bool HasNetwork(ActiveEntity aCreature) => TrainingController.FindTrainable(aCreature) is not null;
 }

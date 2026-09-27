@@ -9,6 +9,7 @@ using Animata.Core.Brains.Modules;
 using Animata.Core.Brains.Neural;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
+using Animata.Core.WorldObjects;
 using Animata.Studio.Controls;
 using Animata.Studio.Kit;
 using Animata.Studio.Session;
@@ -221,10 +222,10 @@ public sealed class ModuleInspector
 
     private void SensorSection(StackPanel aPanel, SensorModule aModule)
     {
-        var sensor = _creature.Body.Sensors.Find(aSensor => aSensor.Id == aModule.SensorId);
+        var sensor = _creature.Body.FindSensor(aModule.Slot);
         var section = Ui.VStack(2, Ui.Header("Sensor"));
         section.Children.Add(Ui.Row("Typ", sensor?.GetType().Name ?? "brak w ciele!", true));
-        section.Children.Add(Ui.Row("Id", aModule.SensorId.ToString()[..8] + "…", true));
+        section.Children.Add(Ui.Row("Slot", aModule.Slot, true));
         switch (sensor)
         {
             case RaySensor rays:
@@ -242,13 +243,18 @@ public sealed class ModuleInspector
             case TargetSensor eye:
                 section.Children.Add(Ui.Row("Cel", eye.TargetId is { } id && _session.World.Find(id) is { } target ? StudioSession.NameOf(target) : "brak"));
                 break;
+            case JointSensor joints:
+                section.Children.Add(Ui.Row("Stawy", $"{joints.Joints} (Yaw, Pitch jako ułamek zakresu)", true));
+                if (_creature is SnakeCreature snake)
+                    section.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(_session, snake, () => Changed?.Invoke()), 34));
+                break;
         }
         aPanel.Children.Add(section);
     }
 
     private void ActuatorSection(StackPanel aPanel, ActuatorModule aModule)
     {
-        var actuator = _creature.Body.Actuators.Find(aActuator => aActuator.Id == aModule.ActuatorId);
+        var actuator = _creature.Body.FindActuator(aModule.Slot);
         var section = Ui.VStack(2, Ui.Header("Aktuator"));
         section.Children.Add(Ui.Row("Typ", actuator?.GetType().Name ?? "brak w ciele!", true));
         switch (actuator)
@@ -257,6 +263,11 @@ public sealed class ModuleInspector
                 section.Children.Add(Ui.Row("Maks. prędkość", $"{steering.MaxSpeed:0.##} m/s", true));
                 section.Children.Add(Ui.Row("Maks. skręt kół", $"{steering.MaxSteerAngle * 180 / MathF.PI:0}°", true));
                 section.Children.Add(Ui.Row("Rozstaw osi", $"{steering.WheelBase:0.##} m", true));
+                break;
+            case SpineActuator spine:
+                section.Children.Add(Ui.Row("Stawy", $"{spine.Joints} · porty Yaw{{i}}, Pitch{{i}} ∈ [-1, 1]", true));
+                if (_creature is SnakeCreature snake)
+                    section.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(_session, snake, () => Changed?.Invoke()), 34));
                 break;
             case DiskDriveActuator disk:
                 section.Children.Add(Ui.Row("Maks. prędkość", $"{disk.MaxSpeed:0.##} m/s", true));
@@ -273,7 +284,7 @@ public sealed class ModuleInspector
             Ui.Row("Warstwy", string.Join(" → ", network.Layers), true),
             Ui.Row("Parametry", network.ParameterCount.ToString(), true),
             Ui.Row("Aktywacja", "tanh", true));
-        if (_creature.Brain is { } brain && _session.Training.IsTraining(brain) && Core.Training.TrainingController.FindNetwork(_creature) == aModule)
+        if (_creature.Brain is { } brain && _session.Training.IsTraining(brain) && Core.Training.TrainingController.FindTrainable(_creature) == aModule)
         {
             var note = Ui.Text("Uczy się — wagi mistrza podmieniają się same.", 12, "Studio.Accent");
             note.TextWrapping = TextWrapping.Wrap;
@@ -472,7 +483,7 @@ public sealed class ModuleInspector
     {
         foreach (var sensor in aCreature.Body.Sensors)
         {
-            var name = sensor switch { TargetSensor => "Oko", RaySensor => "Wąsy", _ => sensor.GetType().Name };
+            var name = sensor switch { TargetSensor => "Oko", RaySensor => "Wąsy", JointSensor => "Stawy", _ => sensor.GetType().Name };
             var source = sensor;
             yield return ("Zmysły", $"{name} · {sensor.GetType().Name}", sensor is RaySensor ? Icons.Whiskers : Icons.Eye,
                 () => new SensorModule(source) { Name = name }, null);
@@ -485,16 +496,19 @@ public sealed class ModuleInspector
         if (aCreature.Body.Sensors.OfType<RaySensor>().FirstOrDefault() is { } rays)
             yield return ("Logika", "AvoidAndSeek", Icons.Brain, () => new AvoidAndSeekModule(rays.Angles) { Name = "AvoidAndSeek" }, null);
         yield return ("Logika", "ApproachTarget", Icons.Brain, () => new ApproachTargetModule { Name = "Approach" }, null);
+        if (aCreature.Body.Actuators.OfType<SpineActuator>().FirstOrDefault() is { } spine)
+            yield return ("Logika", "CPG · fala stawów", Icons.Snake, () => new CpgModule(spine.Joints) { Name = "CPG" }, null);
 
         yield return ("Struktura", "Podgraf", Icons.Composite, () => new CompositeModule { Name = "Podgraf" }, null);
 
-        var driven = aBrain.Graph.Descendants().OfType<ActuatorModule>().Select(aModule => aModule.ActuatorId).ToHashSet();
+        var driven = aBrain.Graph.Descendants().OfType<ActuatorModule>().Select(aModule => aModule.Slot).ToHashSet();
         foreach (var actuator in aCreature.Body.Actuators)
         {
             var target = actuator;
-            yield return ("Ciało", $"Koła · {actuator.GetType().Name.Replace("Actuator", string.Empty)}", Icons.Wheel,
-                () => new ActuatorModule(target) { Name = "Koła" },
-                driven.Contains(actuator.Id) ? "Tym aktuatorem steruje już inny moduł (jeden aktuator — jedno sterowanie)." : null);
+            var label = actuator is SpineActuator ? "Kręgosłup" : "Koła";
+            yield return ("Ciało", $"{label} · {actuator.GetType().Name.Replace("Actuator", string.Empty)}", actuator is SpineActuator ? Icons.Snake : Icons.Wheel,
+                () => new ActuatorModule(target) { Name = label },
+                driven.Contains(actuator.Slot) ? "Tym aktuatorem steruje już inny moduł (jeden aktuator — jedno sterowanie)." : null);
         }
     }
 

@@ -19,6 +19,7 @@ namespace Animata.Core.Brains;
 [JsonDerivedType(typeof(ConstantState), "constant")]
 [JsonDerivedType(typeof(AvoidAndSeekState), "avoidAndSeek")]
 [JsonDerivedType(typeof(CompositeState), "composite")]
+[JsonDerivedType(typeof(CpgState), "cpg")]
 public abstract record ModuleState
 {
     public string ToJson() => JsonSerializer.Serialize(this);
@@ -69,3 +70,13 @@ public sealed record NeuralNetworkState(
 
 /// <summary>Stan podgrafu: stany modułów wnętrza (po Id), rekurencyjnie. Struktury grafu nie zapisuje.</summary>
 public sealed record CompositeState(ModuleSnapshot[] Modules) : ModuleState;
+
+/// <summary>Stan CPG węża: liczba stawów (kształt, należy do ciała) i 6 uczonych parametrów.</summary>
+public sealed record CpgState(
+    int Joints,
+    float Amplitude,
+    float Frequency,
+    float PhaseLag,
+    float TurnGain,
+    float PitchAmplitude,
+    float PitchPhase) : ModuleState;

@@ -7,6 +7,7 @@ namespace Animata.Core.Physics;
 /// Rozpychanie nakładających się encji jako okręgów w płaszczyźnie XY (promień = BoundingRadius).
 /// Dwie ruchome dzielą korektę po połowie; ruchoma kontra nieruchoma — ruchoma bierze całość.
 /// Kilka iteracji rozwiązuje łańcuchy (A pcha B, B pcha C). O(n²) — wystarczy do kilkuset encji.
+/// Encje liczone przez fizykę (<see cref="Entity.UsesPhysics"/>) są pomijane — zderza je Bepu.
 /// </summary>
 public sealed class CollisionSystem
 {
@@ -25,14 +26,14 @@ public sealed class CollisionSystem
             {
                 var a = aEntities[i];
                 var radiusA = a.BoundingRadius;
-                if (radiusA <= 0)
+                if (radiusA <= 0 || a.UsesPhysics)
                     continue;
 
                 for (var j = i + 1; j < aEntities.Count; j++)
                 {
                     var b = aEntities[j];
                     var radiusB = b.BoundingRadius;
-                    if (radiusB <= 0 || (!a.IsMovable && !b.IsMovable))
+                    if (radiusB <= 0 || b.UsesPhysics || (!a.IsMovable && !b.IsMovable))
                         continue;
 
                     var delta = new Vector2(b.Body.Position.X - a.Body.Position.X, b.Body.Position.Y - a.Body.Position.Y);

@@ -7,7 +7,7 @@ using Animata.Core.Sensors;
 namespace Animata.Core.WorldObjects;
 
 /// <summary>
-/// Zmiana liczby wąsów stwora w miejscu: ten sam stwór, ten sam <see cref="RaySensor"/> (to samo Id) i ten sam mózg.
+/// Zmiana liczby wąsów stwora w miejscu: ten sam stwór, ten sam <see cref="RaySensor"/> (ten sam slot) i ten sam mózg.
 /// - sensor dostaje nowe kąty (wachlarz <see cref="WorldObjectCatalog.WhiskerSpread"/>), porty Ray0…Ray{n−1};
 /// - węzły tego sensora w grafie (także w podgrafach) dostają nowe porty;
 /// - AvoidAndSeek dostaje nowe kąty (parametry zostają);
@@ -41,14 +41,14 @@ public static class WhiskerRewiring
         var networkStates = networks.Select(aNetwork => Remap((NeuralNetworkState)aNetwork.CaptureState(), aCount, aNetwork.Name)).ToList();
         var snapshots = brain?.Snapshots.Select(aSnapshot => (Old: aSnapshot, New: Convert(aSnapshot, aCount))).ToList()
             ?? new List<(BrainSnapshot Old, BrainSnapshot? New)>();
-        var fed = graphs.Select(aGraph => (Graph: aGraph, Pairs: FedByRays(aGraph, sensor.Id))).ToList();
+        var fed = graphs.Select(aGraph => (Graph: aGraph, Pairs: FedByRays(aGraph, sensor.Slot))).ToList();
 
         // 2. Ciało i moduły.
         sensor.SetAngles(angles);
         foreach (var module in graphs.SelectMany(aGraph => aGraph.Modules))
             switch (module)
             {
-                case SensorModule source when source.SensorId == sensor.Id:
+                case SensorModule source when source.Slot == sensor.Slot:
                     source.SetPorts(sensor.OutputPorts);
                     break;
                 case AvoidAndSeekModule avoid:
@@ -83,14 +83,14 @@ public static class WhiskerRewiring
     }
 
     /// <summary>Pary (węzeł sensora, moduł) połączone wąsem „port do portu tej samej nazwy” (Ray3 → Ray3).</summary>
-    private static List<(BrainModule Source, BrainModule Target)> FedByRays(BrainGraph aGraph, Guid aSensorId)
+    private static List<(BrainModule Source, BrainModule Target)> FedByRays(BrainGraph aGraph, string aSlot)
     {
         var pairs = new List<(BrainModule Source, BrainModule Target)>();
         foreach (var link in aGraph.Connections)
         {
             if (!RaySensor.IsPortName(link.SourcePort) || link.SourcePort != link.TargetPort)
                 continue;
-            if (aGraph.Find(link.SourceId) is SensorModule source && source.SensorId == aSensorId &&
+            if (aGraph.Find(link.SourceId) is SensorModule source && source.Slot == aSlot &&
                 aGraph.Find(link.TargetId) is { } target && !pairs.Contains((source, target)))
                 pairs.Add((source, target));
         }

@@ -2,6 +2,7 @@ using System.Numerics;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
+using Animata.Core.Persistence;
 using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
@@ -15,13 +16,14 @@ public enum CreatureKind
     ControllerCar,
     NeuralCar,
     ControllerCylinder,
-    NeuralCylinder
+    NeuralCylinder,
+    Snake
 }
 
 /// <summary>
-/// Stan aplikacji niezależny od paneli: świat, symulacja (pauza, prędkość, błąd mózgu), nauka i snapshoty.
-/// Panele tylko go czytają i wołają jego akcje, więc symulacja i nauka idą dalej, gdy użytkownik jest w menu
-/// albo w mózgu stwora. Wszystko wołane z wątku UI.
+/// Jedna scena Studia: świat, symulacja (pauza, prędkość, błąd mózgu), nauka i snapshoty. Studio ma kilka scen
+/// (demo, wąż), każdą z własną sesją; wszystkie idą naraz. Panele tylko czytają sesję i wołają jej akcje,
+/// więc symulacja i nauka idą dalej, gdy użytkownik jest w menu albo w mózgu stwora. Wszystko wołane z wątku UI.
 /// </summary>
 public sealed class StudioSession : IDisposable
 {
@@ -31,11 +33,19 @@ public sealed class StudioSession : IDisposable
     private readonly Dictionary<Brain, List<TrainingProgress>> _progress = [];
     private float _pending;
 
-    public StudioSession()
+    private readonly Func<DemoScene> _factory;
+
+    /// <param name="aName">Nazwa sceny (breadcrumb, kafel w menu).</param>
+    /// <param name="aFactory">Świeża scena — na start i dla „od nowa”.</param>
+    public StudioSession(string aName, Func<DemoScene> aFactory)
     {
-        Demo = WorldObjectCatalog.CreateDemo();
+        Name = aName;
+        _factory = aFactory;
+        Demo = aFactory();
         Training = new TrainingController(History);
     }
+
+    public string Name { get; }
 
     public DemoScene Demo { get; private set; }
     public World World => Demo.World;
@@ -60,10 +70,12 @@ public sealed class StudioSession : IDisposable
     public event Action? SceneReset;
 
     public IEnumerable<ActiveEntity> Creatures => World.Entities.OfType<ActiveEntity>();
-    public IEnumerable<ActiveEntity> NeuralCreatures => Creatures.Where(aCreature => TrainingController.FindNetwork(aCreature) is not null);
+    public IEnumerable<ActiveEntity> NeuralCreatures => Creatures.Where(aCreature => TrainingController.FindTrainable(aCreature) is not null);
 
     public static string NameOf(Entity aEntity) => !string.IsNullOrWhiteSpace(aEntity.Name) ? aEntity.Name : aEntity switch
     {
+        SnakeCreature => "Wąż",
+        Floor floor => $"Podłoga {floor.Size.X:0.#} × {floor.Size.Y:0.#} m",
         CarCreature => "Autko",
         CylinderCreature => "Walec",
         TargetBall => "Kulka",
@@ -228,8 +240,18 @@ public sealed class StudioSession : IDisposable
         CreatureKind.ControllerCar => "Autko sterownik",
         CreatureKind.NeuralCar => "Autko NN",
         CreatureKind.ControllerCylinder => "Walec sterownik",
-        _ => "Walec NN"
+        CreatureKind.NeuralCylinder => "Walec NN",
+        _ => "Wąż"
     };
+
+    /// <summary>„1 segment”, „3 segmenty”, „8 segmentów”.</summary>
+    public static string Segments(int aCount)
+    {
+        var word = aCount == 1 ? "segment"
+            : aCount % 10 is >= 2 and <= 4 && aCount % 100 is not (>= 12 and <= 14) ? "segmenty"
+            : "segmentów";
+        return $"{aCount} {word}";
+    }
 
     /// <summary>„1 wąs”, „3 wąsy”, „5 wąsów”, „23 wąsy”.</summary>
     public static string Whiskers(int aCount)
@@ -244,7 +266,8 @@ public sealed class StudioSession : IDisposable
     /// Wstawia stwora w punkcie podłoża: patrzy na najbliższą kulkę i na nią poluje. Stwór z siecią od razu się uczy
     /// (jak fioletowe w demo). Autko dostaje <paramref name="aWhiskers"/> wąsów (nieparzyście, 1…25).
     /// </summary>
-    public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition, int aWhiskers = WorldObjectCatalog.DefaultWhiskers)
+    public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition, int aWhiskers = WorldObjectCatalog.DefaultWhiskers,
+        int aSegments = WorldObjectCatalog.DefaultSnakeSegments)
     {
         var position = aPosition with { Z = 0 };
         var target = NearestTarget(position);
@@ -254,15 +277,18 @@ public sealed class StudioSession : IDisposable
             CreatureKind.ControllerCar => WorldObjectCatalog.CreateControllerCar(position, yaw, target?.Id, aWhiskers),
             CreatureKind.NeuralCar => WorldObjectCatalog.CreateNeuralCar(position, yaw, target?.Id, aWhiskers),
             CreatureKind.ControllerCylinder => WorldObjectCatalog.CreateControllerSeeker(position, target?.Id),
-            _ => WorldObjectCatalog.CreateLearningSeeker(position, target?.Id)
+            CreatureKind.NeuralCylinder => WorldObjectCatalog.CreateLearningSeeker(position, target?.Id),
+            _ => WorldObjectCatalog.CreateLearningSnake(position, yaw, target?.Id, aSegments)
         };
-        creature.Body.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw);
+        creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));
         var name = KindName(aKind);
         if (IsCar(aKind) && aWhiskers != WorldObjectCatalog.DefaultWhiskers)
             name += $" ×{aWhiskers}";
+        if (aKind == CreatureKind.Snake && aSegments != WorldObjectCatalog.DefaultSnakeSegments)
+            name += $" ×{aSegments}";
         creature.Name = UniqueName(name);
         World.Add(creature);
-        if (TrainingController.FindNetwork(creature) is not null)
+        if (TrainingController.FindTrainable(creature) is not null)
             Training.Start(creature);
         Status = target is null ? $"dodano: {creature.Name} (brak kulki — dodaj cel)" : $"dodano: {creature.Name}";
         return creature;
@@ -339,6 +365,44 @@ public sealed class StudioSession : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Zmienia liczbę segmentów węża w miejscu (<see cref="SnakeCreature.SetSegments"/>): parametry CPG zostają,
+    /// trwająca nauka jest zatrzymywana i wznawiana w ciele o nowej długości.
+    /// </summary>
+    public bool SetSegments(SnakeCreature aSnake, int aSegments)
+    {
+        if (!WorldObjectCatalog.IsValidSnakeLength(aSegments))
+        {
+            Status = $"wąż ma od {WorldObjectCatalog.MinSnakeSegments} do {WorldObjectCatalog.MaxSnakeSegments} segmentów";
+            return false;
+        }
+        if (aSnake.Segments == aSegments)
+            return true;
+
+        var brain = aSnake.Brain;
+        var training = brain is not null && Training.IsTraining(brain);
+        if (training)
+            Training.Stop(brain!);
+        try
+        {
+            aSnake.SetSegments(aSegments);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or BrainException)
+        {
+            Status = exception.Message;
+            if (training)
+                Training.Start(aSnake);
+            return false;
+        }
+
+        if (brain is not null)
+            _progress.Remove(brain);
+        if (training)
+            Training.Start(aSnake);
+        Status = $"{NameOf(aSnake)}: {Segments(aSegments)}" + (training ? " — nauka wznowiona" : string.Empty);
+        return true;
+    }
+
     private TargetBall? NearestTarget(Vector3 aPosition) => World.Entities.OfType<TargetBall>()
         .MinBy(aTarget => Vector3.DistanceSquared(aTarget.Body.Position, aPosition));
 
@@ -355,6 +419,11 @@ public sealed class StudioSession : IDisposable
 
     public void Remove(Entity aEntity)
     {
+        if (aEntity.IsFixed)
+        {
+            Status = $"{NameOf(aEntity)} jest nieruszalna — nie da się jej usunąć";
+            return;
+        }
         if (aEntity is ActiveEntity { Brain: { } brain })
         {
             Training.Stop(brain, aSnapshot: false);
@@ -364,22 +433,44 @@ public sealed class StudioSession : IDisposable
         World.Remove(aEntity);
     }
 
-    /// <summary>Nowa scena demo od zera: zatrzymuje nauki, czyści historię, startuje naukę fioletowych.</summary>
+    /// <summary>Scena od zera: zatrzymuje nauki, czyści historię, startuje naukę stworów z uczonym modułem.</summary>
     public void ResetScene()
+    {
+        Replace(_factory(), 0);
+        Status = $"{Name}: od nowa";
+        StartTrainingAll();
+    }
+
+    /// <summary>Zapis sceny (świat, mózgi, snapshoty) do dokumentu JSON.</summary>
+    public WorldDocument Save() => WorldFile.Capture(World, Name, SimTime);
+
+    /// <summary>Wczytuje zapisany świat w miejsce obecnego. Nauka nie startuje sama (L ją włącza).</summary>
+    public void Load(WorldDocument aDocument)
+    {
+        var scene = WorldFile.Restore(aDocument);
+        Replace(scene, aDocument.Time);
+        Status = $"wczytano: {aDocument.Name} ({scene.World.Entities.Count} encji) — L włącza naukę";
+    }
+
+    private void Replace(DemoScene aScene, double aTime)
     {
         Training.Dispose();
         _progress.Clear();
+        var old = Demo.World;
         History = new SnapshotHistory();
-        Demo = WorldObjectCatalog.CreateDemo();
+        Demo = aScene;
         Training = new TrainingController(History);
-        SimTime = 0;
+        old.Dispose();
+        SimTime = aTime;
         Paused = false;
         Error = null;
         ErrorModuleId = null;
-        Status = "nowa scena demo";
-        StartTrainingAll();
         SceneReset?.Invoke();
     }
 
-    public void Dispose() => Training.Dispose();
+    public void Dispose()
+    {
+        Training.Dispose();
+        World.Dispose();
+    }
 }

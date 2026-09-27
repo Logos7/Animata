@@ -12,7 +12,7 @@ using Animata.Studio.Theme;
 
 namespace Animata.Studio.Controls;
 
-/// <summary>Scena z góry w miniaturze (kafel w menu): podłoże, słupki, cele i stwory w swoich kolorach.</summary>
+/// <summary>Scena z góry w miniaturze (kafel w menu): podłogi, słupki, cele i stwory (wąż — jako łańcuch segmentów).</summary>
 public sealed class SceneMiniMap : ThemedControl
 {
     private static readonly Color Ground = Color.FromRgb(51, 69, 84);
@@ -27,19 +27,38 @@ public sealed class SceneMiniMap : ThemedControl
         if (World is null || World.Entities.Count == 0)
             return;
 
-        // Zakres świata jak podłoże w rendererze (22 × 16 m), poszerzony, gdyby coś wyjechało.
-        var minX = MathF.Min(-11, World.Entities.Min(aEntity => aEntity.Body.Position.X) - 1);
-        var maxX = MathF.Max(11, World.Entities.Max(aEntity => aEntity.Body.Position.X) + 1);
-        var minY = MathF.Min(-8, World.Entities.Min(aEntity => aEntity.Body.Position.Y) - 1);
-        var maxY = MathF.Max(8, World.Entities.Max(aEntity => aEntity.Body.Position.Y) + 1);
+        // Zakres: podłogi i wszystko, co na nich (albo poza nimi) stoi, z małym marginesem.
+        var floors = World.Entities.OfType<Floor>().ToList();
+        var others = World.Entities.Where(aEntity => aEntity is not Floor).ToList();
+        var minX = float.PositiveInfinity;
+        var maxX = float.NegativeInfinity;
+        var minY = float.PositiveInfinity;
+        var maxY = float.NegativeInfinity;
+        foreach (var floor in floors)
+        {
+            minX = MathF.Min(minX, floor.Min.X);
+            maxX = MathF.Max(maxX, floor.Max.X);
+            minY = MathF.Min(minY, floor.Min.Y);
+            maxY = MathF.Max(maxY, floor.Max.Y);
+        }
+        foreach (var entity in others)
+        {
+            minX = MathF.Min(minX, entity.Body.Position.X - 1);
+            maxX = MathF.Max(maxX, entity.Body.Position.X + 1);
+            minY = MathF.Min(minY, entity.Body.Position.Y - 1);
+            maxY = MathF.Max(maxY, entity.Body.Position.Y + 1);
+        }
+        if (!float.IsFinite(minX) || maxX - minX < 1e-3f || maxY - minY < 1e-3f)
+            (minX, maxX, minY, maxY) = (-11, 11, -8, 8);
         var scale = Math.Min((bounds.Width - 24) / (maxX - minX), (bounds.Height - 24) / (maxY - minY));
         var offset = new Point(bounds.Width / 2 - (minX + maxX) / 2 * scale, bounds.Height / 2 + (minY + maxY) / 2 * scale);
         Point Map(Vector3 aPosition) => new(offset.X + aPosition.X * scale, offset.Y - aPosition.Y * scale);
 
-        aContext.DrawRectangle(Ui.Brush(Ground), null,
-            new Rect(Map(new Vector3(-11, 8, 0)), Map(new Vector3(11, -8, 0))), 6, 6);
+        foreach (var floor in floors)
+            aContext.DrawRectangle(Ui.Brush(Ground), null,
+                new Rect(Map(new Vector3(floor.Min.X, floor.Max.Y, 0)), Map(new Vector3(floor.Max.X, floor.Min.Y, 0))), 6, 6);
 
-        foreach (var entity in World.Entities)
+        foreach (var entity in others)
         {
             var center = Map(entity.Body.Position);
             var radius = entity.BoundingRadius * scale;
@@ -53,6 +72,15 @@ public sealed class SceneMiniMap : ThemedControl
                         aContext.DrawRectangle(Ui.Brush(color), null,
                             new Rect(-car.Length / 2 * scale, -car.Width / 2 * scale, car.Length * scale, car.Width * scale), 3, 3);
                     break;
+                case ArticulatedCreature body:
+                {
+                    var pen = new Pen(Ui.Brush(color), Math.Max(3, body.BoundingRadius * 2 * scale), lineCap: PenLineCap.Round);
+                    for (var index = 1; index < body.PartPositions.Count; index++)
+                        aContext.DrawLine(pen, Map(body.PartPositions[index - 1]), Map(body.PartPositions[index]));
+                    if (body.PartPositions.Count > 0)
+                        aContext.DrawEllipse(Ui.Brush(color), null, Map(body.PartPositions[0]), pen.Thickness * 0.8, pen.Thickness * 0.8);
+                    break;
+                }
                 default:
                     aContext.DrawEllipse(Ui.Brush(color), null, center, radius, radius);
                     break;
@@ -155,6 +183,25 @@ public sealed class BodyDiagram : ThemedControl
                 aContext.DrawEllipse(Ui.Brush(bodyColor), outline, center, radius, radius);
                 aContext.DrawEllipse(Ui.Brush(P.Text), null, center + new Vector(radius * 1.08, 0), radius * 0.2, radius * 0.2);
                 Callout(aContext, center + new Vector(0, radius + 6), new Point(16, size.Height - 22), "Koła · DiskDrive");
+                break;
+            }
+            case ArticulatedCreature body when body.PartPositions.Count > 0:
+            {
+                // Części w układzie stwora (przód w prawo), skala dopasowana do długości ciała.
+                var inverse = Quaternion.Inverse(body.Body.Rotation);
+                var local = body.PartPositions.Select(aPosition => Vector3.Transform(aPosition - body.Body.Position, inverse)).ToList();
+                var extent = local.Max(aPoint => MathF.Max(MathF.Abs(aPoint.X), MathF.Abs(aPoint.Y))) + body.BoundingRadius * 2;
+                var fit = Math.Min(size.Width, size.Height) * 0.38 / Math.Max(0.1f, extent);
+                Point ToScreen(Vector3 aPoint) => center + new Vector(aPoint.X * fit, -aPoint.Y * fit);
+                var thickness = Math.Max(6, body.BoundingRadius * 2 * fit);
+                var pen = new Pen(Ui.Brush(bodyColor), thickness, lineCap: PenLineCap.Round);
+                for (var index = 1; index < local.Count; index++)
+                    aContext.DrawLine(pen, ToScreen(local[index - 1]), ToScreen(local[index]));
+                for (var index = 0; index < local.Count; index++)
+                    aContext.DrawEllipse(Ui.Brush(index == 0 ? P.Accent : StudioPalette.WithAlpha(P.Text, 0.35)), null,
+                        ToScreen(local[index]), index == 0 ? thickness * 0.45 : 2.5, index == 0 ? thickness * 0.45 : 2.5);
+                Callout(aContext, ToScreen(local[^1]), new Point(16, size.Height - 22),
+                    $"Kręgosłup · {body.JointCount} stawów (skręt + pochylenie)");
                 break;
             }
             default:

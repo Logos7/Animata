@@ -92,6 +92,8 @@ internal static class ScenePicker
                 CarCreature car => HitCylinder(car.Body, 0.5f * MathF.Max(car.Length, car.Width),
                     SceneMeshes.CarClearance + car.Height, aOrigin, aDirection),
                 Obstacle obstacle => HitCylinder(obstacle.Body, obstacle.Radius, obstacle.Height, aOrigin, aDirection),
+                ArticulatedCreature body => HitParts(body, aOrigin, aDirection),
+                // Podłoga (i każda encja IsFixed) nie jest łapana — kliknięcie w nią nic nie zaznacza ani nie przesuwa.
                 _ => null
             };
             if (hit is float distance && distance < best)
@@ -101,6 +103,31 @@ internal static class ScenePicker
             }
         }
         return nearest;
+    }
+
+    /// <summary>Części stwora jako kule (kapsuła — kula obejmująca całą kapsułę).</summary>
+    private static float? HitParts(ArticulatedCreature aCreature, Vector3 aOrigin, Vector3 aDirection)
+    {
+        float? best = null;
+        for (var index = 0; index < aCreature.PartPositions.Count; index++)
+        {
+            var part = aCreature.Plan.Parts[index];
+            var radius = part.Shape == PartShape.Capsule ? part.Size.X + part.Size.Y / 2 : part.Radius;
+            if (HitSphere(aCreature.PartPositions[index], radius, aOrigin, aDirection) is float distance && (best is null || distance < best))
+                best = distance;
+        }
+        return best;
+    }
+
+    private static float? HitSphere(Vector3 aCenter, float aRadius, Vector3 aOrigin, Vector3 aDirection)
+    {
+        var offset = aOrigin - aCenter;
+        var projection = Vector3.Dot(offset, aDirection);
+        var discriminant = projection * projection - (offset.LengthSquared() - aRadius * aRadius);
+        if (discriminant < 0)
+            return null;
+        var near = -projection - MathF.Sqrt(discriminant);
+        return near > 0 ? near : null;
     }
 
     private static float? HitBall(TargetBall aBall, Vector3 aOrigin, Vector3 aDirection)
