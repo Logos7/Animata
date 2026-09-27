@@ -425,6 +425,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 details.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(Session, snake, () => _propertiesBuilt = false)));
             details.Children.Add(Ui.Row("Napęd", string.Join(", ", active.Body.Actuators.Select(aActuator => aActuator.GetType().Name.Replace("Actuator", string.Empty)))));
             _properties.Children.Add(details);
+            if (PanelParts.DriveEditor(active) is { } drive)
+                _properties.Children.Add(drive);
 
             if (TrainingController.FindTrainable(active) is not null)
                 _properties.Children.Add(PanelParts.TrainingCard(Session, active, _updaters));
@@ -569,35 +571,17 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             menu.Items.Add(new MenuItem { Header = StudioSession.NameOf(entity), IsEnabled = false });
             if (entity is ActiveEntity { Brain: not null } creature)
                 menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
-            if (entity is CarCreature car)
-            {
-                var count = WorldObjectCatalog.WhiskerCountOf(car);
-                menu.Items.Add(WhiskerMenu($"Wąsy: {count}", Icons.Whiskers, count, aCount => SetWhiskers(car, aCount)));
-            }
-            if (entity is SnakeCreature snake)
-                menu.Items.Add(CountMenu($"Segmenty: {snake.Segments}", Icons.Snake, SegmentChoices, snake.Segments, StudioSession.Segments,
-                    aCount =>
-                    {
-                        if (Session.World.Contains(snake) && Session.SetSegments(snake, aCount))
-                            _propertiesBuilt = false;
-                    }));
             if (entity is TargetBall ball)
                 menu.Items.Add(Item("Wszystkie oczy na tę kulkę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
             menu.Items.Add(Item("Usuń", Icons.Trash, () => RemoveEntity(entity), Key.Delete));
             menu.Items.Add(new Separator());
         }
 
-        menu.Items.Add(new MenuItem { Header = "Wstaw tutaj", IsEnabled = false });
-        menu.Items.Add(WhiskerMenu("Autko — sterownik", Icons.Brain, 0,
-            aCount => SelectNew(Session.AddCreature(CreatureKind.ControllerCar, at, aCount))));
-        menu.Items.Add(WhiskerMenu("Autko — sieć neuronowa", Icons.Neural, 0,
-            aCount => SelectNew(Session.AddCreature(CreatureKind.NeuralCar, at, aCount))));
-        menu.Items.Add(Item("Walec — sterownik", Icons.Brain, () => SelectNew(Session.AddCreature(CreatureKind.ControllerCylinder, at))));
-        menu.Items.Add(Item("Walec — sieć neuronowa", Icons.Neural, () => SelectNew(Session.AddCreature(CreatureKind.NeuralCylinder, at))));
-        menu.Items.Add(CountMenu("Wąż — uczy się pełzać (CPG)", Icons.Snake, SegmentChoices, 0, StudioSession.Segments,
-            aCount => SelectNew(Session.AddCreature(CreatureKind.Snake, at, aSegments: aCount)), WorldObjectCatalog.DefaultSnakeSegments));
+        menu.Items.Add(Item("Autko", Icons.Wheel, () => SelectNew(Session.AddCreature(CreatureKind.Car, at))));
+        menu.Items.Add(Item("Walec", Icons.Target, () => SelectNew(Session.AddCreature(CreatureKind.Cylinder, at))));
+        menu.Items.Add(Item("Wąż", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.Snake, at))));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Kulka (cel)", Icons.Target, () => SelectNew(Session.AddTarget(at)), Key.Insert));
+        menu.Items.Add(Item("Kulka", Icons.Target, () => SelectNew(Session.AddTarget(at)), Key.Insert));
         menu.Items.Add(Item("Słupek", Icons.Pillar, () => SelectNew(Session.AddObstacle(at)), Key.O));
 
         menu.Open(_renderer.View);
@@ -610,32 +594,6 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             item.InputGesture = new KeyGesture(key);
         item.Click += (_, _) => aClick();
         return item;
-    }
-
-    /// <summary>Liczby segmentów w menu (pełny zakres jest na liście we właściwościach).</summary>
-    private static readonly int[] SegmentChoices = [2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24];
-
-    /// <summary>Podmenu liczby wąsów (1, 3, …, 25); <paramref name="aCurrent"/> dostaje znacznik (0 — żadna).</summary>
-    private static MenuItem WhiskerMenu(string aHeader, string aIcon, int aCurrent, Action<int> aChoose) =>
-        CountMenu(aHeader, aIcon, WorldObjectCatalog.WhiskerCounts, aCurrent, StudioSession.Whiskers, aChoose, WorldObjectCatalog.DefaultWhiskers);
-
-    /// <summary>Podmenu liczb (wąsy, segmenty); bieżąca ma znacznik, domyślna dopisek.</summary>
-    private static MenuItem CountMenu(string aHeader, string aIcon, IEnumerable<int> aCounts, int aCurrent, Func<int, string> aLabel,
-        Action<int> aChoose, int aDefault = 0)
-    {
-        var parent = new MenuItem { Header = aHeader, Icon = Ui.Icon(aIcon, 14) };
-        foreach (var count in aCounts)
-        {
-            var chosen = count;
-            var item = new MenuItem
-            {
-                Header = aLabel(count) + (count == aDefault ? " (domyślnie)" : string.Empty),
-                Icon = count == aCurrent ? Ui.Icon(Icons.Check, 14, "Studio.Accent") : null
-            };
-            item.Click += (_, _) => aChoose(chosen);
-            parent.Items.Add(item);
-        }
-        return parent;
     }
 
     // ---------- zapis i odczyt ----------
@@ -700,12 +658,6 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         {
             Session.Status = $"nie wczytano: {exception.Message}";
         }
-    }
-
-    private void SetWhiskers(ActiveEntity aCreature, int aCount)
-    {
-        if (Session.World.Contains(aCreature) && Session.SetWhiskers(aCreature, aCount))
-            _propertiesBuilt = false;
     }
 
     private void SelectNew(Entity aEntity)

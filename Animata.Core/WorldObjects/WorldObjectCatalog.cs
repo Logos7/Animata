@@ -126,7 +126,8 @@ public static class WorldObjectCatalog
     public static CylinderCreature CreateSeeker(Vector3 aPosition, Vector3 aColor, Guid? aTargetId, BrainModule aController)
     {
         var brain = new Brain();
-        var creature = new CylinderCreature(brain) { Color = aColor, Body = { Position = aPosition } };
+        var creature = new CylinderCreature(brain) { Color = aColor };
+        creature.Place(aPosition, Quaternion.Identity);
         var eye = new TargetSensor { Slot = "Eye", TargetId = aTargetId };
         var wheels = new DiskDriveActuator { Slot = "Wheels" };
         creature.Body.Sensors.Add(eye);
@@ -170,11 +171,8 @@ public static class WorldObjectCatalog
         int aWhiskers = DefaultWhiskers)
     {
         var brain = new Brain();
-        var car = new CarCreature(brain)
-        {
-            Color = aColor,
-            Body = { Position = aPosition, Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) }
-        };
+        var car = new CarCreature(brain) { Color = aColor };
+        car.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
         var eye = new TargetSensor { Slot = "Eye", TargetId = aTargetId };
         var whiskers = new RaySensor(WhiskerAnglesFor(aWhiskers), WhiskerRange) { Slot = "Whiskers" };
         var wheels = new SteeringDriveActuator { Slot = "Wheels" };

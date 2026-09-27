@@ -259,20 +259,16 @@ public sealed class ModuleInspector
         section.Children.Add(Ui.Row("Typ", actuator?.GetType().Name ?? "brak w ciele!", true));
         switch (actuator)
         {
-            case SteeringDriveActuator steering:
-                section.Children.Add(Ui.Row("Maks. prędkość", $"{steering.MaxSpeed:0.##} m/s", true));
-                section.Children.Add(Ui.Row("Maks. skręt kół", $"{steering.MaxSteerAngle * 180 / MathF.PI:0}°", true));
-                section.Children.Add(Ui.Row("Rozstaw osi", $"{steering.WheelBase:0.##} m", true));
+            case SteeringDriveActuator or DiskDriveActuator:
+                if (PanelParts.DriveEditor(_creature) is { } drive)
+                    section.Children.Add(drive);
                 break;
             case SpineActuator spine:
                 section.Children.Add(Ui.Row("Stawy", $"{spine.Joints} · porty Yaw{{i}}, Pitch{{i}} ∈ [-1, 1]", true));
                 if (_creature is SnakeCreature snake)
                     section.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(_session, snake, () => Changed?.Invoke()), 34));
                 break;
-            case DiskDriveActuator disk:
-                section.Children.Add(Ui.Row("Maks. prędkość", $"{disk.MaxSpeed:0.##} m/s", true));
-                section.Children.Add(Ui.Row("Maks. obrót", $"{disk.MaxTurnSpeed:0.##} rad/s", true));
-                break;
+
         }
         aPanel.Children.Add(section);
     }

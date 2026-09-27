@@ -33,9 +33,11 @@ and let it run on.
 
 ## What works today
 
-- **World and bodies.** Entities on a floor (a fixed box nothing can move). Simple bodies — a disc with differential
-  drive and a car with front-wheel steering and a real turning radius — slide with circle collisions. Bodies built
-  from blocks (parts and joints, a `BodyPlan`) live in real 3D rigid-body physics (BepuPhysics 2).
+- **World and bodies.** Entities on a floor (a fixed box nothing can move). Every creature is built from blocks
+  (parts and joints, a `BodyPlan`) and lives in real 3D rigid-body physics (BepuPhysics 2). Three creatures:
+  a **car** (box body on four wheel bodies with suspension, front-wheel steering, rear-wheel drive), a **cylinder**
+  (disc on two driven side wheels and two support balls, turns in place) and a **snake**. Drive settings — top speed,
+  reverse speed, maximum steering angle, turn rate, wheel torque — are editable per creature.
 - **A snake that learns to crawl.** Any number of capsule segments (2–24, changeable on a living snake) linked by
   ball joints with servos (yaw and pitch — full 3D). Scales give it more grip sideways than forwards, so a wave
   running from head to tail pushes it along. A CPG module (a travelling wave with six learnable parameters) drives
@@ -119,7 +121,7 @@ dotnet run --project Animata.Studio
 | Everywhere | Esc · Alt+← · mouse Back | Zoom out one level |
 | Scene, creature, graph | Space | Pause / resume the world |
 | Scene | LMB drag | Move entities |
-| Scene | RMB click | Context menu: insert a car (1–25 whiskers), cylinder, snake (2–24 segments), target or post where you clicked; on an entity: enter, change whiskers or segments, delete |
+| Scene | RMB click | Context menu: insert a car, cylinder or snake (they start learning), a target or a post where you clicked; on an entity: enter, aim eyes, delete |
 | Scene | RMB drag · WSADQE · wheel | Look around · fly · fly forward/back (the wheel works like W/S) |
 | Scene | Ins · O · T · Del | Add target · add post · aim all eyes at the selected target · delete |
 | Scene | L · K | Start/stop training · random weights and retrain |

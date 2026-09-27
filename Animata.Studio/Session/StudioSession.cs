@@ -10,13 +10,11 @@ using Animata.Core.Worlds;
 
 namespace Animata.Studio.Session;
 
-/// <summary>Stwory, które da się wstawić do sceny.</summary>
+/// <summary>Zwierzątka, które da się wstawić do sceny — każde z uczonym mózgiem (sieć albo CPG), od razu się uczy.</summary>
 public enum CreatureKind
 {
-    ControllerCar,
-    NeuralCar,
-    ControllerCylinder,
-    NeuralCylinder,
+    Car,
+    Cylinder,
     Snake
 }
 
@@ -233,14 +231,10 @@ public sealed class StudioSession : IDisposable
 
     // ---------- świat ----------
 
-    public static bool IsCar(CreatureKind aKind) => aKind is CreatureKind.ControllerCar or CreatureKind.NeuralCar;
-
     public static string KindName(CreatureKind aKind) => aKind switch
     {
-        CreatureKind.ControllerCar => "Autko sterownik",
-        CreatureKind.NeuralCar => "Autko NN",
-        CreatureKind.ControllerCylinder => "Walec sterownik",
-        CreatureKind.NeuralCylinder => "Walec NN",
+        CreatureKind.Car => "Autko",
+        CreatureKind.Cylinder => "Walec",
         _ => "Wąż"
     };
 
@@ -263,30 +257,22 @@ public sealed class StudioSession : IDisposable
     }
 
     /// <summary>
-    /// Wstawia stwora w punkcie podłoża: patrzy na najbliższą kulkę i na nią poluje. Stwór z siecią od razu się uczy
-    /// (jak fioletowe w demo). Autko dostaje <paramref name="aWhiskers"/> wąsów (nieparzyście, 1…25).
+    /// Wstawia zwierzątko w punkcie podłoża: patrzy na najbliższą kulkę i na nią poluje, od razu się uczy
+    /// (autko i walec — sieć neuronowa, wąż — CPG). Liczbę wąsów i segmentów zmienia się potem we właściwościach.
     /// </summary>
-    public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition, int aWhiskers = WorldObjectCatalog.DefaultWhiskers,
-        int aSegments = WorldObjectCatalog.DefaultSnakeSegments)
+    public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition)
     {
         var position = aPosition with { Z = 0 };
         var target = NearestTarget(position);
         var yaw = target is null ? 0 : MathF.Atan2(target.Body.Position.Y - position.Y, target.Body.Position.X - position.X);
         ActiveEntity creature = aKind switch
         {
-            CreatureKind.ControllerCar => WorldObjectCatalog.CreateControllerCar(position, yaw, target?.Id, aWhiskers),
-            CreatureKind.NeuralCar => WorldObjectCatalog.CreateNeuralCar(position, yaw, target?.Id, aWhiskers),
-            CreatureKind.ControllerCylinder => WorldObjectCatalog.CreateControllerSeeker(position, target?.Id),
-            CreatureKind.NeuralCylinder => WorldObjectCatalog.CreateLearningSeeker(position, target?.Id),
-            _ => WorldObjectCatalog.CreateLearningSnake(position, yaw, target?.Id, aSegments)
+            CreatureKind.Car => WorldObjectCatalog.CreateNeuralCar(position, yaw, target?.Id),
+            CreatureKind.Cylinder => WorldObjectCatalog.CreateLearningSeeker(position, target?.Id),
+            _ => WorldObjectCatalog.CreateLearningSnake(position, yaw, target?.Id)
         };
         creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));
-        var name = KindName(aKind);
-        if (IsCar(aKind) && aWhiskers != WorldObjectCatalog.DefaultWhiskers)
-            name += $" ×{aWhiskers}";
-        if (aKind == CreatureKind.Snake && aSegments != WorldObjectCatalog.DefaultSnakeSegments)
-            name += $" ×{aSegments}";
-        creature.Name = UniqueName(name);
+        creature.Name = UniqueName(KindName(aKind));
         World.Add(creature);
         if (TrainingController.FindTrainable(creature) is not null)
             Training.Start(creature);

@@ -13,6 +13,7 @@ namespace Animata.Core.Brains.Modules;
 ///   trzymaj z premią, żeby nie zmieniać zdania co klatkę (inaczej autko drga przed przeszkodą),
 /// - coś tuż przed maską albo cel blisko z boku (w promieniu skrętu) — cofaj przez chwilę z kontrą,
 ///   tak żeby przód obrócił się w wybraną stronę.
+/// Parametry dobrane przeszukiwaniem na autku w fizyce (128 tras treningowych, sprawdzone na 192 innych: 192/192).
 /// Moduł ma krótką pamięć (wybrana strona, licznik cofania) — to stan chwilowy, nie trafia do snapshotu;
 /// czyści ją <see cref="Reset"/>.
 /// </summary>
@@ -63,42 +64,42 @@ public sealed class AvoidAndSeekModule : BrainModule
     public IReadOnlyList<float> RayAngles => _rayAngles;
 
     /// <summary>Skręt na radian różnicy między kursem a wybranym kierunkiem.</summary>
-    public float SteerGain { get; set; } = 1.5f;
+    public float SteerGain { get; set; } = 1.42f;
 
     /// <summary>Siła odpychania od przeszkód czutych z boku (bliskość², uśrednione jak dla 4 wąsów bocznych).</summary>
-    public float AvoidGain { get; set; } = 4;
+    public float AvoidGain { get; set; } = 5.27f;
 
     /// <summary>Wąsy bliżej niż ten kąt (rad) od kierunku do celu decydują, czy droga jest wolna.</summary>
-    public float PathWidth { get; set; } = 0.6f;
+    public float PathWidth { get; set; } = 0.56f;
 
     /// <summary>Bliskość, poniżej której wąs uznaje się za wolny.</summary>
-    public float ClearProximity { get; set; } = 0.15f;
+    public float ClearProximity { get; set; } = 0.31f;
 
     /// <summary>Premia (w skali bliskości) dla wąsów po raz wybranej stronie.</summary>
-    public float SideCommitment { get; set; } = 0.3f;
+    public float SideCommitment { get; set; } = 0.38f;
 
     /// <summary>Wąsy w tym stożku (rad) liczą się jako „przed maską”.</summary>
-    public float FrontAngle { get; set; } = 0.6f;
+    public float FrontAngle { get; set; } = 0.82f;
 
     /// <summary>Bliskość z przodu, od której autko cofa.</summary>
-    public float ReverseProximity { get; set; } = 0.9f;
+    public float ReverseProximity { get; set; } = 0.96f;
 
     /// <summary>Najkrótsze (s) cofnięcie.</summary>
-    public float ReverseDuration { get; set; } = 0.5f;
+    public float ReverseDuration { get; set; } = 0.56f;
 
     /// <summary>Cofanie trwa, dopóki bliskość z przodu nie spadnie poniżej tej wartości (lub minie 3 s).</summary>
-    public float ReleaseProximity { get; set; } = 0.45f;
+    public float ReleaseProximity { get; set; } = 0.47f;
 
     /// <summary>Po tylu sekundach wolnej drogi do celu autko zapomina wybraną stronę objazdu.</summary>
     public float SideMemory { get; set; } = 1;
 
     public float StopGap { get; set; } = 0.1f;
-    public float SlowdownGap { get; set; } = 1.5f;
-    public float MinThrottle { get; set; } = 0.25f;
+    public float SlowdownGap { get; set; } = 1.19f;
+    public float MinThrottle { get; set; } = 0.31f;
 
     /// <summary>Cel bliżej niż to i bardziej z boku niż <see cref="TurnAroundAngle"/> — cofnij, zamiast krążyć.</summary>
-    public float TurnAroundGap { get; set; } = 1.4f;
-    public float TurnAroundAngle { get; set; } = 1.2f;
+    public float TurnAroundGap { get; set; } = 0.91f;
+    public float TurnAroundAngle { get; set; } = 1.24f;
 
     public override IReadOnlyList<string> InputPorts => _inputs;
     public override IReadOnlyList<string> OutputPorts => Outputs;

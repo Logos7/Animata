@@ -41,10 +41,13 @@ public sealed record ObstacleDocument(Guid Id, string Name, float[] Position, fl
     : EntityDocument(Id, Name, Position, Rotation);
 
 public sealed record CarDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Whiskers,
-    float WhiskerRange, Guid? Target, BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
+    float WhiskerRange, Guid? Target, BrainDocument Brain, DriveDocument? Drive = null) : EntityDocument(Id, Name, Position, Rotation);
 
 public sealed record CylinderDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, Guid? Target,
-    BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
+    BrainDocument Brain, DriveDocument? Drive = null) : EntityDocument(Id, Name, Position, Rotation);
+
+/// <summary>Ustawienia napędu (autko: prędkości, skręt, moment; walec: prędkość, obrót, moment). Brak = domyślne.</summary>
+public sealed record DriveDocument(float MaxSpeed, float MaxReverseSpeed, float MaxSteerAngle, float MaxTurnSpeed, float DriveTorque);
 
 public sealed record SnakeDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Segments,
     Guid? Target, BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
@@ -129,13 +132,41 @@ public static class WorldFile
             Obstacle obstacle => new ObstacleDocument(obstacle.Id, obstacle.Name, position, rotation, obstacle.Radius, obstacle.Height),
             CarCreature car => new CarDocument(car.Id, car.Name, position, rotation, Vector(car.Color),
                 WorldObjectCatalog.WhiskerCountOf(car), car.Body.Sensors.OfType<RaySensor>().FirstOrDefault()?.Range ?? WorldObjectCatalog.WhiskerRange,
-                TargetOf(car), CaptureBrain(car.Brain!.Graph, car.Brain.Snapshots)),
+                TargetOf(car), CaptureBrain(car.Brain!.Graph, car.Brain.Snapshots), DriveOf(car)),
             CylinderCreature cylinder => new CylinderDocument(cylinder.Id, cylinder.Name, position, rotation, Vector(cylinder.Color),
-                TargetOf(cylinder), CaptureBrain(cylinder.Brain!.Graph, cylinder.Brain.Snapshots)),
+                TargetOf(cylinder), CaptureBrain(cylinder.Brain!.Graph, cylinder.Brain.Snapshots), DriveOf(cylinder)),
             SnakeCreature snake => new SnakeDocument(snake.Id, snake.Name, position, rotation, Vector(snake.Color), snake.Segments,
                 TargetOf(snake), CaptureBrain(snake.Brain!.Graph, snake.Brain.Snapshots)),
             _ => throw new NotSupportedException($"Zapis nie zna encji {aEntity.GetType().Name}.")
         };
+    }
+
+    private static DriveDocument? DriveOf(Entity aCreature) => aCreature.Body.Actuators.FirstOrDefault() switch
+    {
+        Actuators.SteeringDriveActuator steering => new DriveDocument(steering.MaxSpeed, steering.MaxReverseSpeed, steering.MaxSteerAngle, 0, steering.DriveTorque),
+        Actuators.DiskDriveActuator disk => new DriveDocument(disk.MaxSpeed, 0, 0, disk.MaxTurnSpeed, disk.DriveTorque),
+        _ => null
+    };
+
+    private static void ApplyDrive(Entity aCreature, DriveDocument? aDrive)
+    {
+        if (aDrive is null)
+            return;
+        foreach (var actuator in aCreature.Body.Actuators)
+            switch (actuator)
+            {
+                case Actuators.SteeringDriveActuator steering:
+                    steering.MaxSpeed = aDrive.MaxSpeed;
+                    steering.MaxReverseSpeed = aDrive.MaxReverseSpeed;
+                    steering.MaxSteerAngle = aDrive.MaxSteerAngle;
+                    steering.DriveTorque = aDrive.DriveTorque;
+                    break;
+                case Actuators.DiskDriveActuator disk:
+                    disk.MaxSpeed = aDrive.MaxSpeed;
+                    disk.MaxTurnSpeed = aDrive.MaxTurnSpeed;
+                    disk.DriveTorque = aDrive.DriveTorque;
+                    break;
+            }
     }
 
     private static Guid? TargetOf(Entity aCreature) => aCreature.Body.Sensors.OfType<TargetSensor>().FirstOrDefault()?.TargetId;
@@ -209,6 +240,7 @@ public static class WorldFile
                 if (creature.Body.Sensors.OfType<RaySensor>().FirstOrDefault() is { } whiskers)
                     whiskers.Range = car.WhiskerRange;
                 RestoreBrain(creature.Brain!, car.Brain);
+                ApplyDrive(creature, car.Drive);
                 entity = creature;
                 break;
             }
@@ -216,6 +248,7 @@ public static class WorldFile
             {
                 var creature = WorldObjectCatalog.CreateSeeker(position, ToVector(cylinder.Color), cylinder.Target, new ApproachTargetModule());
                 RestoreBrain(creature.Brain!, cylinder.Brain);
+                ApplyDrive(creature, cylinder.Drive);
                 entity = creature;
                 break;
             }

@@ -104,6 +104,9 @@ internal static class SceneMeshes
             case PartShape.Sphere:
                 mesh.AddSphere(Vector3.Zero, aPart.Size.X);
                 break;
+            case PartShape.Cylinder:
+                mesh.AddCylinder(new Vector3(0, -aPart.Size.Y / 2, 0), new Vector3(0, aPart.Size.Y / 2, 0), aPart.Size.X, 32, true, true);
+                break;
             default:
                 mesh.AddBox(Vector3.Zero, aPart.Size.X, aPart.Size.Y, aPart.Size.Z);
                 break;

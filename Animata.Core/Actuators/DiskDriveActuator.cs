@@ -18,6 +18,17 @@ public sealed class DiskDriveActuator : Actuator
     public float MaxSpeed { get; set; } = 2;
     public float MaxTurnSpeed { get; set; } = 2.5f;
 
+    /// <summary>Największy moment silnika jednego koła (N·m).</summary>
+    public float DriveTorque { get; set; } = 3;
+
+    /// <summary>Kopiuje ustawienia (nie stan) z innego napędu.</summary>
+    public void CopySettingsFrom(DiskDriveActuator aOther)
+    {
+        MaxSpeed = aOther.MaxSpeed;
+        MaxTurnSpeed = aOther.MaxTurnSpeed;
+        DriveTorque = aOther.DriveTorque;
+    }
+
     public override IReadOnlyList<string> InputPorts => Ports;
 
     public override void Apply(Entity aOwner, IReadOnlyDictionary<string, float> aCommands, float aDelta)
@@ -29,6 +40,16 @@ public sealed class DiskDriveActuator : Actuator
         var step = aCommands.GetValueOrDefault(StepPort);
         if (!float.IsFinite(turn) || !float.IsFinite(step))
             throw new ArgumentOutOfRangeException(nameof(aCommands), "Drive commands must be finite.");
+
+        // Ciało z części: napęd różnicowy — koło po lewej (Y > 0) wolniej przy skręcie w lewo, po prawej szybciej.
+        if (aOwner is ArticulatedCreature body)
+        {
+            var forward = Math.Clamp(step, 0, 1) * MathF.Max(0, MaxSpeed);
+            var rate = Math.Clamp(turn, -1, 1) * MathF.Max(0, MaxTurnSpeed);
+            for (var joint = 0; joint < body.JointCount; joint++)
+                body.SetWheelTarget(joint, 0, forward - rate * body.Plan.Joints[joint].Anchor.Y, DriveTorque);
+            return;
+        }
 
         var angle = Math.Clamp(turn, -1, 1) * MathF.Max(0, MaxTurnSpeed) * aDelta;
         var distance = Math.Clamp(step, 0, 1) * MathF.Max(0, MaxSpeed) * aDelta;

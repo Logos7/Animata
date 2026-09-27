@@ -9,8 +9,10 @@ using BepuPhysics.Constraints;
 namespace Animata.Core.Entities;
 
 /// <summary>
-/// Stwór z części (<see cref="BodyPlan"/>) poruszający się w fizyce Bepu. Każda część to bryła, każdy staw to
-/// przegub kulowy (BallSocket) z serwem kątowym (AngularServo), które trzyma zadany skręt i pochylenie.
+/// Stwór z części (<see cref="BodyPlan"/>) poruszający się w fizyce Bepu. Każda część to bryła. Staw kulowy to BallSocket
+/// z serwem kątowym (AngularServo), które trzyma zadany skręt i pochylenie; staw sztywny to Weld; koło to zawieszenie
+/// (LinearAxisServo + PointOnLineServo), zawias osi (AngularHinge, skręt = obrót osi wokół pionu) i silnik
+/// (AngularAxisMotor) — jak w demie samochodu Bepu.
 /// Układ stwora (Body.Position / Rotation) wynika z korzenia: to poza, w której korzeń byłby w swojej pozie
 /// spoczynkowej — dla leżącego węża to punkt na ziemi pod głową, obrócony jak głowa.
 /// Ręczna zmiana Body.Position / Rotation (mysz, panel) albo <see cref="Place"/> stawia całe ciało w pozie
@@ -32,6 +34,13 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     private PhysicsWorld? _physics;
     private BodyHandle[] _bodies = [];
     private ConstraintHandle[] _servos = [];
+    private ConstraintHandle?[] _motors = [];
+    private float[] _wheelSteer = [];
+    private float[] _wheelSpeed = [];
+    private float[] _wheelTorque = [];
+    private float[] _sentSteer = [];
+    private float[] _sentSpeed = [];
+    private float[] _sentTorque = [];
     private Vector3[] _positions = [];
     private Quaternion[] _orientations = [];
     private Quaternion[] _restRelative = [];
@@ -76,10 +85,29 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     /// <summary>Zmierzone pochylenie stawu (rad, wokół osi Y rodzica).</summary>
     public float JointPitch(int aJoint) => _pitch[aJoint];
 
-    /// <summary>Zadaje staw: ułamki [-1, 1] zakresu (MaxYaw, MaxPitch z planu). Działa od następnego kroku fizyki.</summary>
+    /// <summary>
+    /// Zadaje koło: kąt skrętu (rad, dodatni = w lewo; tylko koła skrętne), prędkość obwodowa (m/s, dodatnia = do przodu)
+    /// i największy moment silnika (N·m; 0 = koło toczy się swobodnie). Działa od następnego kroku fizyki.
+    /// </summary>
+    public void SetWheelTarget(int aJoint, float aSteer, float aSpeed, float aTorque)
+    {
+        var joint = Plan.Joints[aJoint];
+        if (joint.Kind != JointKind.Wheel)
+            return;
+        _wheelSteer[aJoint] = joint.Steerable && float.IsFinite(aSteer) ? aSteer : 0;
+        _wheelSpeed[aJoint] = joint.Driven && float.IsFinite(aSpeed) ? aSpeed : 0;
+        _wheelTorque[aJoint] = joint.Driven && float.IsFinite(aTorque) ? MathF.Max(0, aTorque) : 0;
+    }
+
+    /// <summary>Bieżący kąt skrętu koła (rad) — do rysowania.</summary>
+    public float WheelSteer(int aJoint) => _wheelSteer[aJoint];
+
+    /// <summary>Zadaje staw kulowy: ułamki [-1, 1] zakresu (MaxYaw, MaxPitch z planu). Działa od następnego kroku fizyki.</summary>
     public void SetJointTarget(int aJoint, float aYaw, float aPitch)
     {
         var joint = Plan.Joints[aJoint];
+        if (joint.Kind != JointKind.Ball)
+            return;
         _targetYaw[aJoint] = Math.Clamp(float.IsFinite(aYaw) ? aYaw : 0, -1, 1) * joint.MaxYaw;
         _targetPitch[aJoint] = Math.Clamp(float.IsFinite(aPitch) ? aPitch : 0, -1, 1) * joint.MaxPitch;
     }
@@ -138,6 +166,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             {
                 PartShape.Capsule => aPhysics.AddBody(new Capsule(part.Size.X, part.Size.Y), part.Mass, pose, group, index, part.Friction),
                 PartShape.Sphere => aPhysics.AddBody(new Sphere(part.Size.X), part.Mass, pose, group, index, part.Friction),
+                PartShape.Cylinder => aPhysics.AddBody(new Cylinder(part.Size.X, part.Size.Y), part.Mass, pose, group, index, part.Friction),
                 _ => aPhysics.AddBody(new Box(part.Size.X, part.Size.Y, part.Size.Z), part.Mass, pose, group, index, part.Friction)
             };
             _positions[index] = position;
@@ -151,16 +180,64 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             var child = Plan.Parts[_children[index]];
             var parentBepu = parent.Orientation * FixOf(parent);
             var childBepu = child.Orientation * FixOf(child);
-            var socket = new BallSocket
+            var toParent = Quaternion.Inverse(parentBepu);
+            var a = _bodies[_parents[index]];
+            var b = _bodies[_children[index]];
+            _motors[index] = null;
+            switch (joint.Kind)
             {
-                LocalOffsetA = Vector3.Transform(joint.Anchor - parent.Position, Quaternion.Inverse(parentBepu)),
-                LocalOffsetB = Vector3.Transform(joint.Anchor - child.Position, Quaternion.Inverse(childBepu)),
-                SpringSettings = new SpringSettings(30, 1)
-            };
-            aPhysics.AddConstraint(_bodies[_parents[index]], _bodies[_children[index]], socket);
-            _servos[index] = aPhysics.AddConstraint(_bodies[_parents[index]], _bodies[_children[index]], Servo(index, 0, 0));
-            _sentYaw[index] = 0;
-            _sentPitch[index] = 0;
+                case JointKind.Fixed:
+                    aPhysics.AddConstraint(a, b, new Weld
+                    {
+                        LocalOffset = Vector3.Transform(child.Position - parent.Position, toParent),
+                        LocalOrientation = Quaternion.Normalize(toParent * childBepu),
+                        SpringSettings = new SpringSettings(30, 1)
+                    });
+                    break;
+                case JointKind.Wheel:
+                {
+                    var down = Vector3.Transform(-Vector3.UnitZ, toParent);
+                    var top = Vector3.Transform(joint.Anchor - parent.Position, toParent);
+                    aPhysics.AddConstraint(a, b, new LinearAxisServo
+                    {
+                        LocalPlaneNormal = down,
+                        TargetOffset = joint.Suspension,
+                        LocalOffsetA = top,
+                        LocalOffsetB = default,
+                        ServoSettings = ServoSettings.Default,
+                        SpringSettings = new SpringSettings(joint.SuspensionFrequency, 0.7f)
+                    });
+                    aPhysics.AddConstraint(a, b, new PointOnLineServo
+                    {
+                        LocalDirection = down,
+                        LocalOffsetA = top,
+                        LocalOffsetB = default,
+                        ServoSettings = ServoSettings.Default,
+                        SpringSettings = new SpringSettings(30, 1)
+                    });
+                    _servos[index] = aPhysics.AddConstraint(a, b, Hinge(index, 0));
+                    if (joint.Driven)
+                        _motors[index] = aPhysics.AddConstraint(b, a, Motor(index, 0, 0));
+                    _sentSteer[index] = 0;
+                    _sentSpeed[index] = 0;
+                    _sentTorque[index] = 0;
+                    break;
+                }
+                default:
+                {
+                    var socket = new BallSocket
+                    {
+                        LocalOffsetA = Vector3.Transform(joint.Anchor - parent.Position, toParent),
+                        LocalOffsetB = Vector3.Transform(joint.Anchor - child.Position, Quaternion.Inverse(childBepu)),
+                        SpringSettings = new SpringSettings(30, 1)
+                    };
+                    aPhysics.AddConstraint(a, b, socket);
+                    _servos[index] = aPhysics.AddConstraint(a, b, Servo(index, 0, 0));
+                    _sentYaw[index] = 0;
+                    _sentPitch[index] = 0;
+                    break;
+                }
+            }
         }
 
         _publishedPosition = Body.Position;
@@ -173,6 +250,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             aPhysics.RemoveBody(body);
         Array.Clear(_bodies);
         Array.Clear(_servos);
+        Array.Clear(_motors);
         _physics = null;
     }
 
@@ -192,11 +270,29 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
 
         for (var joint = 0; joint < _servos.Length; joint++)
         {
-            if (_targetYaw[joint] == _sentYaw[joint] && _targetPitch[joint] == _sentPitch[joint])
-                continue;
-            aPhysics.UpdateConstraint(_servos[joint], Servo(joint, _targetYaw[joint], _targetPitch[joint]));
-            _sentYaw[joint] = _targetYaw[joint];
-            _sentPitch[joint] = _targetPitch[joint];
+            switch (Plan.Joints[joint].Kind)
+            {
+                case JointKind.Ball:
+                    if (_targetYaw[joint] == _sentYaw[joint] && _targetPitch[joint] == _sentPitch[joint])
+                        continue;
+                    aPhysics.UpdateConstraint(_servos[joint], Servo(joint, _targetYaw[joint], _targetPitch[joint]));
+                    _sentYaw[joint] = _targetYaw[joint];
+                    _sentPitch[joint] = _targetPitch[joint];
+                    break;
+                case JointKind.Wheel:
+                    if (_wheelSteer[joint] != _sentSteer[joint])
+                    {
+                        aPhysics.UpdateConstraint(_servos[joint], Hinge(joint, _wheelSteer[joint]));
+                        _sentSteer[joint] = _wheelSteer[joint];
+                    }
+                    if (_motors[joint] is { } motor && (_wheelSpeed[joint] != _sentSpeed[joint] || _wheelTorque[joint] != _sentTorque[joint]))
+                    {
+                        aPhysics.UpdateConstraint(motor, Motor(joint, _wheelSpeed[joint], _wheelTorque[joint]));
+                        _sentSpeed[joint] = _wheelSpeed[joint];
+                        _sentTorque[joint] = _wheelTorque[joint];
+                    }
+                    break;
+            }
         }
 
         // Łuski: tarcie Coulomba w bok i do tyłu wzdłuż podłoża — prędkość maleje najwyżej o μ·g·Δt (do zera).
@@ -232,6 +328,8 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
 
         for (var joint = 0; joint < _yaw.Length; joint++)
         {
+            if (Plan.Joints[joint].Kind != JointKind.Ball)
+                continue;
             var relative = Quaternion.Inverse(_orientations[_parents[joint]]) * _orientations[_children[joint]];
             var bend = relative * Quaternion.Inverse(_restRelative[joint]);
             var axis = Vector3.Transform(Vector3.UnitX, bend);
@@ -258,6 +356,13 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         _positions = new Vector3[parts];
         _orientations = new Quaternion[parts];
         _servos = new ConstraintHandle[joints];
+        _motors = new ConstraintHandle?[joints];
+        _wheelSteer = new float[joints];
+        _wheelSpeed = new float[joints];
+        _wheelTorque = new float[joints];
+        _sentSteer = new float[joints];
+        _sentSpeed = new float[joints];
+        _sentTorque = new float[joints];
         _restRelative = new Quaternion[joints];
         _parents = new int[joints];
         _children = new int[joints];
@@ -304,6 +409,37 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             ServoSettings = new ServoSettings(float.MaxValue, 0, joint.Strength)
         };
     }
+
+    /// <summary>Zawias koła: oś koła (jego Y) wzdłuż osi z pozy spoczynkowej obróconej o skręt wokół pionu rodzica.</summary>
+    private AngularHinge Hinge(int aJoint, float aSteer)
+    {
+        var parent = Plan.Parts[_parents[aJoint]];
+        var child = Plan.Parts[_children[aJoint]];
+        var toParent = Quaternion.Inverse(parent.Orientation * FixOf(parent));
+        var axle = Vector3.Transform(Vector3.Transform(Vector3.UnitY, child.Orientation * FixOf(child)), toParent);
+        var up = Vector3.Transform(Vector3.UnitZ, toParent);
+        return new AngularHinge
+        {
+            LocalHingeAxisA = Vector3.Normalize(Vector3.Transform(axle, Quaternion.CreateFromAxisAngle(up, aSteer))),
+            LocalHingeAxisB = Vector3.UnitY,
+            SpringSettings = new SpringSettings(30, 1)
+        };
+    }
+
+    /// <summary>Silnik koła: prędkość obwodowa → kątowa wokół osi koła (znak sprawdzony pomiarem: dodatnia = do przodu).</summary>
+    private AngularAxisMotor Motor(int aJoint, float aSpeed, float aTorque)
+    {
+        var radius = MathF.Max(0.01f, Plan.Parts[_children[aJoint]].Size.X);
+        return new AngularAxisMotor
+        {
+            LocalAxisA = Vector3.UnitY,
+            TargetVelocity = WheelSpin * aSpeed / radius,
+            Settings = new MotorSettings(MathF.Max(0, aTorque), 1e-6f)
+        };
+    }
+
+    /// <summary>Znak prędkości kątowej silnika koła względem kierunku jazdy (ustalony pomiarem w teście).</summary>
+    internal const float WheelSpin = 1;
 
     private static Quaternion FixOf(PartPlan aPart) => aPart.Shape == PartShape.Capsule ? CapsuleFix : Quaternion.Identity;
 

@@ -104,6 +104,29 @@ public class PersistenceTests
     }
 
     [Fact]
+    public void DriveSettings_SurviveSaving()
+    {
+        using var world = WorldObjectCatalog.CreateDemo().World;
+        var car = world.Entities.OfType<CarCreature>().First();
+        var steering = car.Body.Actuators.OfType<Animata.Core.Actuators.SteeringDriveActuator>().Single();
+        steering.MaxSpeed = 4;
+        steering.MaxSteerAngle = 0.5f;
+        steering.DriveTorque = 7;
+        var cylinder = world.Entities.OfType<CylinderCreature>().First();
+        cylinder.Body.Actuators.OfType<Animata.Core.Actuators.DiskDriveActuator>().Single().MaxTurnSpeed = 1.25f;
+
+        RoundTrip(world, out var restored);
+        using (restored)
+        {
+            var twin = restored.Find(car.Id)!.Body.Actuators.OfType<Animata.Core.Actuators.SteeringDriveActuator>().Single();
+            Assert.Equal(4f, twin.MaxSpeed);
+            Assert.Equal(0.5f, twin.MaxSteerAngle);
+            Assert.Equal(7f, twin.DriveTorque);
+            Assert.Equal(1.25f, restored.Find(cylinder.Id)!.Body.Actuators.OfType<Animata.Core.Actuators.DiskDriveActuator>().Single().MaxTurnSpeed);
+        }
+    }
+
+    [Fact]
     public void NewerFormat_IsRejected()
     {
         var json = WorldFile.ToJson(new WorldDocument(WorldFile.Format + 1, "przyszłość", 0, []));

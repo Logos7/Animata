@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using Animata.Core.Actuators;
 using Animata.Core.Entities;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
@@ -14,6 +15,44 @@ namespace Animata.Studio.Panels;
 /// <summary>Kawałki UI wspólne dla kilku paneli.</summary>
 public static class PanelParts
 {
+    /// <summary>
+    /// Edytowalne parametry napędu stwora (autko: prędkość, wsteczny, skręt kół, moment; walec: prędkość, obrót, moment)
+    /// albo null, gdy stwór nie ma takiego napędu. Zmiana działa od razu w scenie; trwająca nauka bierze ustawienia
+    /// z chwili startu — nowe obejmie ją po zatrzymaniu i wznowieniu (L).
+    /// </summary>
+    public static Control? DriveEditor(ActiveEntity aCreature)
+    {
+        var section = Ui.VStack(2, Ui.Header("Napęd — ustawienia"));
+        switch (aCreature.Body.Actuators.FirstOrDefault(aActuator => aActuator is SteeringDriveActuator or DiskDriveActuator))
+        {
+            case SteeringDriveActuator steering:
+                section.Children.Add(Ui.Row("Prędkość maks. [m/s]", Number(steering.MaxSpeed, 0.1f, 20, aValue => steering.MaxSpeed = aValue)));
+                section.Children.Add(Ui.Row("Wstecz maks. [m/s]", Number(steering.MaxReverseSpeed, 0, 10, aValue => steering.MaxReverseSpeed = aValue)));
+                section.Children.Add(Ui.Row("Skręt kół maks. [°]", Number(steering.MaxSteerAngle * 180 / MathF.PI, 1, 70,
+                    aValue => steering.MaxSteerAngle = aValue * MathF.PI / 180)));
+                section.Children.Add(Ui.Row("Moment koła [N·m]", Number(steering.DriveTorque, 0.1f, 50, aValue => steering.DriveTorque = aValue)));
+                break;
+            case DiskDriveActuator disk:
+                section.Children.Add(Ui.Row("Prędkość maks. [m/s]", Number(disk.MaxSpeed, 0.1f, 20, aValue => disk.MaxSpeed = aValue)));
+                section.Children.Add(Ui.Row("Obrót maks. [rad/s]", Number(disk.MaxTurnSpeed, 0.1f, 20, aValue => disk.MaxTurnSpeed = aValue)));
+                section.Children.Add(Ui.Row("Moment koła [N·m]", Number(disk.DriveTorque, 0.1f, 50, aValue => disk.DriveTorque = aValue)));
+                break;
+            default:
+                return null;
+        }
+        return section;
+    }
+
+    /// <summary>Pole liczby z zakresem: poza zakresem albo nie-liczba — odrzucone (pole wraca do poprzedniej wartości).</summary>
+    private static TextBox Number(float aValue, float aMin, float aMax, Action<float> aSet) =>
+        Ui.Field(Ui.F(aValue), aText =>
+        {
+            if (!Ui.TryParse(aText, out var value) || value < aMin || value > aMax)
+                return false;
+            aSet(value);
+            return true;
+        }, 96);
+
     /// <summary>
     /// Lista liczby segmentów węża (2…24). Zmiana w miejscu (<see cref="StudioSession.SetSegments"/>): ten sam wąż i mózg,
     /// parametry CPG zostają. Po niej — już po obsłudze zdarzenia listy — woła <paramref name="aChanged"/>.

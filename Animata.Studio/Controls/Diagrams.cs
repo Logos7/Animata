@@ -72,6 +72,9 @@ public sealed class SceneMiniMap : ThemedControl
                         aContext.DrawRectangle(Ui.Brush(color), null,
                             new Rect(-car.Length / 2 * scale, -car.Width / 2 * scale, car.Length * scale, car.Width * scale), 3, 3);
                     break;
+                case CylinderCreature:
+                    aContext.DrawEllipse(Ui.Brush(color), null, center, radius, radius);
+                    break;
                 case ArticulatedCreature body:
                 {
                     var pen = new Pen(Ui.Brush(color), Math.Max(3, body.BoundingRadius * 2 * scale), lineCap: PenLineCap.Round);

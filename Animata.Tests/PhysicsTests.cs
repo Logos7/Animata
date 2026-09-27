@@ -8,49 +8,111 @@ namespace Animata.Tests;
 
 public class PhysicsTests
 {
-    /// <summary>Pełny skręt kół: autko jedzie po okręgu o promieniu WheelBase / tan(MaxSteerAngle) ≈ 1.14 m.</summary>
-    [Fact]
-    public void Steering_FullLock_DrivesMinimumTurnCircle()
-    {
-        var car = new CarCreature();
-        var drive = new SteeringDriveActuator();
-        var command = new Dictionary<string, float>
-        {
-            [SteeringDriveActuator.SteerPort] = 1,
-            [SteeringDriveActuator.ThrottlePort] = 0.5f
-        };
-        var expected = drive.WheelBase / MathF.Tan(drive.MaxSteerAngle);
-        var center = new Vector3(0, expected, 0); // skręt w lewo: środek po lewej (+Y)
+    private const float Delta = 1f / 30f;
 
-        for (var tick = 0; tick < 300; tick++)
-        {
-            drive.Apply(car, command, 1f / 60f);
-            Assert.Equal(expected, Vector3.Distance(car.Body.Position, center), 0.01f);
-        }
-    }
-
-    [Fact]
-    public void Steering_DoesNotTurnInPlace()
-    {
-        var car = new CarCreature();
-        new SteeringDriveActuator().Apply(car, new Dictionary<string, float> { [SteeringDriveActuator.SteerPort] = 1 }, 1);
-        Assert.Equal(Quaternion.Identity, car.Body.Rotation);
-        Assert.Equal(Vector3.Zero, car.Body.Position);
-    }
-
-    [Fact]
-    public void Collisions_PushOnlyTheMovableEntity()
+    private static World FloorWorld()
     {
         var world = new World();
+        world.Add(Floor.At(60, 60));
+        return world;
+    }
+
+    /// <summary>Jazda przez fizykę: autko z napędem, komenda co tick (bez mózgu).</summary>
+    private static List<Vector2> Drive(CarCreature aCar, World aWorld, float aSteer, float aThrottle, float aSeconds)
+    {
+        var drive = aCar.Body.Actuators.OfType<SteeringDriveActuator>().Single();
+        var command = new Dictionary<string, float>
+        {
+            [SteeringDriveActuator.SteerPort] = aSteer,
+            [SteeringDriveActuator.ThrottlePort] = aThrottle
+        };
+        var path = new List<Vector2>();
+        for (var tick = 0; tick < aSeconds * 30; tick++)
+        {
+            drive.Apply(aCar, command, Delta);
+            aWorld.Update(Delta);
+            path.Add(new Vector2(aCar.Body.Position.X, aCar.Body.Position.Y));
+        }
+        return path;
+    }
+
+    private static CarCreature PhysicalCar(World aWorld)
+    {
+        var car = new CarCreature();
+        car.Body.Actuators.Add(new SteeringDriveActuator());
+        aWorld.Add(car);
+        return car;
+    }
+
+    [Fact]
+    public void Car_DrivesStraightAtItsMaxSpeed()
+    {
+        using var world = FloorWorld();
+        var car = PhysicalCar(world);
+        Drive(car, world, 0, 1, 4);
+        var speed = car.Body.Actuators.OfType<SteeringDriveActuator>().Single().MaxSpeed;
+        Assert.InRange(car.Body.Position.X, speed * 4 * 0.8f, speed * 4);
+        Assert.InRange(MathF.Abs(car.Body.Position.Y), 0, 0.1f);
+    }
+
+    /// <summary>Pełny skręt: koło o promieniu blisko rozstaw osi / tan(kąt) ≈ 1.1 m (fizyka dokłada trochę poślizgu).</summary>
+    [Fact]
+    public void Car_FullLock_DrivesATightLeftCircle()
+    {
+        using var world = FloorWorld();
+        var car = PhysicalCar(world);
+        var path = Drive(car, world, 1, 0.5f, 12).Skip(90).ToList();
+        var center = new Vector2(path.Average(aPoint => aPoint.X), path.Average(aPoint => aPoint.Y));
+        var radius = path.Average(aPoint => Vector2.Distance(aPoint, center));
+
+        Assert.InRange(radius, 1.0f, 1.9f);
+        Assert.True(center.Y > 0.5f, $"skręt w lewo: środek po lewej, a jest {center}");
+    }
+
+    [Fact]
+    public void Car_DoesNotTurnInPlace()
+    {
+        using var world = FloorWorld();
+        var car = PhysicalCar(world);
+        Drive(car, world, 1, 0, 3);
+        Assert.InRange(new Vector2(car.Body.Position.X, car.Body.Position.Y).Length(), 0, 0.05f);
+        var heading = Vector3.Transform(Vector3.UnitX, car.Body.Rotation);
+        Assert.InRange(MathF.Abs(MathF.Atan2(heading.Y, heading.X)), 0, 0.05f);
+    }
+
+    [Fact]
+    public void Cylinder_TurnsInPlaceToTheLeft()
+    {
+        using var world = FloorWorld();
+        var cylinder = new CylinderCreature();
+        var drive = new DiskDriveActuator();
+        cylinder.Body.Actuators.Add(drive);
+        world.Add(cylinder);
+        for (var tick = 0; tick < 15; tick++)
+        {
+            drive.Apply(cylinder, new Dictionary<string, float> { [DiskDriveActuator.TurnPort] = 1 }, Delta);
+            world.Update(Delta);
+        }
+        var heading = Vector3.Transform(Vector3.UnitX, cylinder.Body.Rotation);
+        Assert.InRange(MathF.Atan2(heading.Y, heading.X), 0.2f, 1.5f);
+        Assert.InRange(new Vector2(cylinder.Body.Position.X, cylinder.Body.Position.Y).Length(), 0, 0.1f);
+    }
+
+    [Fact]
+    public void Collisions_ArePhysical_AndPostsDoNotMove()
+    {
+        using var world = FloorWorld();
         var obstacle = WorldObjectCatalog.CreateObstacle(Vector3.Zero, 0.5f);
-        var creature = WorldObjectCatalog.CreateControllerSeeker(new Vector3(0.6f, 0, 0), null);
+        var creature = WorldObjectCatalog.CreateControllerSeeker(new Vector3(0.9f, 0, 0), null);
         world.Add(obstacle);
         world.Add(creature);
 
-        world.Update(0.01f);
+        for (var tick = 0; tick < 30; tick++)
+            world.Update(Delta);
 
         Assert.Equal(Vector3.Zero, obstacle.Body.Position);
-        Assert.Equal(obstacle.Radius + creature.Radius, creature.Body.Position.X, 1e-4f);
+        var distance = new Vector2(creature.Body.Position.X, creature.Body.Position.Y).Length();
+        Assert.True(distance >= obstacle.Radius + creature.Radius - 0.05f, $"distance {distance:0.00}");
     }
 
     [Fact]

@@ -40,7 +40,7 @@ public class SnakeTests
         Assert.Equal(new Vector3(0, 0, -0.1f), floor.Body.Position);
         Assert.Equal(0f, floor.Top, 5);
         Assert.Equal(0, floor.BoundingRadius);
-        Assert.Null(world.Physics);
+        Assert.NotNull(world.Physics);
         Assert.All(car.Body.Sensors.OfType<RaySensor>().Single().LastDistances, aDistance => Assert.Equal(WorldObjectCatalog.WhiskerRange, aDistance));
     }
 

@@ -73,6 +73,9 @@ public sealed record SeekRig(
 
 public static class SeekRigs
 {
+    /// <summary>Podłoga prób: wszystkie stwory są bryłami w fizyce, więc muszą na czymś stać.</summary>
+    private static void AddFloor(World aWorld) => aWorld.Add(Floor.At(60, 60));
+
     /// <summary>Walec z napędem różnicowym, bez przeszkód.</summary>
     public static readonly SeekRig Disk = new(
         "walec",
@@ -80,7 +83,8 @@ public static class SeekRigs
             WorldObjectCatalog.CreateSeeker(Vector3.Zero, WorldObjectCatalog.NeuralColor, aTargetId, aController),
         aCommand => Math.Clamp(aCommand.GetValueOrDefault(DiskDriveActuator.StepPort), 0, 1)
             + 0.25f * MathF.Min(MathF.Abs(aCommand.GetValueOrDefault(DiskDriveActuator.TurnPort)), 1),
-        new SeekTargetOptions());
+        new SeekTargetOptions(),
+        AddFloor);
 
     private static readonly ConcurrentDictionary<int, SeekRig> CarRigs = new();
 
@@ -113,7 +117,8 @@ public static class SeekRigs
             MinObstacles = 1,
             MaxObstacles = 3,
             ContactWeight = 2
-        });
+        },
+        AddFloor);
 
     private static readonly ConcurrentDictionary<int, SeekRig> SnakeRigs = new();
 
@@ -150,17 +155,72 @@ public static class SeekRigs
             MaxDistance = 6,
             ValidationEpisodes = 8
         },
-        aWorld => aWorld.Add(Floor.At(60, 60)));
+        AddFloor);
 
-    /// <summary>Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów, wąż — z tą samą liczbą segmentów).</summary>
+    /// <summary>
+    /// Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów, wąż — z tą samą liczbą segmentów). Jeśli napęd stwora
+    /// ma inne ustawienia niż domyślne (prędkość, skręt, moment), ciało w próbach dostaje ich kopię z chwili wywołania.
+    /// </summary>
     public static SeekRig For(Entity aCreature)
     {
-        if (aCreature is SnakeCreature snake)
-            return SnakeWith(snake.Segments);
-        if (aCreature is not CarCreature car)
-            return Disk;
-        var whiskers = WorldObjectCatalog.WhiskerCountOf(car);
-        return WorldObjectCatalog.IsValidWhiskerCount(whiskers) ? CarWith(whiskers) : Car;
+        var rig = aCreature switch
+        {
+            SnakeCreature snake => SnakeWith(snake.Segments),
+            CarCreature car when WorldObjectCatalog.IsValidWhiskerCount(WorldObjectCatalog.WhiskerCountOf(car)) =>
+                CarWith(WorldObjectCatalog.WhiskerCountOf(car)),
+            CarCreature => Car,
+            _ => Disk
+        };
+        var steering = aCreature.Body.Actuators.OfType<SteeringDriveActuator>().FirstOrDefault() is { } sourceSteering &&
+            !SameSettings(sourceSteering, new SteeringDriveActuator())
+                ? Copy(sourceSteering)
+                : null;
+        var disk = aCreature.Body.Actuators.OfType<DiskDriveActuator>().FirstOrDefault() is { } sourceDisk &&
+            !SameSettings(sourceDisk, new DiskDriveActuator())
+                ? Copy(sourceDisk)
+                : null;
+        if (steering is null && disk is null)
+            return rig;
+        var create = rig.CreateCreature;
+        return rig with
+        {
+            CreateCreature = (aTargetId, aController) =>
+            {
+                var creature = create(aTargetId, aController);
+                foreach (var actuator in creature.Body.Actuators)
+                    switch (actuator)
+                    {
+                        case SteeringDriveActuator target when steering is not null:
+                            target.CopySettingsFrom(steering);
+                            break;
+                        case DiskDriveActuator target when disk is not null:
+                            target.CopySettingsFrom(disk);
+                            break;
+                    }
+                return creature;
+            }
+        };
+    }
+
+    private static bool SameSettings(SteeringDriveActuator aA, SteeringDriveActuator aB) =>
+        aA.MaxSpeed == aB.MaxSpeed && aA.MaxReverseSpeed == aB.MaxReverseSpeed && aA.MaxSteerAngle == aB.MaxSteerAngle &&
+        aA.WheelBase == aB.WheelBase && aA.DriveTorque == aB.DriveTorque;
+
+    private static bool SameSettings(DiskDriveActuator aA, DiskDriveActuator aB) =>
+        aA.MaxSpeed == aB.MaxSpeed && aA.MaxTurnSpeed == aB.MaxTurnSpeed && aA.DriveTorque == aB.DriveTorque;
+
+    private static SteeringDriveActuator Copy(SteeringDriveActuator aSource)
+    {
+        var copy = new SteeringDriveActuator();
+        copy.CopySettingsFrom(aSource);
+        return copy;
+    }
+
+    private static DiskDriveActuator Copy(DiskDriveActuator aSource)
+    {
+        var copy = new DiskDriveActuator();
+        copy.CopySettingsFrom(aSource);
+        return copy;
     }
 }
 
@@ -266,8 +326,9 @@ public sealed class SeekTargetTask
     }
 
     /// <summary>
-    /// Przejeżdża próby jedna po drugiej jednym stworem. Przed każdą próbą mózg jest resetowany
-    /// (<see cref="Brain.Reset"/>), więc wynik próby nie zależy od tego, jak skończyła się poprzednia.
+    /// Przejeżdża próby jedna po drugiej. Każda próba ma własny, świeży świat (podłoga z rigu, cel, słupki, nowe ciało
+    /// z tym samym sterownikiem), a mózg jest resetowany (<see cref="Brain.Reset"/>) — wynik próby nie zależy od tego,
+    /// jak skończyła się poprzednia (także przez stan solvera fizyki).
     /// </summary>
     public static IReadOnlyList<EpisodeResult> Run(BrainModule aController, IReadOnlyList<SeekEpisode> aEpisodes,
         SeekTargetOptions aOptions, SeekRig aRig)
@@ -275,24 +336,16 @@ public sealed class SeekTargetTask
         if (aEpisodes.Count == 0)
             throw new ArgumentException("At least one episode is required.", nameof(aEpisodes));
 
-        using var world = new World();
-        aRig.PrepareWorld?.Invoke(world);
-        var target = WorldObjectCatalog.CreateTargetBall(Vector3.Zero);
-        var creature = aRig.CreateCreature(target.Id, aController);
-        world.Add(target);
-        world.Add(creature);
-        var brain = creature.Brain!;
-        var wheels = brain.Graph.Modules.OfType<ActuatorModule>().Single();
-        var obstacles = new List<Obstacle>();
-
         var ticks = (int)MathF.Ceiling(aOptions.EpisodeSeconds / aOptions.Delta);
         var results = new EpisodeResult[aEpisodes.Count];
         for (var index = 0; index < aEpisodes.Count; index++)
         {
             var episode = aEpisodes[index];
-            foreach (var obstacle in obstacles)
-                world.Remove(obstacle);
-            obstacles.Clear();
+            using var world = new World();
+            aRig.PrepareWorld?.Invoke(world);
+            var target = WorldObjectCatalog.CreateTargetBall(new Vector3(episode.TargetOffset, 0));
+            world.Add(target);
+            var obstacles = new List<Obstacle>();
             foreach (var spec in episode.Obstacles)
             {
                 var obstacle = WorldObjectCatalog.CreateObstacle(new Vector3(spec.Position, 0), spec.Radius);
@@ -300,8 +353,11 @@ public sealed class SeekTargetTask
                 world.Add(obstacle);
             }
 
+            var creature = aRig.CreateCreature(target.Id, aController);
             creature.Place(Vector3.Zero, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, episode.Yaw));
-            target.Body.Position = new Vector3(episode.TargetOffset, 0);
+            world.Add(creature);
+            var brain = creature.Brain!;
+            var wheels = brain.Graph.Modules.OfType<ActuatorModule>().Single();
             brain.Reset();
 
             var initialGap = MathF.Max(Gap(creature, target), 1e-3f);

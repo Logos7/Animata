@@ -12,7 +12,10 @@ public enum PartShape
     Box,
 
     /// <summary>Kula. Size = (promień, —, —).</summary>
-    Sphere
+    Sphere,
+
+    /// <summary>Walec wzdłuż lokalnej osi Y części (jak oś koła). Size = (promień, szerokość, —).</summary>
+    Cylinder
 }
 
 /// <summary>Rodzaj stawu.</summary>
@@ -22,7 +25,18 @@ public enum JointKind
     /// Przegub kulowy z serwem: dziecko trzyma zadany skręt (wokół osi Z rodzica, „yaw”) i pochylenie
     /// (wokół osi Y rodzica, „pitch”) względem pozy spoczynkowej; skręcania wokół własnej osi nie ma.
     /// </summary>
-    Ball
+    Ball,
+
+    /// <summary>Sztywne połączenie (spaw) — dziecko jest częścią rodzica, np. kółko podporowe.</summary>
+    Fixed,
+
+    /// <summary>
+    /// Koło: dziecko (walec, oś wzdłuż jego Y) na zawieszeniu pod rodzicem — sprężyna i prowadnica pionowa, zawias osi,
+    /// opcjonalnie skręt (obrót osi wokół pionu, <see cref="JointPlan.Steerable"/>) i silnik (<see cref="JointPlan.Driven"/>).
+    /// <see cref="JointPlan.Anchor"/> to górny punkt zawieszenia; koło w spoczynku wisi <see cref="JointPlan.Suspension"/> niżej.
+    /// Prędkość i skręt zadaje napęd przez <see cref="Entities.ArticulatedCreature.SetWheelTarget"/>.
+    /// </summary>
+    Wheel
 }
 
 /// <summary>
@@ -48,13 +62,16 @@ public sealed record PartPlan(
     {
         PartShape.Capsule => Size.X,
         PartShape.Sphere => Size.X,
+        PartShape.Cylinder => Size.X,
         _ => MathF.Min(Size.X, MathF.Min(Size.Y, Size.Z)) / 2
     };
 }
 
 /// <summary>
 /// Staw łączący rodzica z dzieckiem w punkcie <see cref="Anchor"/> (układ stwora, poza spoczynkowa).
-/// Kąty graniczne w radianach; <see cref="Strength"/> — największy moment serwa (N·m).
+/// Kąty graniczne w radianach; <see cref="Strength"/> — największy moment serwa albo silnika koła (N·m).
+/// Pola kół: <see cref="Steerable"/>, <see cref="Driven"/>, <see cref="Suspension"/> (skok zawieszenia, m),
+/// <see cref="SuspensionFrequency"/> (sztywność sprężyny, Hz).
 /// </summary>
 public sealed record JointPlan(
     string Name,
@@ -64,7 +81,11 @@ public sealed record JointPlan(
     JointKind Kind,
     float MaxYaw,
     float MaxPitch,
-    float Strength);
+    float Strength,
+    bool Steerable = false,
+    bool Driven = false,
+    float Suspension = 0.04f,
+    float SuspensionFrequency = 6);
 
 /// <summary>
 /// Plan ciała z klocków: części i stawy (drzewo — każda część poza pierwszą ma dokładnie jednego rodzica).
@@ -113,6 +134,26 @@ public sealed class BodyPlanBuilder
         return this;
     }
 
+    /// <summary>Koło: walec <paramref name="aWheel"/> na zawieszeniu pod <paramref name="aParent"/>; kotwica = środek koła + skok w górę.</summary>
+    public BodyPlanBuilder Wheel(string aName, string aParent, string aWheel, bool aSteerable, bool aDriven, float aTorque,
+        float aSuspension = 0.04f, float aFrequency = 6)
+    {
+        var wheel = _parts.Find(aPart => aPart.Name == aWheel)
+            ?? throw new ArgumentException($"Wheel part \"{aWheel}\" must be added before its joint.");
+        _joints.Add(new JointPlan(aName, aParent, aWheel, wheel.Position + new Vector3(0, 0, aSuspension), JointKind.Wheel, 0, 0, aTorque,
+            aSteerable, aDriven, aSuspension, aFrequency));
+        return this;
+    }
+
+    /// <summary>Sztywne połączenie dziecka z rodzicem.</summary>
+    public BodyPlanBuilder Weld(string aName, string aParent, string aChild)
+    {
+        var child = _parts.Find(aPart => aPart.Name == aChild)
+            ?? throw new ArgumentException($"Part \"{aChild}\" must be added before its joint.");
+        _joints.Add(new JointPlan(aName, aParent, aChild, child.Position, JointKind.Fixed, 0, 0, 1));
+        return this;
+    }
+
     public BodyPlanBuilder Joint(string aName, string aParent, string aChild, Vector3 aAnchor,
         float aMaxYaw, float aMaxPitch, float aStrength, JointKind aKind = JointKind.Ball)
     {
@@ -131,7 +172,7 @@ public sealed class BodyPlanBuilder
             if (string.IsNullOrWhiteSpace(part.Name) || !names.Add(part.Name))
                 throw new ArgumentException($"Part name \"{part.Name}\" is empty or repeated.");
             if (!(part.Mass > 0) || !(part.Size.X > 0) || (part.Shape == PartShape.Box && !(part.Size.Y > 0 && part.Size.Z > 0)) ||
-                (part.Shape == PartShape.Capsule && !(part.Size.Y >= 0)))
+                (part.Shape == PartShape.Capsule && !(part.Size.Y >= 0)) || (part.Shape == PartShape.Cylinder && !(part.Size.Y > 0)))
                 throw new ArgumentException($"Part \"{part.Name}\" needs a positive mass and size.");
             if (!(part.Friction >= 0) || !(part.LateralFriction >= 0) || !(part.BackwardFriction >= 0))
                 throw new ArgumentException($"Part \"{part.Name}\" needs non-negative friction.");
@@ -151,6 +192,9 @@ public sealed class BodyPlanBuilder
                 throw new ArgumentException($"Part \"{joint.Child}\" has more than one parent.");
             if (joint.MaxYaw < 0 || joint.MaxPitch < 0 || !(joint.Strength > 0))
                 throw new ArgumentException($"Joint \"{joint.Name}\" needs non-negative limits and positive strength.");
+            if (joint.Kind == JointKind.Wheel &&
+                (_parts.Find(aPart => aPart.Name == joint.Child)!.Shape != PartShape.Cylinder || !(joint.Suspension > 0) || !(joint.SuspensionFrequency > 0)))
+                throw new ArgumentException($"Wheel joint \"{joint.Name}\" needs a cylinder part, a positive suspension and spring frequency.");
         }
 
         // Każda część dochodzi po rodzicach do korzenia (brak cykli i części „wiszących w powietrzu”).
