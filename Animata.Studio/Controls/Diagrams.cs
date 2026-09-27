@@ -88,6 +88,19 @@ public sealed class SceneMiniMap : ThemedControl
                 case CylinderCreature:
                     aContext.DrawEllipse(Ui.Brush(color), null, center, radius, radius);
                     break;
+                case SpiderCreature spider when spider.PartPositions.Count > 2 * SpiderCreature.Legs:
+                {
+                    var legPen = new Pen(Ui.Brush(color), 1.5, lineCap: PenLineCap.Round);
+                    var trunk = Map(spider.PartPositions[0]);
+                    for (var leg = 0; leg < SpiderCreature.Legs; leg++)
+                    {
+                        var knee = Map(spider.PartPositions[1 + 2 * leg]);
+                        aContext.DrawLine(legPen, trunk, knee);
+                        aContext.DrawLine(legPen, knee, Map(spider.PartPositions[2 + 2 * leg]));
+                    }
+                    aContext.DrawEllipse(Ui.Brush(color), null, trunk, Math.Max(3, 0.2 * scale), Math.Max(2, 0.14 * scale));
+                    break;
+                }
                 case ArticulatedCreature body:
                 {
                     var pen = new Pen(Ui.Brush(color), Math.Max(3, body.BoundingRadius * 2 * scale), lineCap: PenLineCap.Round);
@@ -199,6 +212,28 @@ public sealed class BodyDiagram : ThemedControl
                 aContext.DrawEllipse(Ui.Brush(bodyColor), outline, center, radius, radius);
                 aContext.DrawEllipse(Ui.Brush(P.Text), null, center + new Vector(radius * 1.08, 0), radius * 0.2, radius * 0.2);
                 Callout(aContext, center + new Vector(0, radius + 6), new Point(16, size.Height - 22), "Koła · DiskDrive");
+                break;
+            }
+            case SpiderCreature spider when spider.PartPositions.Count > 2 * SpiderCreature.Legs:
+            {
+                // Pająk z góry w swoim układzie: tułów i nogi (udo → kolano → stopa).
+                var inverse = Quaternion.Inverse(spider.Body.Rotation);
+                var local = spider.PartPositions.Select(aPosition => Vector3.Transform(aPosition - spider.Body.Position, inverse)).ToList();
+                var fit = Math.Min(size.Width, size.Height) * 0.38 / 0.55;
+                Point ToScreen(Vector3 aPoint) => center + new Vector(aPoint.X * fit, -aPoint.Y * fit);
+                var legPen = new Pen(Ui.Brush(bodyColor), Math.Max(3, SpiderCreature.LegRadius * 2 * fit), lineCap: PenLineCap.Round);
+                for (var leg = 0; leg < SpiderCreature.Legs; leg++)
+                {
+                    var thigh = local[1 + 2 * leg];
+                    var shin = local[2 + 2 * leg];
+                    aContext.DrawLine(legPen, ToScreen(local[0]), ToScreen(thigh));
+                    aContext.DrawLine(legPen, ToScreen(thigh), ToScreen(shin));
+                    aContext.DrawEllipse(Ui.Brush(spider.IsPartTouching(2 + 2 * leg) ? P.Accent : StudioPalette.WithAlpha(P.Text, 0.35)), null,
+                        ToScreen(shin), 4, 4);
+                }
+                var half = new Vector(SpiderCreature.BodyLength / 2 * fit, SpiderCreature.BodyWidth / 2 * fit);
+                aContext.DrawRectangle(Ui.Brush(bodyColor), outline, new Rect(ToScreen(local[0]) - half, ToScreen(local[0]) + half), 6, 6);
+                Callout(aContext, ToScreen(local[4]), new Point(16, size.Height - 22), "Nogi · 4 × (biodro + kolano) · stopa na ziemi = akcent");
                 break;
             }
             case ArticulatedCreature body when body.PartPositions.Count > 0:

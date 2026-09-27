@@ -534,6 +534,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     {
         TargetSensor => "Oko",
         ClockSensor => "Zegar",
+        FeelSensor => "Czucie terenu",
         JointSensor => "Czucie stawów",
         RaySensor rays => $"Wąsy ×{rays.Angles.Count}",
         _ => aSensor.GetType().Name
@@ -722,6 +723,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         menu.Items.Add(Item("Walec", Icons.Target, () => SelectNew(Session.AddCreature(CreatureKind.Cylinder, at))));
         menu.Items.Add(Item("Wąż CPG", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.Snake, at))));
         menu.Items.Add(Item("Wąż NN", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.NeuralSnake, at))));
+        menu.Items.Add(Item("Pająk", Icons.Spider, () => SelectNew(Session.AddCreature(CreatureKind.Spider, at))));
+        menu.Items.Add(Item("Pająk NN", Icons.Spider, () => SelectNew(Session.AddCreature(CreatureKind.NeuralSpider, at))));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Kulka", Icons.Target, () => SelectNew(Session.AddTarget(at)), Key.Insert));
         menu.Items.Add(Item("Słupek", Icons.Pillar, () => SelectNew(Session.AddObstacle(at)), Key.O));

@@ -188,6 +188,7 @@ public sealed class GraphCanvas : ThemedControl
         ConstantModule constant => Ui.F(constant.Value),
         AvoidAndSeekModule or ApproachTargetModule => "sterownik",
         CpgModule cpg => $"CPG · {cpg.Joints} stawów",
+        GaitModule gait => $"kłus · {gait.Frequency:0.#} Hz",
         _ => string.Empty
     };
 
@@ -203,6 +204,7 @@ public sealed class GraphCanvas : ThemedControl
         RouterModule => Icons.Router,
         ConstantModule => Icons.Constant,
         CpgModule => Icons.Snake,
+        GaitModule => Icons.Spider,
         _ => Icons.Brain
     };
 
@@ -210,7 +212,7 @@ public sealed class GraphCanvas : ThemedControl
     {
         SensorModule or CompositeModule or SubgraphInputModule or SubgraphOutputModule => StudioTheme.Palette.Accent,
         ActuatorModule => StudioTheme.Palette.WireCommand,
-        NeuralNetworkModule or CpgModule => StudioPalette.Neural,
+        NeuralNetworkModule or CpgModule or GaitModule => StudioPalette.Neural,
         AvoidAndSeekModule or ApproachTargetModule => StudioPalette.Controller,
         _ => StudioTheme.Palette.Text3
     };

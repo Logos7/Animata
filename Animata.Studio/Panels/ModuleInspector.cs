@@ -493,8 +493,10 @@ public sealed class ModuleInspector
         if (aCreature.Body.Sensors.OfType<RaySensor>().FirstOrDefault() is { } rays)
             yield return ("Logika", "AvoidAndSeek", Icons.Brain, () => new AvoidAndSeekModule(rays.Angles) { Name = "AvoidAndSeek" }, null);
         yield return ("Logika", "ApproachTarget", Icons.Brain, () => new ApproachTargetModule { Name = "Approach" }, null);
-        if (aCreature.Body.Actuators.OfType<SpineActuator>().FirstOrDefault() is { } spine)
+        if (aCreature is SnakeCreature && aCreature.Body.Actuators.OfType<SpineActuator>().FirstOrDefault() is { } spine)
             yield return ("Logika", "CPG · fala stawów", Icons.Snake, () => new CpgModule(spine.Joints) { Name = "CPG" }, null);
+        if (aCreature is SpiderCreature)
+            yield return ("Logika", "Chód · kłus", Icons.Spider, () => new GaitModule { Name = "Chód" }, null);
 
         yield return ("Struktura", "Podgraf", Icons.Composite, () => new CompositeModule { Name = "Podgraf" }, null);
 
@@ -502,7 +504,7 @@ public sealed class ModuleInspector
         foreach (var actuator in aCreature.Body.Actuators)
         {
             var target = actuator;
-            var label = actuator is SpineActuator ? "Kręgosłup" : "Koła";
+            var label = actuator is SpineActuator ? aCreature is SpiderCreature ? "Nogi" : "Kręgosłup" : "Koła";
             yield return ("Ciało", $"{label} · {actuator.GetType().Name.Replace("Actuator", string.Empty)}", actuator is SpineActuator ? Icons.Snake : Icons.Wheel,
                 () => new ActuatorModule(target) { Name = label },
                 driven.Contains(actuator.Slot) ? "Tym aktuatorem steruje już inny moduł (jeden aktuator — jedno sterowanie)." : null);

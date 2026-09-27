@@ -79,10 +79,13 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     /// <summary>Orientacje części w świecie (oś X części = jej długość).</summary>
     public IReadOnlyList<Quaternion> PartOrientations => _orientations;
 
-    /// <summary>Zmierzony skręt stawu (rad, wokół osi Z rodzica).</summary>
+    /// <summary>Czy część czegoś dotykała w ostatnim kroku fizyki (podłoża, płyty, przeszkody, innej części).</summary>
+    public bool IsPartTouching(int aPart) => _physics is { } physics && aPart < _bodies.Length && physics.IsTouching(_bodies[aPart]);
+
+    /// <summary>Zmierzony skręt stawu (rad, wokół osi Z dziecka w pozie spoczynkowej).</summary>
     public float JointYaw(int aJoint) => _yaw[aJoint];
 
-    /// <summary>Zmierzone pochylenie stawu (rad, wokół osi Y rodzica).</summary>
+    /// <summary>Zmierzone pochylenie stawu (rad, wokół osi Y dziecka w pozie spoczynkowej).</summary>
     public float JointPitch(int aJoint) => _pitch[aJoint];
 
     /// <summary>
@@ -240,8 +243,34 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             }
         }
 
+        // Części odległe w drzewie stawów o 1 albo 2 (staw, albo wspólny sąsiad — np. udo pająka i tułów przez
+        // przyspawane biodro) nie zderzają się ze sobą; dalsze tak (wąż nie przenika sam przez siebie).
+        foreach (var (first, second) in NearPairs())
+            aPhysics.IgnoreCollision(_bodies[first], _bodies[second]);
+
         _publishedPosition = Body.Position;
         _publishedRotation = Body.Rotation;
+    }
+
+    /// <summary>Pary części w odległości 1 albo 2 w drzewie stawów.</summary>
+    private IEnumerable<(int, int)> NearPairs()
+    {
+        var neighbours = Enumerable.Range(0, Plan.Parts.Count).Select(_ => new HashSet<int>()).ToArray();
+        for (var joint = 0; joint < Plan.Joints.Count; joint++)
+        {
+            neighbours[_parents[joint]].Add(_children[joint]);
+            neighbours[_children[joint]].Add(_parents[joint]);
+        }
+        var pairs = new HashSet<(int, int)>();
+        for (var part = 0; part < neighbours.Length; part++)
+            foreach (var near in neighbours[part])
+            {
+                pairs.Add((Math.Min(part, near), Math.Max(part, near)));
+                foreach (var far in neighbours[near])
+                    if (far != part)
+                        pairs.Add((Math.Min(part, far), Math.Max(part, far)));
+            }
+        return pairs;
     }
 
     void IPhysicalEntity.DetachPhysics(PhysicsWorld aPhysics)
@@ -331,7 +360,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             if (Plan.Joints[joint].Kind != JointKind.Ball)
                 continue;
             var relative = Quaternion.Inverse(_orientations[_parents[joint]]) * _orientations[_children[joint]];
-            var bend = relative * Quaternion.Inverse(_restRelative[joint]);
+            var bend = Quaternion.Inverse(_restRelative[joint]) * relative;
             var axis = Vector3.Transform(Vector3.UnitX, bend);
             _yaw[joint] = MathF.Atan2(axis.Y, axis.X);
             _pitch[joint] = MathF.Atan2(-axis.Z, MathF.Sqrt(axis.X * axis.X + axis.Y * axis.Y));
@@ -392,8 +421,9 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     }
 
     /// <summary>
-    /// Serwo stawu: cel B = A · T w lokalnym układzie Bepu rodzica, gdzie T = Fa⁻¹ · Rz(skręt) · Ry(pochylenie) · R0 · Fb
-    /// (R0 — względny obrót w pozie spoczynkowej, F — poprawka osi kapsuły).
+    /// Serwo stawu: cel B = A · T w lokalnym układzie Bepu rodzica, gdzie T = Fa⁻¹ · R0 · Rz(skręt) · Ry(pochylenie) · Fb
+    /// (R0 — względny obrót w pozie spoczynkowej, F — poprawka osi kapsuły). Skręt i pochylenie są wokół osi dziecka
+    /// w pozie spoczynkowej (Z i Y części), więc noga skierowana w bok zgina się tak samo jak noga skierowana do przodu.
     /// </summary>
     private AngularServo Servo(int aJoint, float aYaw, float aPitch)
     {
@@ -401,7 +431,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         var parent = Plan.Parts[_parents[aJoint]];
         var child = Plan.Parts[_children[aJoint]];
         var bend = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitY, aPitch);
-        var target = Quaternion.Inverse(FixOf(parent)) * bend * _restRelative[aJoint] * FixOf(child);
+        var target = Quaternion.Inverse(FixOf(parent)) * _restRelative[aJoint] * bend * FixOf(child);
         return new AngularServo
         {
             TargetRelativeRotationLocalA = Quaternion.Normalize(target),

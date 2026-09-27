@@ -63,6 +63,7 @@ public sealed class PhysicsWorld : IDisposable
             return;
         Simulation.Bodies.Remove(aHandle);
         _tags.Set(aHandle.Value, 0, 0, DefaultFriction);
+        _tags.ForgetPairs(aHandle.Value);
         if (_bodyShapes.Remove(aHandle, out var shape))
             Simulation.Shapes.Remove(shape);
     }
@@ -92,6 +93,12 @@ public sealed class PhysicsWorld : IDisposable
         Simulation.Solver.ApplyDescription(aHandle, aDescription);
 
     public BodyReference Body(BodyHandle aHandle) => Simulation.Bodies[aHandle];
+
+    /// <summary>
+    /// Te dwa ciała (zwykle sąsiednie części stwora) nie zderzają się ze sobą. Pozostałe części tej samej grupy się
+    /// zderzają — wąż nie przenika sam przez siebie, noga pająka nie wchodzi w drugą.
+    /// </summary>
+    public void IgnoreCollision(BodyHandle aA, BodyHandle aB) => _tags.Ignore(aA.Value, aB.Value);
 
     /// <summary>Czy ciało miało w ostatnim kroku kontakt (z podłożem, przeszkodą albo innym ciałem).</summary>
     public bool IsTouching(BodyHandle aHandle) => _tags.IsTouching(aHandle.Value);
@@ -141,6 +148,34 @@ public sealed class PhysicsWorld : IDisposable
         public bool SameGroup(int aA, int aB) =>
             aA < _group.Length && aB < _group.Length && _group[aA] != 0 && _group[aA] == _group[aB];
 
+        private readonly HashSet<long> _ignored = [];
+        private readonly Dictionary<int, List<int>> _partners = [];
+
+        private static long Key(int aA, int aB) => aA < aB ? ((long)aA << 32) | (uint)aB : ((long)aB << 32) | (uint)aA;
+
+        public void Ignore(int aA, int aB)
+        {
+            if (!_ignored.Add(Key(aA, aB)))
+                return;
+            (_partners.TryGetValue(aA, out var a) ? a : _partners[aA] = []).Add(aB);
+            (_partners.TryGetValue(aB, out var b) ? b : _partners[aB] = []).Add(aA);
+        }
+
+        /// <summary>Czyta się w trakcie kroku (wiele wątków), zmienia tylko między krokami.</summary>
+        public bool Ignored(int aA, int aB) => _ignored.Contains(Key(aA, aB));
+
+        public void ForgetPairs(int aBody)
+        {
+            if (!_partners.Remove(aBody, out var partners))
+                return;
+            foreach (var partner in partners)
+            {
+                _ignored.Remove(Key(aBody, partner));
+                if (_partners.TryGetValue(partner, out var list))
+                    list.Remove(aBody);
+            }
+        }
+
         public int IndexOf(int aBody) => aBody < _index.Length ? _index[aBody] : -1;
 
         public void MarkTouching(int aBody)
@@ -180,7 +215,9 @@ public sealed class PhysicsWorld : IDisposable
                 return false;
             if (aA.Mobility == CollidableMobility.Static || aB.Mobility == CollidableMobility.Static)
                 return true;
-            return !_tags.SameGroup(aA.BodyHandle.Value, aB.BodyHandle.Value);
+            var a = aA.BodyHandle.Value;
+            var b = aB.BodyHandle.Value;
+            return !_tags.SameGroup(a, b) || !_tags.Ignored(a, b);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -22,8 +22,9 @@ public enum PartShape
 public enum JointKind
 {
     /// <summary>
-    /// Przegub kulowy z serwem: dziecko trzyma zadany skręt (wokół osi Z rodzica, „yaw”) i pochylenie
-    /// (wokół osi Y rodzica, „pitch”) względem pozy spoczynkowej; skręcania wokół własnej osi nie ma.
+    /// Przegub kulowy z serwem: dziecko trzyma zadany skręt („yaw”, wokół swojej osi Z w pozie spoczynkowej) i pochylenie
+    /// („pitch”, wokół swojej osi Y — dodatnie opuszcza oś X części) względem pozy spoczynkowej; skręcania wokół własnej
+    /// osi X nie ma. Dla części o tej samej orientacji co rodzic (wąż) to osie rodzica.
     /// </summary>
     Ball,
 

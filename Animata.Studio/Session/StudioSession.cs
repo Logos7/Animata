@@ -17,7 +17,9 @@ public enum CreatureKind
     Car,
     Cylinder,
     Snake,
-    NeuralSnake
+    NeuralSnake,
+    Spider,
+    NeuralSpider
 }
 
 /// <summary>
@@ -75,6 +77,7 @@ public sealed class StudioSession : IDisposable
     public static string NameOf(Entity aEntity) => !string.IsNullOrWhiteSpace(aEntity.Name) ? aEntity.Name : aEntity switch
     {
         SnakeCreature => "Wąż",
+        SpiderCreature => "Pająk",
         Floor floor => $"Podłoga {floor.Size.X:0.#} × {floor.Size.Y:0.#} m",
         CarCreature => "Autko",
         CylinderCreature => "Walec",
@@ -233,6 +236,8 @@ public sealed class StudioSession : IDisposable
         CreatureKind.Car => "Autko",
         CreatureKind.Cylinder => "Walec",
         CreatureKind.NeuralSnake => "Wąż NN",
+        CreatureKind.Spider => "Pająk",
+        CreatureKind.NeuralSpider => "Pająk NN",
         _ => "Wąż CPG"
     };
 
@@ -296,6 +301,8 @@ public sealed class StudioSession : IDisposable
             CreatureKind.Car => WorldObjectCatalog.CreateNeuralCar(position, yaw, target?.Id),
             CreatureKind.Cylinder => WorldObjectCatalog.CreateLearningSeeker(position, target?.Id),
             CreatureKind.NeuralSnake => WorldObjectCatalog.CreateNeuralSnake(position, yaw, target?.Id),
+            CreatureKind.Spider => WorldObjectCatalog.CreateLearningSpider(position, yaw, target?.Id),
+            CreatureKind.NeuralSpider => WorldObjectCatalog.CreateNeuralSpider(position, yaw, target?.Id),
             _ => WorldObjectCatalog.CreateLearningSnake(position, yaw, target?.Id)
         };
         creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));

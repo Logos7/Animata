@@ -30,6 +30,7 @@ public sealed record WorldDocument(int Format, string Name, double Time, IReadOn
 [JsonDerivedType(typeof(CarDocument), "car")]
 [JsonDerivedType(typeof(CylinderDocument), "cylinder")]
 [JsonDerivedType(typeof(SnakeDocument), "snake")]
+[JsonDerivedType(typeof(SpiderDocument), "spider")]
 public abstract record EntityDocument(Guid Id, string Name, float[] Position, float[] Rotation);
 
 public sealed record FloorDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Size)
@@ -55,6 +56,9 @@ public sealed record CylinderDocument(Guid Id, string Name, float[] Position, fl
 public sealed record DriveDocument(float MaxSpeed, float MaxReverseSpeed, float MaxSteerAngle, float MaxTurnSpeed, float DriveTorque);
 
 public sealed record SnakeDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Segments,
+    Guid? Target, BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
+
+public sealed record SpiderDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color,
     Guid? Target, BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
 
 /// <summary>Mózg: moduły, połączenia, położenia węzłów w edytorze (Id → x, y) i snapshoty.</summary>
@@ -152,6 +156,7 @@ public static class WorldFile
                 CarDocument car => car with { Target = Remap(car.Target) },
                 CylinderDocument cylinder => cylinder with { Target = Remap(cylinder.Target) },
                 SnakeDocument snake => snake with { Target = Remap(snake.Target) },
+                SpiderDocument spider => spider with { Target = Remap(spider.Target) },
                 _ => document
             };
             copies.Add(RestoreEntity(moved with { Id = ids[document.Id], Position = Vector(position) }));
@@ -176,6 +181,8 @@ public static class WorldFile
                 TargetOf(cylinder), CaptureBrain(cylinder.Brain!), DriveOf(cylinder)),
             SnakeCreature snake => new SnakeDocument(snake.Id, snake.Name, position, rotation, Vector(snake.Color), snake.Segments,
                 TargetOf(snake), CaptureBrain(snake.Brain!)),
+            SpiderCreature spider => new SpiderDocument(spider.Id, spider.Name, position, rotation, Vector(spider.Color),
+                TargetOf(spider), CaptureBrain(spider.Brain!)),
             _ => throw new NotSupportedException($"Zapis nie zna encji {aEntity.GetType().Name}.")
         };
     }
@@ -230,7 +237,7 @@ public static class WorldFile
         RouterModule router => new RouterNode(router.Id, router.Name, router.Channels, [.. router.Ports]),
         CompositeModule composite => new CompositeNode(composite.Id, composite.Name, composite.Input.Id, composite.Output.Id,
             [.. composite.InputPorts], [.. composite.OutputPorts], CaptureBrain(composite.Inner, [], [composite.Input, composite.Output])),
-        NeuralNetworkModule or CpgModule or AvoidAndSeekModule or ApproachTargetModule =>
+        NeuralNetworkModule or CpgModule or GaitModule or AvoidAndSeekModule or ApproachTargetModule =>
             new StateNode(aModule.Id, aModule.Name, aModule.CaptureState()!),
         _ => throw new NotSupportedException($"Zapis nie zna modułu {aModule.GetType().Name}.")
     };
@@ -303,6 +310,13 @@ public static class WorldFile
                 var creature = WorldObjectCatalog.CreateSnake(position, 0, ToVector(snake.Color), snake.Target,
                     WorldObjectCatalog.CreateCpg(snake.Segments), snake.Segments);
                 RestoreBrain(creature.Brain!, snake.Brain);
+                entity = creature;
+                break;
+            }
+            case SpiderDocument spider:
+            {
+                var creature = WorldObjectCatalog.CreateSpider(position, 0, ToVector(spider.Color), spider.Target, new GaitModule());
+                RestoreBrain(creature.Brain!, spider.Brain);
                 entity = creature;
                 break;
             }
@@ -381,6 +395,7 @@ public static class WorldFile
         {
             NeuralNetworkState network => new NeuralNetworkModule(new NeuralNetwork([.. network.Layers])) { Id = aDocument.Id },
             CpgState cpg => new CpgModule(cpg.Joints) { Id = aDocument.Id },
+            GaitState => new GaitModule { Id = aDocument.Id },
             AvoidAndSeekState avoid => new AvoidAndSeekModule(avoid.RayAngles) { Id = aDocument.Id },
             ApproachTargetState => new ApproachTargetModule { Id = aDocument.Id },
             _ => throw new NotSupportedException($"Nieznany stan modułu w pliku: {aDocument.State.GetType().Name}.")

@@ -174,6 +174,37 @@ public static class SeekRigs
         AddFloor);
 
     /// <summary>
+    /// Pająk (czworonóg) w fizyce: podłoga 60 × 60 m, 0–2 niskie płyty (2–6 cm) na drodze, cel 2–5 m, 12 s.
+    /// Wysiłek = średnia wielkość komend stawów.
+    /// </summary>
+    public static readonly SeekRig Spider = new(
+        "pająk",
+        (aTargetId, aController) =>
+            WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, WorldObjectCatalog.SpiderColor, aTargetId, aController),
+        aCommand =>
+        {
+            if (aCommand.Count == 0)
+                return 0;
+            var total = 0f;
+            foreach (var value in aCommand.Values)
+                total += MathF.Min(MathF.Abs(value), 1);
+            return total / aCommand.Count;
+        },
+        new SeekTargetOptions
+        {
+            EpisodesPerGeneration = 6,
+            EpisodeSeconds = 12,
+            MinDistance = 2,
+            MaxDistance = 5,
+            ValidationEpisodes = 8,
+            MaxSlabs = 2,
+            MinSlabHeight = 0.02f,
+            MaxSlabHeight = 0.06f,
+            BodyLength = 0.4f
+        },
+        AddFloor);
+
+    /// <summary>
     /// Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów, wąż — z tą samą liczbą segmentów). Jeśli napęd stwora
     /// ma inne ustawienia niż domyślne (prędkość, skręt, moment), ciało w próbach dostaje ich kopię z chwili wywołania.
     /// </summary>
@@ -182,6 +213,7 @@ public static class SeekRigs
         var rig = aCreature switch
         {
             SnakeCreature snake => SnakeWith(snake.Segments),
+            SpiderCreature => Spider,
             CarCreature car when WorldObjectCatalog.IsValidWhiskerCount(WorldObjectCatalog.WhiskerCountOf(car)) =>
                 CarWith(WorldObjectCatalog.WhiskerCountOf(car)),
             CarCreature => Car,
