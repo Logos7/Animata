@@ -1,6 +1,7 @@
 using System.Numerics;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
+using Animata.Core.Brains.Neural;
 using Animata.Core.Entities;
 using Animata.Core.Persistence;
 using Animata.Core.Sensors;
@@ -386,6 +387,40 @@ public sealed class StudioSession : IDisposable
         if (training)
             Training.Start(aSnake);
         Status = $"{NameOf(aSnake)}: {Segments(aSegments)}" + (training ? " — nauka wznowiona" : string.Empty);
+        return true;
+    }
+
+    /// <summary>
+    /// Zmienia kształt sieci (<paramref name="aChange"/>: np. <see cref="NeuralNetwork.ResizeLayer"/>, InsertLayer, RemoveLayer).
+    /// Przed zmianą zapisuje snapshot „przed zmianą sieci” (powrót do starego kształtu), trwającą naukę zatrzymuje
+    /// i wznawia już dla nowego kształtu. Zwraca false (powód w <see cref="Status"/>), gdy się nie da.
+    /// </summary>
+    public bool ReshapeNetwork(ActiveEntity aCreature, NeuralNetworkModule aModule, Action<NeuralNetwork> aChange)
+    {
+        var brain = aCreature.Brain;
+        var training = brain is not null && Training.IsTraining(brain);
+        if (training)
+            Training.Stop(brain!);
+        var before = brain is not null ? History.Capture(brain, "przed zmianą sieci", aModule) : null;
+        try
+        {
+            aChange(aModule.Network);
+            brain?.Graph.InvalidateDeep();
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            Status = exception.Message;
+            if (training)
+                Training.Start(aCreature);
+            return false;
+        }
+
+        if (brain is not null)
+            _progress.Remove(brain);
+        if (training)
+            Training.Start(aCreature);
+        Status = $"{NameOf(aCreature)}: sieć {string.Join(" → ", aModule.Network.Layers)}, {aModule.ParameterCount} parametrów"
+            + (training ? " — nauka wznowiona" : before is not null ? " — stary kształt w snapshotach" : string.Empty);
         return true;
     }
 

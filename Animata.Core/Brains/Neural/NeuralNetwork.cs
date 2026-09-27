@@ -66,6 +66,112 @@ public sealed class NeuralNetwork
         return _values[^1];
     }
 
+    // ---------- edycja kształtu ----------
+
+    /// <summary>Najmniej i najwięcej neuronów w warstwie ukrytej; najwięcej warstw ukrytych.</summary>
+    public const int MinLayerSize = 1;
+    public const int MaxLayerSize = 64;
+    public const int MaxHiddenLayers = 8;
+
+    /// <summary>Aktywacje warstwy z ostatniego <see cref="Evaluate"/> (0 przed pierwszym) — do podglądu.</summary>
+    public ReadOnlySpan<float> Activations(int aLayer) => _values[aLayer];
+
+    /// <summary>
+    /// Nowa liczba neuronów warstwy ukrytej (1…<see cref="Layers"/>.Count − 2). Zostające neurony zachowują swoje wagi
+    /// i biasy; nowe dostają losowe wagi (±1/√wejść) i bias 0, a następna warstwa losowe wagi od nich.
+    /// </summary>
+    public void ResizeLayer(int aLayer, int aSize)
+    {
+        EnsureHidden(aLayer);
+        EnsureSize(aSize);
+        var layers = (int[])_layers.Clone();
+        layers[aLayer] = aSize;
+        Resize(layers);
+    }
+
+    /// <summary>
+    /// Wstawia warstwę ukrytą przed warstwą <paramref name="aIndex"/> (1…Count − 1). Wagi pozostałych par warstw zostają;
+    /// nowe połączenia (do nowej warstwy i z niej) są losowe — sieć zmienia zachowanie i warto ją douczyć.
+    /// </summary>
+    public void InsertLayer(int aIndex, int aSize)
+    {
+        if (aIndex < 1 || aIndex > _layers.Length - 1)
+            throw new ArgumentOutOfRangeException(nameof(aIndex), aIndex, "A hidden layer goes between the input and the output.");
+        EnsureSize(aSize);
+        if (_layers.Length - 2 >= MaxHiddenLayers)
+            throw new InvalidOperationException($"A network has at most {MaxHiddenLayers} hidden layers.");
+        var layers = _layers.ToList();
+        layers.Insert(aIndex, aSize);
+        // Macierze: przed nową warstwą bez zmian, dwie wokół niej nowe, dalsze przesunięte o jedną.
+        var keep = new (float[][] Weights, float[] Biases)?[layers.Count - 1];
+        for (var matrix = 0; matrix < _weights.Length; matrix++)
+        {
+            if (matrix < aIndex - 1)
+                keep[matrix] = (_weights[matrix], _biases[matrix]);
+            else if (matrix > aIndex - 1)
+                keep[matrix + 1] = (_weights[matrix], _biases[matrix]);
+        }
+        Rebuild([.. layers], keep);
+    }
+
+    /// <summary>Usuwa warstwę ukrytą; warstwy po obu stronach łączą się nowymi, losowymi wagami.</summary>
+    public void RemoveLayer(int aIndex)
+    {
+        EnsureHidden(aIndex);
+        var layers = _layers.ToList();
+        layers.RemoveAt(aIndex);
+        var keep = new (float[][] Weights, float[] Biases)?[layers.Count - 1];
+        for (var matrix = 0; matrix < _weights.Length; matrix++)
+        {
+            if (matrix < aIndex - 1)
+                keep[matrix] = (_weights[matrix], _biases[matrix]);
+            else if (matrix > aIndex)
+                keep[matrix - 1] = (_weights[matrix], _biases[matrix]);
+        }
+        Rebuild([.. layers], keep);
+    }
+
+    private void EnsureHidden(int aLayer)
+    {
+        if (aLayer < 1 || aLayer > _layers.Length - 2)
+            throw new ArgumentOutOfRangeException(nameof(aLayer), aLayer, "Only hidden layers can be changed (inputs and outputs follow the ports).");
+    }
+
+    private static void EnsureSize(int aSize)
+    {
+        if (aSize < MinLayerSize || aSize > MaxLayerSize)
+            throw new ArgumentOutOfRangeException(nameof(aSize), aSize, $"A layer has {MinLayerSize}–{MaxLayerSize} neurons.");
+    }
+
+    /// <summary>Nowy kształt: macierze z <paramref name="aKeep"/> przepisane, reszta losowa (±1/√wejść), biasy nowych 0.</summary>
+    private void Rebuild(int[] aLayers, (float[][] Weights, float[] Biases)?[] aKeep)
+    {
+        var weights = new float[aLayers.Length - 1][][];
+        var biases = new float[aLayers.Length - 1][];
+        for (var matrix = 0; matrix < weights.Length; matrix++)
+        {
+            if (aKeep[matrix] is { } kept)
+            {
+                weights[matrix] = kept.Weights;
+                biases[matrix] = kept.Biases;
+                continue;
+            }
+            var scale = 1f / MathF.Sqrt(aLayers[matrix]);
+            weights[matrix] = new float[aLayers[matrix + 1]][];
+            biases[matrix] = new float[aLayers[matrix + 1]];
+            for (var neuron = 0; neuron < aLayers[matrix + 1]; neuron++)
+            {
+                weights[matrix][neuron] = new float[aLayers[matrix]];
+                for (var source = 0; source < aLayers[matrix]; source++)
+                    weights[matrix][neuron][source] = (Random.Shared.NextSingle() * 2 - 1) * scale;
+            }
+        }
+        _layers = aLayers;
+        _weights = weights;
+        _biases = biases;
+        _values = aLayers.Select(aSize => new float[aSize]).ToArray();
+    }
+
     /// <summary>Liczba uczonych parametrów: wszystkie wagi i biasy.</summary>
     public int ParameterCount
     {

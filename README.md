@@ -60,7 +60,10 @@ and let it run on.
   (`Eye`, `Whiskers`, `Spine`), not by id.
 - **Studio.** A desktop app with two scenes (demo, snake) that run side by side, which you *zoom into*: double-click a creature and the window turns into its panel (senses, body,
   actuators, brain). Click the brain and you are in a live graph editor; double-click a subgraph and you go one level
-  deeper. Pause, step, change speed and edit while it runs.
+  deeper; double-click a neural network and you see its layers — neurons lit by their live activations, weights as
+  coloured lines — and can change the number of neurons in each hidden layer and add or remove hidden layers (kept
+  weights stay, new connections start random, the old shape stays in a snapshot, training resumes on the new shape).
+  Pause, step, change speed and edit while it runs.
 
 ## The experimental approach
 
@@ -130,6 +133,9 @@ dotnet run --project Animata.Studio
 | Brain graph | Drag output → input | Connect ports (grabbing a used input re-routes its wire) |
 | Brain graph | Ctrl+G · Ctrl+Shift+G | Group selection into a subgraph · ungroup |
 | Brain graph | Del · F · Ctrl+A | Delete · fit view · select all |
+| Brain graph | Double-click · Enter | Enter a subgraph or a neural network |
+| Neural network | Click neuron · click column | Show its bias and incoming weights · select a layer |
+| Neural network | + · − · Ins · Del | One neuron more / less in the selected hidden layer · add a hidden layer after it · remove it |
 
 ## Author
 

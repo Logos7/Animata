@@ -78,7 +78,7 @@ public sealed class GraphPanel : StudioPanel
         _inspector.Message += ShowMessage;
         _inspector.DeleteRequested += () => _canvas.DeleteSelection();
         _inspector.UngroupRequested += () => _canvas.UngroupSelection();
-        _inspector.EnterRequested += aComposite => Activate(aComposite, _canvas.ScreenCenterOf(aComposite));
+        _inspector.EnterRequested += aModule => Activate(aModule, _canvas.ScreenCenterOf(aModule));
 
         // ---------- pasek ----------
         _validationIcon = Ui.IconColored(Icons.Check, StudioPalette.Good, 14, 2);
@@ -291,10 +291,16 @@ public sealed class GraphPanel : StudioPanel
 
     private void Activate(BrainModule aModule, Point aPoint)
     {
-        if (aModule is not CompositeModule composite || _canvas is null || Navigator?.Active != this)
+        if (_canvas is null || Navigator?.Active != this)
             return;
-        Enter(new GraphPanel(Session, _creature, composite.Inner, composite, _graph, GraphCanvas.TitleOf(composite), null),
-            OriginOf(_canvas, aPoint));
+        StudioPanel? next = aModule switch
+        {
+            CompositeModule composite => new GraphPanel(Session, _creature, composite.Inner, composite, _graph, GraphCanvas.TitleOf(composite), null),
+            NeuralNetworkModule network => new NetworkPanel(Session, _creature, network),
+            _ => null
+        };
+        if (next is not null)
+            Enter(next, OriginOf(_canvas, aPoint));
     }
 
     public override void Refresh(float aDelta)
@@ -348,8 +354,8 @@ public sealed class GraphPanel : StudioPanel
             case Key.Space:
                 Session.TogglePause();
                 return true;
-            case Key.Enter when _canvas.Primary is CompositeModule composite:
-                Activate(composite, _canvas.ScreenCenterOf(composite));
+            case Key.Enter when _canvas.Primary is { } primary and (CompositeModule or NeuralNetworkModule):
+                Activate(primary, _canvas.ScreenCenterOf(primary));
                 return true;
             case Key.Escape:
                 return _canvas.Cancel();

@@ -37,6 +37,7 @@ public static class Icons
     public const string Check = "M3 8.5L6 11.5L13 4.5";
     public const string Warning = "M8 2L14.5 13.5H1.5ZM8 6.5V9.5M8 11.5V11.6";
     public const string Plus = "M8 3V13M3 8H13";
+    public const string Minus = "M3 8H13";
     public const string Trash = "M3 4.5H13M6 4.5V3H10V4.5M4.5 4.5L5.2 13.5H10.8L11.5 4.5";
     public const string Layout = "M2 3H6V7H2ZM10 3H14V7H10ZM6 11H10V15H6ZM6 5H10M4 7V13H6M12 7V13H10";
     public const string Fit = "M2 6V2H6M10 2H14V6M14 10V14H10M6 14H2V10";

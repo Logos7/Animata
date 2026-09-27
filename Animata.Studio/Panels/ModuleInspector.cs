@@ -43,7 +43,7 @@ public sealed class ModuleInspector
     public event Action? Changed;
     public event Action<string>? Message;
     public event Action? DeleteRequested;
-    public event Action<CompositeModule>? EnterRequested;
+    public event Action<BrainModule>? EnterRequested;
     public event Action? UngroupRequested;
 
     public void Refresh(float aDelta)
@@ -136,9 +136,10 @@ public sealed class ModuleInspector
             name,
             Ui.MonoText(aModule.GetType().Name + (aSelected > 1 ? $" · zaznaczono {aSelected}" : string.Empty), 11.5, "Studio.Text3")));
 
-        if (aModule is CompositeModule enterable)
+        if (aModule is CompositeModule or NeuralNetworkModule)
         {
-            var enter = Ui.Button("Wejdź do podgrafu", () => EnterRequested?.Invoke(enterable), Icons.Enter, aAccent: true);
+            var enter = Ui.Button(aModule is CompositeModule ? "Wejdź do podgrafu" : "Wejdź do sieci · neurony i warstwy",
+                () => EnterRequested?.Invoke(aModule), Icons.Enter, aAccent: true);
             enter.HorizontalAlignment = HorizontalAlignment.Stretch;
             enter.HorizontalContentAlignment = HorizontalAlignment.Center;
             enter.Height = 36;
