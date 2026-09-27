@@ -104,6 +104,39 @@ public class SpiderTests
     }
 
     [Fact]
+    public void Touch_FeelsFeetOnTheGround_AndBellyWhenLyingDown()
+    {
+        using var world = new World();
+        world.Add(Floor.At(10, 10));
+        var spider = WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, Vector3.One, null, new GaitModule { Stride = 0, Lift = 0, KneeSwing = 0 });
+        world.Add(spider);
+        for (var tick = 0; tick < 30; tick++)
+            world.Update(Delta);
+        var touch = spider.Body.Sensors.OfType<TouchSensor>().Single().Read(spider, world);
+        Assert.All(WorldObjectCatalog.SpiderTouchPorts.Take(4), aPort => Assert.Equal(1f, touch[aPort]));
+        Assert.Equal(0f, touch["Belly"]);
+        Assert.Equal(0f, SeekRigs.SpiderPosture(spider));
+
+        // Na grzbiecie: brzuch (tułów) dotyka ziemi, postawa najgorsza.
+        spider.Place(new Vector3(0, 0, 0.1f), Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI));
+        for (var tick = 0; tick < 30; tick++)
+            world.Update(Delta);
+        Assert.Equal(1f, spider.Body.Sensors.OfType<TouchSensor>().Single().Read(spider, world)["Belly"]);
+        Assert.Equal(1f, SeekRigs.SpiderPosture(spider));
+        var feel = spider.Body.Sensors.OfType<FeelSensor>().Single().Read(spider, world);
+        Assert.True(feel.ContainsKey(FeelSensor.HeadRollPort));
+    }
+
+    [Fact]
+    public void HandGait_KeepsItsBellyOffTheGround()
+    {
+        var rig = SeekRigs.Spider;
+        var results = SeekTargetTask.Run(new GaitModule(), SeekTargetTask.CreateValidationEpisodes(rig.DefaultOptions).Take(3).ToList(),
+            rig.DefaultOptions, rig);
+        Assert.All(results, aResult => Assert.True(aResult.PostureTime < 0.1f * rig.DefaultOptions.EpisodeSeconds, $"{aResult.PostureTime} s"));
+    }
+
+    [Fact]
     public void Snake_DoesNotPassThroughItself()
     {
         using var world = new World();

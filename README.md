@@ -50,7 +50,9 @@ and let it run on.
   knee: bend). A trot generator (diagonal legs in step, six learnable parameters: stride, lift, knee bend, knee swing,
   frequency, turning) walks it to the target — the hand-tuned gait reaches 8/8 targets on terrain with low slabs, and
   evolution teaches a random gait the same in about ten generations. A second spider has a neural network (clock and
-  eye in, sixteen joint commands out) and has to find a gait on its own.
+  eye in, sixteen joint commands out) and has to find a gait on its own. Spiders feel **touch** (each foot and the
+  belly) and **balance** (trunk pitch and roll); training punishes lying on the belly or falling over, which removed the
+  belly-crawling "gaits" evolution used to find (bad posture 30–38 % of the time → about 1–10 %).
 - **Bodies that don't pass through themselves.** Parts of one creature collide with each other unless they are
   neighbours in the joint tree (one or two joints apart), so a coiled snake stays coiled and legs don't cross.
   Joint angles are measured around the child part's own axes, so a leg pointing sideways bends like one pointing forward.
@@ -66,7 +68,8 @@ and let it run on.
   actuators and bad configuration are errors, not silent zeros). Logic can be a hand-written controller, a neural
   network whose inputs are small expressions over sensor ports, a router, a constant, or a **subgraph** (composite
   pattern, any depth) with group/ungroup that keeps the wiring intact.
-- **Background evolution.** Nothing learns until you start it (L, or the training button). New creatures start
+- **Background evolution.** Each child mutates with a randomly picked strength (¼, ½, 1 or 2 × σ): some fine-tune,
+  some jump further — the neural spider now reaches 8/8 targets in 20–30 generations instead of 6–7/8. Nothing learns until you start it (L, or the training button). New creatures start
   from random parameters; a creature loaded from a file starts from the snapshot the file marks as current (saving
   marks the snapshot matching the brain's state, adding a „zapis” snapshot if none does). A genetic algorithm trains
   the parameters on its own thread, starting from the creature's current ones. The scene only receives the

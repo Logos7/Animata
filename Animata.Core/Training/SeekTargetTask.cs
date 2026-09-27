@@ -56,6 +56,12 @@ public sealed record SeekTargetOptions
     public float MinSlabHeight { get; init; } = 0.03f;
     public float MaxSlabHeight { get; init; } = 0.1f;
 
+    /// <summary>
+    /// Kara za złą postawę: waga · całka z <see cref="SeekRig.Posture"/> / T (np. pająk leżący brzuchem na ziemi albo
+    /// przewrócony). Bez niej ewolucja chętnie „pełza” tułowiem po ziemi, bo i tak dojeżdża do celu.
+    /// </summary>
+    public float PostureWeight { get; init; }
+
     /// <summary>Długość ciała za głową w chwili startu (wąż leży wzdłuż −X) — płyty nie mogą leżeć pod nim.</summary>
     public float BodyLength { get; init; }
 }
@@ -72,18 +78,20 @@ public readonly record struct SeekEpisode(float Yaw, Vector2 TargetOffset, Obsta
 /// Wynik jednej próby: Cost — składnik fitness (mniejszy = lepszy), FinalGap — szczelina do celu na końcu,
 /// ContactTime — sekundy w kontakcie z przeszkodą, Reached — FinalGap ≤ <see cref="SeekTargetOptions.ReachGap"/>.
 /// </summary>
-public readonly record struct EpisodeResult(float Cost, float FinalGap, float ContactTime, bool Reached);
+public readonly record struct EpisodeResult(float Cost, float FinalGap, float ContactTime, bool Reached, float PostureTime = 0);
 
 /// <summary>
 /// „Ciało do treningu”: jak zbudować stwora z danym sterownikiem i jak liczyć wysiłek z jego komend.
 /// <see cref="PrepareWorld"/> dokłada do świata próby to, czego ciało potrzebuje (np. podłogę dla stwora w fizyce).
+/// <see cref="Posture"/> — zła postawa w danej chwili (0 = dobra, 1 = zła), karana z wagą <see cref="SeekTargetOptions.PostureWeight"/>.
 /// </summary>
 public sealed record SeekRig(
     string Name,
     Func<Guid, BrainModule, ActiveEntity> CreateCreature,
     Func<IReadOnlyDictionary<string, float>, float> Effort,
     SeekTargetOptions DefaultOptions,
-    Action<World>? PrepareWorld = null);
+    Action<World>? PrepareWorld = null,
+    Func<ActiveEntity, float>? Posture = null);
 
 public static class SeekRigs
 {
@@ -200,9 +208,25 @@ public static class SeekRigs
             MaxSlabs = 2,
             MinSlabHeight = 0.02f,
             MaxSlabHeight = 0.06f,
-            BodyLength = 0.4f
+            BodyLength = 0.4f,
+            PostureWeight = 1
         },
-        AddFloor);
+        AddFloor,
+        SpiderPosture);
+
+    /// <summary>
+    /// Zła postawa pająka: 1, gdy tułów leży na ziemi albo pająk jest przewrócony (tułów pochylony o 60° i więcej),
+    /// pomiędzy — rośnie z przechyleniem.
+    /// </summary>
+    public static float SpiderPosture(ActiveEntity aCreature)
+    {
+        if (aCreature is not SpiderCreature spider || spider.PartOrientations.Count == 0)
+            return 0;
+        if (spider.IsPartTouching(0))
+            return 1;
+        var up = Vector3.Transform(Vector3.UnitZ, spider.PartOrientations[0]).Z;
+        return Math.Clamp((0.95f - up) / 0.45f, 0, 1);
+    }
 
     /// <summary>
     /// Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów, wąż — z tą samą liczbą segmentów). Jeśli napęd stwora
@@ -448,6 +472,7 @@ public sealed class SeekTargetTask
             var distanceCost = 0f;
             var energy = 0f;
             var contact = 0f;
+            var posture = 0f;
             for (var tick = 0; tick < ticks; tick++)
             {
                 world.Update(aOptions.Delta);
@@ -455,13 +480,16 @@ public sealed class SeekTargetTask
                 energy += aRig.Effort(wheels.LastCommand) * aOptions.Delta;
                 if (obstacles.Count > 0 && Touches(creature, obstacles))
                     contact += aOptions.Delta;
+                if (aRig.Posture is { } bad)
+                    posture += Math.Clamp(bad(creature), 0, 1) * aOptions.Delta;
             }
 
             var cost = distanceCost / (initialGap * aOptions.EpisodeSeconds)
                 + aOptions.EnergyWeight * energy / aOptions.EpisodeSeconds
-                + aOptions.ContactWeight * contact / aOptions.EpisodeSeconds;
+                + aOptions.ContactWeight * contact / aOptions.EpisodeSeconds
+                + aOptions.PostureWeight * posture / aOptions.EpisodeSeconds;
             var finalGap = Gap(creature, target);
-            results[index] = new EpisodeResult(cost, finalGap, contact, finalGap <= aOptions.ReachGap);
+            results[index] = new EpisodeResult(cost, finalGap, contact, finalGap <= aOptions.ReachGap, posture);
         }
         return results;
     }

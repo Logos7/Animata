@@ -534,6 +534,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     {
         TargetSensor => "Oko",
         ClockSensor => "Zegar",
+        TouchSensor => "Dotyk",
         FeelSensor => "Czucie terenu",
         JointSensor => "Czucie stawów",
         RaySensor rays => $"Wąsy ×{rays.Angles.Count}",
