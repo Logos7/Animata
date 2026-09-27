@@ -41,7 +41,12 @@ and let it run on.
 - **A snake that learns to crawl.** Any number of capsule segments (2–24, changeable on a living snake) linked by
   ball joints with servos (yaw and pitch — full 3D). Scales give it more grip sideways than forwards, so a wave
   running from head to tail pushes it along. A CPG module (a travelling wave with six learnable parameters) drives
-  the joints; evolution teaches a random CPG to crawl to the target in a few generations.
+  the joints; evolution teaches a random CPG to crawl to the target in a few generations. A second snake has **its
+  own neural network** instead of a CPG: a clock sense (`Sin`, `Cos` of a 1.2 Hz rhythm) and the eye go in, a command
+  for every joint comes out, and evolution has to discover the travelling wave and the steering by itself.
+- **Terrain.** Flat slabs (a few centimetres high, any size and rotation) lie on the floor; snakes climb over them in
+  physics, and training episodes for snakes scatter 0–3 slabs on the way, sometimes with the target on top of one.
+  Targets, posts and slabs snap to the height of the ground under them (a toggle in the scene).
 - **Senses.** An eye that tracks a target (distance, gap, direction in the creature's own frame) and whiskers: rays
   that report how close obstacles are. A car can have any odd number of whiskers from 1 to 25, spread over 120°;
   the number can be changed on a living car (scene, creature view or graph inspector): the same brain is rewired in
@@ -61,7 +66,7 @@ and let it run on.
 - **Saving worlds.** A whole world goes to JSON and back: entities, bodies, target links and complete brains
   (modules, wiring, subgraphs, node positions, parameters and snapshots). Brains connect to bodies by slot name
   (`Eye`, `Whiskers`, `Spine`), not by id.
-- **Studio.** A desktop app with two scenes (demo, snake) that run side by side, which you *zoom into*: double-click a creature and the window turns into its panel (senses, body,
+- **Studio.** A desktop app with two scenes (demo; snakes on terrain — a CPG snake and a neural snake) that run side by side, which you *zoom into*: double-click a creature and the window turns into its panel (senses, body,
   actuators, brain). Click the brain and you are in a live graph editor; double-click a subgraph and you go one level
   deeper; double-click a neural network and you see its layers — neurons lit by their live activations, weights as
   coloured lines — and can change the number of neurons in each hidden layer and add or remove hidden layers (kept
@@ -127,9 +132,10 @@ dotnet run --project Animata.Studio
 | Everywhere | Esc · Alt+← · mouse Back | Zoom out one level |
 | Scene, creature, graph | Space | Pause / resume the world |
 | Scene | LMB drag | Move entities |
-| Scene | RMB click | Context menu: insert a car, cylinder or snake (random parameters, not learning until you start it), a target or a post where you clicked; on an entity: enter, aim eyes, delete |
+| Scene | RMB click | Context menu: insert a car, cylinder, CPG snake or neural snake (random parameters, not learning until you start it), a slab, a target or a post where you clicked; on an entity: enter, aim eyes, delete |
 | Scene | RMB drag · WSADQE · wheel | Look around · fly · fly forward/back (the wheel works like W/S) |
-| Scene | Ins · O · T · Del | Add target · add post · aim all eyes at the selected target · delete |
+| Scene | Ins · O · P · T · Del | Add target · add post · add slab · aim all eyes at the selected target · delete |
+| Scene | G · magnet button | Snap to ground on/off: targets, posts and dragged entities stand on the floor or slab below |
 | Scene | L · K | Start/stop training · random weights and retrain |
 | Scene, creature | Ctrl+S · Z | Snapshot the brain · step back through snapshots |
 | Scene | Save · Load (toolbar) | Write the whole world to a `.animata.json` file · replace the scene with a saved one |

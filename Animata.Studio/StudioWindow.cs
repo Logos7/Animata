@@ -32,7 +32,7 @@ public sealed class StudioWindow : Window
         Content = _navigator;
 
         AddScene(new StudioSession("Scena demo", WorldObjectCatalog.CreateDemo));
-        AddScene(new StudioSession("Wąż", WorldObjectCatalog.CreateSnakeScene));
+        AddScene(new StudioSession("Węże", WorldObjectCatalog.CreateSnakeScene));
 
         _navigator.Navigated += UpdateTitle;
         KeyDown += OnKeyDown;

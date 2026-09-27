@@ -257,7 +257,8 @@ public static class WorldObjectCatalog
     public static CpgModule CreateCpg(int aSegments = DefaultSnakeSegments) => new(aSegments - 1) { Name = "CPG" };
 
     /// <summary>
-    /// Wąż: oko (slot „Eye”) na głowie, czucie stawów („Joints”), kręgosłup („Spine”), mózg eye → controller → spine.
+    /// Wąż: oko (slot „Eye”) na głowie, czucie stawów („Joints”), zegar rytmu („Clock”), kręgosłup („Spine”),
+    /// mózg sensory → controller → spine.
     /// Controller musi mieć wyjścia Yaw{i}/Pitch{i} dla wszystkich n−1 stawów (np. <see cref="CreateCpg"/>).
     /// </summary>
     public static SnakeCreature CreateSnake(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController,
@@ -267,11 +268,13 @@ public static class WorldObjectCatalog
         var snake = new SnakeCreature(aSegments, brain) { Color = aColor };
         var eye = new TargetSensor { Slot = "Eye", TargetId = aTargetId };
         var joints = new JointSensor(aSegments - 1) { Slot = "Joints" };
+        var clock = new ClockSensor { Slot = "Clock" };
         var spine = new SpineActuator(aSegments - 1) { Slot = "Spine" };
         snake.Body.Sensors.Add(eye);
         snake.Body.Sensors.Add(joints);
+        snake.Body.Sensors.Add(clock);
         snake.Body.Actuators.Add(spine);
-        BuildBrain(brain, [("Eye", eye), ("Joints", joints)], aController, spine);
+        BuildBrain(brain, [("Eye", eye), ("Joints", joints), ("Clock", clock)], aController, spine);
         snake.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
         return snake;
     }
@@ -289,18 +292,83 @@ public static class WorldObjectCatalog
         return snake;
     }
 
-    /// <summary>Scena węża: podłoga 30 × 30 m, kulka i wąż, który uczy się pełzać do niej.</summary>
+    /// <summary>
+    /// Sieć węża: wejścia Sin, Cos (zegar rytmu), kierunek do celu (bok, przód, góra) i szczelina/4; wyjścia Yaw{k}, Pitch{k}
+    /// na przemian (Yaw0, Pitch0, Yaw1, …), więc dołożony staw dopisuje wyjścia na końcu. Wagi losowe.
+    /// </summary>
+    public static NeuralNetworkModule CreateSnakeNeuralModule(int aSegments = DefaultSnakeSegments, params int[] aHidden)
+    {
+        if (!IsValidSnakeLength(aSegments))
+            throw new ArgumentOutOfRangeException(nameof(aSegments), aSegments,
+                $"Wąż ma od {MinSnakeSegments} do {MaxSnakeSegments} segmentów.");
+        string[] inputs =
+        [
+            ClockSensor.SinPort, ClockSensor.CosPort,
+            "Found * DirectionY", "Found * DirectionX", "Found * DirectionZ", "Found * Gap / 4"
+        ];
+        var outputs = SnakeNetworkOutputs(aSegments - 1);
+        var hidden = aHidden.Length > 0 ? aHidden : SnakeHiddenLayers;
+        var module = new NeuralNetworkModule(new NeuralNetwork([inputs.Length, .. hidden, outputs.Length])) { Name = "Neural" };
+        module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetPorts, TargetSensor.DirectionZPort]);
+        module.Inputs.AddRange(inputs.Select(aExpression => new NeuralInput(aExpression)));
+        module.Outputs.AddRange(outputs.Select(aPort => new NeuralOutput(aPort)));
+        return module;
+    }
+
+    /// <summary>Domyślne warstwy ukryte sieci węża.</summary>
+    public static readonly int[] SnakeHiddenLayers = [8];
+
+    /// <summary>Wyjścia sieci węża: Yaw0, Pitch0, Yaw1, Pitch1, …</summary>
+    public static string[] SnakeNetworkOutputs(int aJoints) =>
+        [.. Enumerable.Range(0, aJoints).SelectMany(aJoint => new[] { SpineActuator.YawPort(aJoint), SpineActuator.PitchPort(aJoint) })];
+
+    /// <summary>Wąż z własną siecią neuronową (losowe wagi) — uczy się pełzać bez gotowego CPG, z zegarem rytmu.</summary>
+    public static SnakeCreature CreateNeuralSnake(Vector3 aPosition, float aYaw, Guid? aTargetId, int aSegments = DefaultSnakeSegments) =>
+        CreateSnake(aPosition, aYaw, NeuralSnakeColor, aTargetId, CreateSnakeNeuralModule(aSegments), aSegments);
+
+    /// <summary>Kolor węża z siecią (odróżnia go od węża z CPG).</summary>
+    public static readonly Vector3 NeuralSnakeColor = new(0.35f, 0.75f, 0.45f);
+
+    /// <summary>Płyta terenu: środek spodu w (x, y, z), wymiary, obrót wokół pionu.</summary>
+    public static Slab CreateSlab(Vector3 aPosition, Vector3 aSize, float aYaw = 0) => new()
+    {
+        Size = aSize,
+        Body = { Position = aPosition, Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) }
+    };
+
+    /// <summary>
+    /// Scena węży: podłoga 30 × 30 m, kulka na płycie, kilka płaskich płyt terenu (4–10 cm) i dwa węże —
+    /// z CPG i z własną siecią. Oba mają losowe parametry i uczą się dopiero po starcie nauki.
+    /// </summary>
     public static DemoScene CreateSnakeScene()
     {
         var world = new World();
         world.Add(Floor.At(30, 30));
-        var target = CreateTargetBall(new Vector3(4, 3, 0));
+        Slab[] slabs =
+        [
+            CreateSlab(new Vector3(0.5f, 0.8f, 0), new Vector3(2.2f, 1.6f, 0.06f), 0.3f),
+            CreateSlab(new Vector3(-1.2f, 3.6f, 0), new Vector3(1.4f, 2.4f, 0.04f), -0.5f),
+            CreateSlab(new Vector3(2.6f, -1.6f, 0), new Vector3(1.8f, 1.2f, 0.08f), 0.9f),
+            CreateSlab(new Vector3(4.2f, 3.2f, 0), new Vector3(2, 2, 0.1f)),
+            CreateSlab(new Vector3(-3.4f, 0.6f, 0), new Vector3(1.2f, 1.2f, 0.05f), 0.2f)
+        ];
+        for (var index = 0; index < slabs.Length; index++)
+        {
+            slabs[index].Name = $"Płyta {index + 1}";
+            world.Add(slabs[index]);
+        }
+
+        var target = CreateTargetBall(new Vector3(4.2f, 3.2f, 0));
         target.Name = "Kulka";
         world.Add(target);
-        var snake = CreateLearningSnake(new Vector3(-4, -2, 0), 0.6f, target.Id);
-        snake.Name = "Wąż";
+        Terrain.Snap(world, target);
+        var snake = CreateLearningSnake(new Vector3(-4.5f, -2.5f, 0), 0.6f, target.Id);
+        snake.Name = "Wąż CPG";
         world.Add(snake);
-        return new DemoScene(world, [snake]);
+        var neural = CreateNeuralSnake(new Vector3(-5.5f, 3.5f, 0), -0.1f, target.Id);
+        neural.Name = "Wąż NN";
+        world.Add(neural);
+        return new DemoScene(world, [snake, neural]);
     }
 
     // ---------- demo ----------

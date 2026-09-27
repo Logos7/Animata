@@ -45,6 +45,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     private TextBlock? _speed;
     private TextBlock? _trainingLabel;
     private Button? _pause;
+    private Button? _snap;
     private Border? _errorBanner;
     private TextBlock? _errorText;
     private string _listKey = string.Empty;
@@ -65,6 +66,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 EnterCreature(creature);
         };
         _renderer.ContextRequested += ShowContextMenu;
+        _renderer.GroundHeight = (aEntity, aPosition) => Session.GroundAt(aPosition, aEntity);
         StudioTheme.Changed += UpdateListSelection;
     }
 
@@ -92,7 +94,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         };
         speed.Click += (_, _) => Session.CycleSpeed();
         ToolTip.SetTip(speed, "Prędkość symulacji");
-        var center = PanelFrame.Group(_pause, step, speed);
+        _snap = Ui.IconButton(Icons.Magnet, "Przyciąganie do terenu (G): kulki, słupki i przeciągane encje stają na podłodze albo płycie pod nimi",
+            () => Session.ToggleSnap());
+        var center = PanelFrame.Group(_pause, step, speed, _snap);
 
         _trainingLabel = Ui.Text("Nauka", 13);
         var training = new Button
@@ -217,6 +221,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             _errorBanner.IsVisible = Session.Error is not null;
             _errorText.Text = Session.Error is { } error ? $"Symulacja zatrzymana: {error}" : string.Empty;
         }
+        if (_snap is not null)
+            _snap.Background = Session.SnapToGround ? Ui.Brush(StudioTheme.Palette.AccentSoft) : Brushes.Transparent;
         if (_trainingLabel is not null)
             _trainingLabel.Text = TrainingScope().Any(Session.IsTraining) ? "Nauka trwa" : "Nauka stoi";
         if (_summary is not null)
@@ -225,7 +231,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             _status.Text = Session.Status ?? string.Empty;
         if (_counts is not null)
             _counts.Text = $"{Session.Creatures.Count()} stwory · {Session.World.Entities.OfType<TargetBall>().Count()} cele · " +
-                $"{Session.World.Entities.OfType<Obstacle>().Count()} słupki";
+                $"{Session.World.Entities.OfType<Obstacle>().Count()} słupki · {Session.World.Entities.OfType<Slab>().Count()} płyty";
 
         RefreshList();
         if (_propertiesOf is not null && !Session.World.Contains(_propertiesOf) || !_propertiesBuilt)
@@ -257,8 +263,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             AddGroup("Stwory", entities.OfType<ActiveEntity>());
             AddGroup("Cele", entities.OfType<TargetBall>());
             AddGroup("Przeszkody", entities.OfType<Obstacle>());
+            AddGroup("Teren", entities.OfType<Slab>());
             AddGroup("Podłoże", entities.OfType<Floor>());
-            AddGroup("Inne", entities.Where(aEntity => aEntity is not ActiveEntity and not TargetBall and not Obstacle and not Floor));
+            AddGroup("Inne", entities.Where(aEntity => aEntity is not ActiveEntity and not TargetBall and not Obstacle and not Slab and not Floor));
             UpdateListSelection();
         }
 
@@ -399,8 +406,11 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             Ui.SetIfIdle(yaw, Ui.F(YawDegrees(entity), 0));
         });
         var transform = Ui.VStack(4, Ui.Header("Transformacja"), Ui.Row("Nazwa", name), Ui.Row("X [m]", x), Ui.Row("Y [m]", y));
-        if (entity is ActiveEntity)
+        if (entity is ActiveEntity or Slab)
             transform.Children.Add(Ui.Row("Kierunek [°]", yaw));
+        var height = Ui.MonoText(string.Empty, 12.5);
+        _updaters.Add(() => height.Text = $"{Ui.F(entity.Body.Position.Z)} m" + (Session.SnapToGround && entity is TargetBall or Obstacle or Slab ? " · teren" : string.Empty));
+        transform.Children.Add(Ui.Row("Wysokość", height));
         switch (entity)
         {
             case Obstacle obstacle:
@@ -408,6 +418,11 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 break;
             case TargetBall ball:
                 transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(ball.Radius), aText => SetRadius(aText, aValue => ball.Radius = aValue), 110)));
+                break;
+            case Slab slab:
+                transform.Children.Add(Ui.Row("Szerokość [m]", Ui.Field(Ui.F(slab.Size.X), aText => SetSlabSize(slab, aText, 0), 110)));
+                transform.Children.Add(Ui.Row("Głębokość [m]", Ui.Field(Ui.F(slab.Size.Y), aText => SetSlabSize(slab, aText, 1), 110)));
+                transform.Children.Add(Ui.Row("Grubość [m]", Ui.Field(Ui.F(slab.Size.Z, 3), aText => SetSlabSize(slab, aText, 2), 110)));
                 break;
         }
         _properties.Children.Add(transform);
@@ -450,6 +465,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     private static string SensorName(Sensor aSensor) => aSensor switch
     {
         TargetSensor => "Oko",
+        ClockSensor => "Zegar",
+        JointSensor => "Czucie stawów",
         RaySensor rays => $"Wąsy ×{rays.Angles.Count}",
         _ => aSensor.GetType().Name
     };
@@ -467,6 +484,28 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         var position = aEntity.Body.Position;
         aEntity.Body.Position = aX ? position with { X = value } : position with { Y = value };
         return true;
+    }
+
+    private static bool SetSlabSize(Slab aSlab, string aText, int aAxis)
+    {
+        if (!Ui.TryParse(aText, out var value))
+            return false;
+        var size = aSlab.Size;
+        size = aAxis switch
+        {
+            0 => size with { X = value },
+            1 => size with { Y = value },
+            _ => size with { Z = value }
+        };
+        try
+        {
+            aSlab.Size = size;
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
     }
 
     private static bool SetRadius(string aText, Action<float> aSet)
@@ -534,6 +573,12 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             case Key.O:
                 SelectNew(Session.AddObstacle(_renderer.GroundPointAtCenter()));
                 return true;
+            case Key.P:
+                SelectNew(Session.AddSlab(_renderer.GroundPointAtCenter()));
+                return true;
+            case Key.G:
+                Session.ToggleSnap();
+                return true;
             case Key.T when _renderer.SelectedEntity is TargetBall chosen:
                 Session.AimAllEyes(chosen);
                 return true;
@@ -579,10 +624,12 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
         menu.Items.Add(Item("Autko", Icons.Wheel, () => SelectNew(Session.AddCreature(CreatureKind.Car, at))));
         menu.Items.Add(Item("Walec", Icons.Target, () => SelectNew(Session.AddCreature(CreatureKind.Cylinder, at))));
-        menu.Items.Add(Item("Wąż", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.Snake, at))));
+        menu.Items.Add(Item("Wąż CPG", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.Snake, at))));
+        menu.Items.Add(Item("Wąż NN", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.NeuralSnake, at))));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Kulka", Icons.Target, () => SelectNew(Session.AddTarget(at)), Key.Insert));
         menu.Items.Add(Item("Słupek", Icons.Pillar, () => SelectNew(Session.AddObstacle(at)), Key.O));
+        menu.Items.Add(Item("Płyta", Icons.Slab, () => SelectNew(Session.AddSlab(at)), Key.P));
 
         menu.Open(_renderer.View);
     }

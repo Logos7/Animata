@@ -16,7 +16,8 @@ public enum CreatureKind
 {
     Car,
     Cylinder,
-    Snake
+    Snake,
+    NeuralSnake
 }
 
 /// <summary>
@@ -100,6 +101,7 @@ public sealed class StudioSession : IDisposable
                 }
             }
 
+        SnapStatics();
         if (Paused || Hold)
             return;
         _pending += Speed;
@@ -230,8 +232,37 @@ public sealed class StudioSession : IDisposable
     {
         CreatureKind.Car => "Autko",
         CreatureKind.Cylinder => "Walec",
-        _ => "Wąż"
+        CreatureKind.NeuralSnake => "Wąż NN",
+        _ => "Wąż CPG"
     };
+
+    /// <summary>
+    /// Przyciąganie do terenu (domyślnie włączone): kulki i słupki stoją na najwyższej powierzchni pod nimi (podłoga, płyta),
+    /// płyty — na podłodze; nowe i przeciągane encje (także stwory) lądują na tej wysokości. Wyłączone — wysokość się nie zmienia.
+    /// </summary>
+    public bool SnapToGround { get; set; } = true;
+
+    /// <summary>Wysokość, na której staje encja w punkcie (przy wyłączonym przyciąganiu — 0 albo bez zmian).</summary>
+    public float GroundAt(Vector3 aPoint, Entity? aEntity = null) =>
+        !SnapToGround ? aEntity?.Body.Position.Z ?? 0
+        : aEntity is Slab ? Terrain.HeightAt(World, new Vector2(aPoint.X, aPoint.Y), aEntity, aFloorsOnly: true)
+        : Terrain.HeightAt(World, new Vector2(aPoint.X, aPoint.Y), aEntity);
+
+    public string ToggleSnap()
+    {
+        SnapToGround = !SnapToGround;
+        return Status = SnapToGround ? "przyciąganie do terenu: włączone" : "przyciąganie do terenu: wyłączone";
+    }
+
+    /// <summary>Kulki, słupki i płyty z powrotem na terenie (np. po zmianie pozycji w panelu albo przesunięciu płyty).</summary>
+    private void SnapStatics()
+    {
+        if (!SnapToGround)
+            return;
+        foreach (var entity in World.Entities)
+            if (entity is Slab or TargetBall or Obstacle)
+                Terrain.Snap(World, entity);
+    }
 
     /// <summary>„1 segment”, „3 segmenty”, „8 segmentów”.</summary>
     public static string Segments(int aCount)
@@ -257,13 +288,14 @@ public sealed class StudioSession : IDisposable
     /// </summary>
     public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition)
     {
-        var position = aPosition with { Z = 0 };
+        var position = aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 };
         var target = NearestTarget(position);
         var yaw = target is null ? 0 : MathF.Atan2(target.Body.Position.Y - position.Y, target.Body.Position.X - position.X);
         ActiveEntity creature = aKind switch
         {
             CreatureKind.Car => WorldObjectCatalog.CreateNeuralCar(position, yaw, target?.Id),
             CreatureKind.Cylinder => WorldObjectCatalog.CreateLearningSeeker(position, target?.Id),
+            CreatureKind.NeuralSnake => WorldObjectCatalog.CreateNeuralSnake(position, yaw, target?.Id),
             _ => WorldObjectCatalog.CreateLearningSnake(position, yaw, target?.Id)
         };
         creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));
@@ -276,7 +308,7 @@ public sealed class StudioSession : IDisposable
     /// <summary>Nowa kulka; oczy, które nie mają celu (albo ich cel zniknął), patrzą na nią.</summary>
     public TargetBall AddTarget(Vector3 aPosition)
     {
-        var target = WorldObjectCatalog.CreateTargetBall(aPosition with { Z = 0 });
+        var target = WorldObjectCatalog.CreateTargetBall(aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 });
         target.Name = UniqueName("Kulka");
         World.Add(target);
         foreach (var eye in Creatures.SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>()))
@@ -288,10 +320,22 @@ public sealed class StudioSession : IDisposable
 
     public Obstacle AddObstacle(Vector3 aPosition)
     {
-        var obstacle = WorldObjectCatalog.CreateObstacle(aPosition with { Z = 0 });
+        var obstacle = WorldObjectCatalog.CreateObstacle(aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 });
         World.Add(obstacle);
         Status = "dodano słupek";
         return obstacle;
+    }
+
+    /// <summary>Płaska płyta terenu 1.5 × 1 × 0.06 m na podłodze.</summary>
+    public Slab AddSlab(Vector3 aPosition)
+    {
+        var slab = WorldObjectCatalog.CreateSlab(aPosition with { Z = 0 }, new Vector3(1.5f, 1, 0.06f));
+        slab.Name = UniqueName("Płyta");
+        World.Add(slab);
+        if (SnapToGround)
+            Terrain.Snap(World, slab);
+        Status = $"dodano: {slab.Name}";
+        return slab;
     }
 
     /// <summary>Wszystkie oczy patrzą na podaną kulkę.</summary>

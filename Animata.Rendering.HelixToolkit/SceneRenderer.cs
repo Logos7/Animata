@@ -34,6 +34,7 @@ public sealed class SceneRenderer : IDisposable
     private Entity? _selected;
     private IPointer? _dragPointer;
     private Vector3 _dragOffset;
+    private float _dragPlane;
 
     public SceneRenderer()
     {
@@ -74,6 +75,12 @@ public sealed class SceneRenderer : IDisposable
     }
 
     public Control View => _viewport;
+
+    /// <summary>
+    /// Wysokość terenu dla przeciąganej encji w punkcie (np. przyciąganie do podłogi i płyt); null — przeciąganie
+    /// zostawia wysokość bez zmian.
+    /// </summary>
+    public Func<Entity, Vector3, float>? GroundHeight { get; set; }
     public Entity? SelectedEntity => _selected;
     public bool IsDragging => _dragPointer is not null;
 
@@ -212,6 +219,8 @@ public sealed class SceneRenderer : IDisposable
         }
         if (selected is not null && !selected.IsFixed && TryGroundPoint(point, selected.Body.Position.Z, out var ground))
         {
+            // Płaszczyzna przeciągania na wysokości z chwili chwycenia — wysokość z terenu nie może jej przesuwać.
+            _dragPlane = selected.Body.Position.Z;
             _dragOffset = selected.Body.Position - ground;
             _dragPointer = aEvent.Pointer;
             _dragPointer.Capture(_viewport);
@@ -223,8 +232,13 @@ public sealed class SceneRenderer : IDisposable
     {
         if (_dragPointer != aEvent.Pointer || _selected is null)
             return;
-        if (TryGroundPoint(aEvent.GetPosition(_viewport), _selected.Body.Position.Z, out var ground))
-            _selected.Body.Position = ground + _dragOffset;
+        if (TryGroundPoint(aEvent.GetPosition(_viewport), _dragPlane, out var ground))
+        {
+            var position = ground + _dragOffset;
+            if (GroundHeight is { } height)
+                position.Z = height(_selected, position);
+            _selected.Body.Position = position;
+        }
         aEvent.Handled = true;
     }
 

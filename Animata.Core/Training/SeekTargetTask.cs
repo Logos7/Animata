@@ -47,12 +47,26 @@ public sealed record SeekTargetOptions
 
     /// <summary>Szczelina (powierzchnia–powierzchnia) na końcu próby, przy której cel uznaje się za osiągnięty.</summary>
     public float ReachGap { get; init; } = 0.3f;
+
+    /// <summary>Liczba płaskich płyt terenu w próbie (losowana z zakresu) — stwór uczy się chodzić po nierównym.</summary>
+    public int MinSlabs { get; init; }
+    public int MaxSlabs { get; init; }
+    public float MinSlabSide { get; init; } = 0.8f;
+    public float MaxSlabSide { get; init; } = 2.2f;
+    public float MinSlabHeight { get; init; } = 0.03f;
+    public float MaxSlabHeight { get; init; } = 0.1f;
+
+    /// <summary>Długość ciała za głową w chwili startu (wąż leży wzdłuż −X) — płyty nie mogą leżeć pod nim.</summary>
+    public float BodyLength { get; init; }
 }
 
 public readonly record struct ObstacleSpec(Vector2 Position, float Radius);
 
-/// <summary>Jedna próba: stwór w (0,0) obrócony o Yaw, cel w TargetOffset, słupki na drodze.</summary>
-public readonly record struct SeekEpisode(float Yaw, Vector2 TargetOffset, ObstacleSpec[] Obstacles);
+/// <summary>Płyta terenu: środek spodu, wymiary (X, Y), wysokość, obrót wokół pionu.</summary>
+public readonly record struct SlabSpec(Vector2 Position, Vector2 Size, float Height, float Yaw);
+
+/// <summary>Jedna próba: stwór w (0,0) obrócony o Yaw, cel w TargetOffset (na terenie), słupki i płyty na drodze.</summary>
+public readonly record struct SeekEpisode(float Yaw, Vector2 TargetOffset, ObstacleSpec[] Obstacles, SlabSpec[]? Slabs = null);
 
 /// <summary>
 /// Wynik jednej próby: Cost — składnik fitness (mniejszy = lepszy), FinalGap — szczelina do celu na końcu,
@@ -123,8 +137,8 @@ public static class SeekRigs
     private static readonly ConcurrentDictionary<int, SeekRig> SnakeRigs = new();
 
     /// <summary>
-    /// Wąż z <paramref name="aSegments"/> segmentami w fizyce: podłoga 60 × 60 m, bez przeszkód, cel 3–6 m, 12 s.
-    /// Wysiłek = średnia wielkość komend stawów.
+    /// Wąż z <paramref name="aSegments"/> segmentami w fizyce: podłoga 60 × 60 m, 0–3 płaskie płyty terenu (3–10 cm)
+    /// na drodze, bez słupków, cel 3–6 m (także na płycie), 12 s. Wysiłek = średnia wielkość komend stawów.
     /// </summary>
     public static SeekRig SnakeWith(int aSegments)
     {
@@ -153,7 +167,9 @@ public static class SeekRigs
             EpisodeSeconds = 12,
             MinDistance = 3,
             MaxDistance = 6,
-            ValidationEpisodes = 8
+            ValidationEpisodes = 8,
+            MaxSlabs = 3,
+            BodyLength = aSegments * WorldObjectCatalog.SnakeSpacing
         },
         AddFloor);
 
@@ -281,9 +297,42 @@ public sealed class SeekTargetTask
             var angle = random.NextSingle() * MathF.Tau;
             var distance = aOptions.MinDistance + random.NextSingle() * (aOptions.MaxDistance - aOptions.MinDistance);
             var target = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * distance;
-            episodes[index] = new SeekEpisode(random.NextSingle() * MathF.Tau, target, PlaceObstacles(aOptions, target, random));
+            var yaw = random.NextSingle() * MathF.Tau;
+            var obstacles = PlaceObstacles(aOptions, target, random);
+            var slabs = aOptions.MaxSlabs > 0 ? PlaceSlabs(aOptions, target, yaw, random) : null;
+            episodes[index] = new SeekEpisode(yaw, target, obstacles, slabs);
         }
         return episodes;
+    }
+
+    /// <summary>
+    /// Płyty na drodze start–cel (od ¼ do końca odcinka, z bocznym rozrzutem — cel może leżeć na płycie), nie pod ciałem
+    /// stwora na starcie i bez nakładania się środkami.
+    /// </summary>
+    private static SlabSpec[] PlaceSlabs(SeekTargetOptions aOptions, Vector2 aTarget, float aYaw, Random aRandom)
+    {
+        var count = aRandom.Next(aOptions.MinSlabs, aOptions.MaxSlabs + 1);
+        var slabs = new List<SlabSpec>(count);
+        var along = Vector2.Normalize(aTarget);
+        var across = new Vector2(-along.Y, along.X);
+        var back = -new Vector2(MathF.Cos(aYaw), MathF.Sin(aYaw));
+        for (var attempt = 0; slabs.Count < count && attempt < count * 20; attempt++)
+        {
+            var size = new Vector2(
+                aOptions.MinSlabSide + aRandom.NextSingle() * (aOptions.MaxSlabSide - aOptions.MinSlabSide),
+                aOptions.MinSlabSide + aRandom.NextSingle() * (aOptions.MaxSlabSide - aOptions.MinSlabSide));
+            var height = aOptions.MinSlabHeight + aRandom.NextSingle() * (aOptions.MaxSlabHeight - aOptions.MinSlabHeight);
+            var yaw = aRandom.NextSingle() * MathF.PI;
+            var position = aTarget * (0.25f + 0.75f * aRandom.NextSingle()) + across * ((aRandom.NextSingle() * 2 - 1) * 0.8f);
+            var reach = size.Length() / 2 + 0.3f;
+            var underBody = false;
+            for (var step = 0f; step <= aOptions.BodyLength + 0.3f && !underBody; step += 0.2f)
+                underBody = Vector2.Distance(position, back * step) < reach;
+            if (underBody || slabs.Any(aOther => Vector2.Distance(aOther.Position, position) < 0.6f))
+                continue;
+            slabs.Add(new SlabSpec(position, size, height, yaw));
+        }
+        return slabs.ToArray();
     }
 
     /// <summary>Słupki w środkowej części odcinka start–cel, z bocznym rozrzutem, niezasłaniające startu ani celu.</summary>
@@ -343,8 +392,11 @@ public sealed class SeekTargetTask
             var episode = aEpisodes[index];
             using var world = new World();
             aRig.PrepareWorld?.Invoke(world);
+            foreach (var spec in episode.Slabs ?? [])
+                world.Add(WorldObjectCatalog.CreateSlab(new Vector3(spec.Position, 0), new Vector3(spec.Size, spec.Height), spec.Yaw));
             var target = WorldObjectCatalog.CreateTargetBall(new Vector3(episode.TargetOffset, 0));
             world.Add(target);
+            Terrain.Snap(world, target);
             var obstacles = new List<Obstacle>();
             foreach (var spec in episode.Obstacles)
             {

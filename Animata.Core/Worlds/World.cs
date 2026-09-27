@@ -32,6 +32,9 @@ public sealed class World : IDisposable
     /// </summary>
     public PhysicsWorld? Physics { get; private set; }
 
+    /// <summary>Czas symulacji w sekundach (suma kroków <see cref="Update"/>) — np. zegar rytmu <see cref="Sensors.ClockSensor"/>.</summary>
+    public double Time { get; private set; }
+
     public Entity? Find(Guid aId) => _index.GetValueOrDefault(aId);
 
     public bool Contains(Entity aEntity) =>
@@ -97,6 +100,7 @@ public sealed class World : IDisposable
             foreach (var entity in _entities)
                 if (entity is ActiveEntity active)
                     active.Update(aDelta);
+            Time += aDelta;
         }
         finally
         {

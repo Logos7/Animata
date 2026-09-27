@@ -26,6 +26,7 @@ public sealed record WorldDocument(int Format, string Name, double Time, IReadOn
 [JsonDerivedType(typeof(FloorDocument), "floor")]
 [JsonDerivedType(typeof(TargetDocument), "target")]
 [JsonDerivedType(typeof(ObstacleDocument), "obstacle")]
+[JsonDerivedType(typeof(SlabDocument), "slab")]
 [JsonDerivedType(typeof(CarDocument), "car")]
 [JsonDerivedType(typeof(CylinderDocument), "cylinder")]
 [JsonDerivedType(typeof(SnakeDocument), "snake")]
@@ -38,6 +39,10 @@ public sealed record TargetDocument(Guid Id, string Name, float[] Position, floa
     : EntityDocument(Id, Name, Position, Rotation);
 
 public sealed record ObstacleDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius, float Height)
+    : EntityDocument(Id, Name, Position, Rotation);
+
+/// <summary>Płyta terenu: środek spodu, obrót, wymiary (X, Y, wysokość).</summary>
+public sealed record SlabDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Size)
     : EntityDocument(Id, Name, Position, Rotation);
 
 public sealed record CarDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Whiskers,
@@ -131,6 +136,7 @@ public static class WorldFile
             Floor floor => new FloorDocument(floor.Id, floor.Name, position, rotation, Vector(floor.Size)),
             TargetBall target => new TargetDocument(target.Id, target.Name, position, rotation, target.Radius),
             Obstacle obstacle => new ObstacleDocument(obstacle.Id, obstacle.Name, position, rotation, obstacle.Radius, obstacle.Height),
+            Slab slab => new SlabDocument(slab.Id, slab.Name, position, rotation, Vector(slab.Size)),
             CarCreature car => new CarDocument(car.Id, car.Name, position, rotation, Vector(car.Color),
                 WorldObjectCatalog.WhiskerCountOf(car), car.Body.Sensors.OfType<RaySensor>().FirstOrDefault()?.Range ?? WorldObjectCatalog.WhiskerRange,
                 TargetOf(car), CaptureBrain(car.Brain!), DriveOf(car)),
@@ -237,6 +243,9 @@ public static class WorldFile
                 break;
             case ObstacleDocument obstacle:
                 entity = new Obstacle { Id = obstacle.Id, Radius = obstacle.Radius, Height = obstacle.Height, Body = { Position = position, Rotation = rotation } };
+                break;
+            case SlabDocument slab:
+                entity = new Slab { Id = slab.Id, Size = ToVector(slab.Size), Body = { Position = position, Rotation = rotation } };
                 break;
             case CarDocument car:
             {

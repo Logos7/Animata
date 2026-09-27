@@ -58,8 +58,21 @@ public sealed class SceneMiniMap : ThemedControl
             aContext.DrawRectangle(Ui.Brush(Ground), null,
                 new Rect(Map(new Vector3(floor.Min.X, floor.Max.Y, 0)), Map(new Vector3(floor.Max.X, floor.Min.Y, 0))), 6, 6);
 
+        // Płyty terenu: obrócone prostokąty pod wszystkim innym.
+        foreach (var slab in others.OfType<Slab>())
+        {
+            var heading = Vector3.Transform(Vector3.UnitX, slab.Body.Rotation);
+            var angle = Math.Atan2(heading.Y, heading.X);
+            var at = Map(slab.Body.Position);
+            using (aContext.PushTransform(Matrix.CreateRotation(-angle) * Matrix.CreateTranslation(at.X, at.Y)))
+                aContext.DrawRectangle(Ui.Brush(Ui.ColorOf(slab)), null,
+                    new Rect(-slab.Size.X / 2 * scale, -slab.Size.Y / 2 * scale, slab.Size.X * scale, slab.Size.Y * scale), 2, 2);
+        }
+
         foreach (var entity in others)
         {
+            if (entity is Slab)
+                continue;
             var center = Map(entity.Body.Position);
             var radius = entity.BoundingRadius * scale;
             var color = Ui.ColorOf(entity);

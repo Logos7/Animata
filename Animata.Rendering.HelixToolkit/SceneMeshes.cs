@@ -18,7 +18,7 @@ internal static class SceneMeshes
     /// <summary>Nadwozie autka wisi na kołach: dół na wysokości promienia koła.</summary>
     public const float CarClearance = WheelRadius;
 
-    public static bool CanDraw(Entity aEntity) => aEntity is CylinderCreature or TargetBall or CarCreature or Obstacle or Floor;
+    public static bool CanDraw(Entity aEntity) => aEntity is CylinderCreature or TargetBall or CarCreature or Obstacle or Floor or Slab;
 
     public static global::HelixToolkit.SharpDX.MeshGeometry3D CreateGeometry(Entity aEntity)
     {
@@ -41,6 +41,9 @@ internal static class SceneMeshes
             case Floor floor:
                 mesh.AddBox(Vector3.Zero, floor.Size.X, floor.Size.Y, floor.Size.Z);
                 break;
+            case Slab slab:
+                mesh.AddBox(new Vector3(0, 0, slab.Size.Z / 2), slab.Size.X, slab.Size.Y, slab.Size.Z);
+                break;
         }
 
         return mesh.ToMeshGeometry3D();
@@ -54,6 +57,7 @@ internal static class SceneMeshes
         CarCreature car => new Vector3(car.Length, car.Width, car.Height),
         Obstacle obstacle => new Vector3(obstacle.Radius, obstacle.Height, 0),
         Floor floor => floor.Size,
+        Slab slab => slab.Size,
         _ => Vector3.Zero
     };
 
@@ -65,6 +69,7 @@ internal static class SceneMeshes
         TargetBall => aSelected ? Material(1f, 1f, 0.4f) : Material(1f, 0.67f, 0.2f),
         ArticulatedCreature body => BodyMaterial(body.Color, aSelected),
         Floor => Material(0.20f, 0.27f, 0.33f),
+        Slab => aSelected ? Material(0.62f, 0.70f, 0.78f) : Material(0.38f, 0.45f, 0.52f),
         _ => Material(0.5f, 0.5f, 0.5f)
     };
 

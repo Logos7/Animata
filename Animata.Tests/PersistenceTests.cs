@@ -56,18 +56,26 @@ public class PersistenceTests
     public void SnakeScene_SavesAndLoads_WithCpgAndSnapshots()
     {
         using var world = WorldObjectCatalog.CreateSnakeScene().World;
-        var snake = world.Entities.OfType<SnakeCreature>().Single();
+        var snake = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż CPG");
         snake.SetSegments(11);
+        var neural = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż NN");
+        neural.SetSegments(5);
         var json = RoundTrip(world, out var restored);
         using (restored)
         {
             Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test", 1.5)));
-            var twin = restored.Entities.OfType<SnakeCreature>().Single();
+            Assert.Equal(5, restored.Entities.OfType<Slab>().Count());
+            var neuralTwin = (SnakeCreature)restored.Find(neural.Id)!;
+            Assert.Equal(5, neuralTwin.Segments);
+            Assert.True(neural.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()!
+                .SameAs(neuralTwin.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()));
+            var twin = (SnakeCreature)restored.Find(snake.Id)!;
             Assert.Equal(11, twin.Segments);
             Assert.NotNull(restored.Physics);
             Assert.Contains(twin.Brain!.Snapshots, aSnapshot => aSnapshot.Label == "ręczne parametry");
             var target = restored.Entities.OfType<TargetBall>().Single();
             Assert.Equal(target.Id, twin.Body.Sensors.OfType<TargetSensor>().Single().TargetId);
+            Assert.True(target.Body.Position.Z > 0.05f);
             restored.Update(Delta);
         }
     }
@@ -130,7 +138,7 @@ public class PersistenceTests
     public void File_PointsAtCurrentSnapshot_AndLoadingStartsFromIt()
     {
         using var world = WorldObjectCatalog.CreateSnakeScene().World;
-        var snake = world.Entities.OfType<SnakeCreature>().Single();
+        var snake = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż CPG");
         var cpg = snake.Brain!.Graph.Modules.OfType<CpgModule>().Single();
         var random = snake.Brain.Capture("losowe", cpg);
         var manual = snake.Brain.Snapshots.Single(aSnapshot => aSnapshot.Label == "ręczne parametry");
@@ -139,7 +147,7 @@ public class PersistenceTests
 
         // Plik wskazuje „ręczne parametry”, choć zapisany stan modułu podmieniamy na losowy — wygrywa snapshot.
         var document = WorldFile.Capture(world, "test", 0);
-        var snakeDocument = document.Entities.OfType<SnakeDocument>().Single();
+        var snakeDocument = document.Entities.OfType<SnakeDocument>().Single(aDocument => aDocument.Id == snake.Id);
         Assert.Equal(manual.Id, snakeDocument.Brain.Current);
         var randomState = random.Modules.Single().State;
         var modules = snakeDocument.Brain.Modules
@@ -151,7 +159,7 @@ public class PersistenceTests
         };
 
         using var restored = WorldFile.Restore(WorldFile.FromJson(WorldFile.ToJson(edited))).World;
-        var twin = restored.Entities.OfType<SnakeCreature>().Single();
+        var twin = (SnakeCreature)restored.Find(snake.Id)!;
         Assert.Equal(manual.Id, twin.Brain!.CurrentSnapshot()!.Id);
         Assert.True(twin.Brain.Graph.Modules.OfType<CpgModule>().Single().CaptureState()!.SameAs(manual.Modules.Single().State));
     }

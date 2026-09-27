@@ -92,6 +92,7 @@ internal static class ScenePicker
                 CarCreature car => HitCylinder(car.Body, 0.5f * MathF.Max(car.Length, car.Width),
                     SceneMeshes.CarClearance + car.Height, aOrigin, aDirection),
                 Obstacle obstacle => HitCylinder(obstacle.Body, obstacle.Radius, obstacle.Height, aOrigin, aDirection),
+                Slab slab => HitSlab(slab, aOrigin, aDirection),
                 ArticulatedCreature body => HitParts(body, aOrigin, aDirection),
                 // Podłoga (i każda encja IsFixed) nie jest łapana — kliknięcie w nią nic nie zaznacza ani nie przesuwa.
                 _ => null
@@ -128,6 +129,38 @@ internal static class ScenePicker
             return null;
         var near = -projection - MathF.Sqrt(discriminant);
         return near > 0 ? near : null;
+    }
+
+    /// <summary>Promień kontra płyta: prostopadłościan w jej układzie (środek spodu w Body.Position, obrót wokół pionu).</summary>
+    private static float? HitSlab(Slab aSlab, Vector3 aOrigin, Vector3 aDirection)
+    {
+        var inverse = Quaternion.Inverse(aSlab.Body.Rotation);
+        var origin = Vector3.Transform(aOrigin - aSlab.Body.Position, inverse);
+        var direction = Vector3.Transform(aDirection, inverse);
+        var min = new Vector3(-aSlab.Size.X / 2, -aSlab.Size.Y / 2, 0);
+        var max = new Vector3(aSlab.Size.X / 2, aSlab.Size.Y / 2, aSlab.Size.Z);
+        var near = float.NegativeInfinity;
+        var far = float.PositiveInfinity;
+        for (var axis = 0; axis < 3; axis++)
+        {
+            var o = axis == 0 ? origin.X : axis == 1 ? origin.Y : origin.Z;
+            var d = axis == 0 ? direction.X : axis == 1 ? direction.Y : direction.Z;
+            var lo = axis == 0 ? min.X : axis == 1 ? min.Y : min.Z;
+            var hi = axis == 0 ? max.X : axis == 1 ? max.Y : max.Z;
+            if (MathF.Abs(d) < 1e-8f)
+            {
+                if (o < lo || o > hi)
+                    return null;
+                continue;
+            }
+            var t1 = (lo - o) / d;
+            var t2 = (hi - o) / d;
+            near = MathF.Max(near, MathF.Min(t1, t2));
+            far = MathF.Min(far, MathF.Max(t1, t2));
+            if (near > far)
+                return null;
+        }
+        return near > 0 ? near : far > 0 ? far : null;
     }
 
     private static float? HitBall(TargetBall aBall, Vector3 aOrigin, Vector3 aDirection)

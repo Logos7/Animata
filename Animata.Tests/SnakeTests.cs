@@ -250,14 +250,19 @@ public class SnakeTests
     }
 
     [Fact]
-    public void SnakeScene_HasFloorTargetAndLearningSnake()
+    public void SnakeScene_HasFloorSlabsTargetAndTwoSnakes()
     {
         var scene = WorldObjectCatalog.CreateSnakeScene();
         using var world = scene.World;
         Assert.Single(world.Entities.OfType<Floor>());
-        Assert.Single(world.Entities.OfType<TargetBall>());
-        var snake = Assert.IsType<SnakeCreature>(Assert.Single(scene.Creatures));
-        Assert.Contains(snake.Brain!.Snapshots, aSnapshot => aSnapshot.Label == "ręczne parametry");
+        Assert.True(world.Entities.OfType<Slab>().Count() >= 3);
+        var target = Assert.Single(world.Entities.OfType<TargetBall>());
+        Assert.Equal(Terrain.HeightAt(world, new Vector2(target.Body.Position.X, target.Body.Position.Y), target), target.Body.Position.Z);
+        Assert.Equal(2, scene.Creatures.Count);
+        var cpg = scene.Creatures.OfType<SnakeCreature>().Single(aSnake => aSnake.Brain!.Graph.Modules.OfType<CpgModule>().Any());
+        Assert.Contains(cpg.Brain!.Snapshots, aSnapshot => aSnapshot.Label == "ręczne parametry");
+        var neural = scene.Creatures.OfType<SnakeCreature>().Single(aSnake => aSnake != cpg);
+        Assert.Single(neural.Brain!.Graph.Modules.OfType<NeuralNetworkModule>());
         world.Update(Delta);
     }
 }
