@@ -1,0 +1,69 @@
+using System.Numerics;
+using Animata.Core.Actuators;
+using Animata.Core.Bodies;
+using Animata.Core.Brains;
+using Animata.Core.Brains.Modules;
+using Animata.Core.Brains.Neural;
+using Animata.Core.Entities;
+using Animata.Core.Sensors;
+using Animata.Core.Worlds;
+
+namespace Animata.Core.WorldObjects;
+
+// Pająki: czworonóg z chodem (kłus) albo z siecią.
+public static partial class WorldObjectCatalog
+{
+    public static readonly Vector3 SpiderColor = new(0.55f, 0.35f, 0.25f);
+    public static readonly Vector3 NeuralSpiderColor = new(0.72f, 0.45f, 0.85f);
+
+    /// <summary>
+    /// Pająk: oko „Eye” (tułów), czucie stawów „Joints”, zegar „Clock”, czucie terenu „Feel”, nogi „Legs” (8 stawów:
+    /// biodro, kolano × 4). Mózg sensory → controller → nogi; controller musi mieć wyjścia Yaw/Pitch 0–7 (np. <see cref="GaitModule"/>).
+    /// </summary>
+    public static SpiderCreature CreateSpider(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController)
+    {
+        var brain = new Brain();
+        var spider = new SpiderCreature(brain) { Color = aColor };
+        var eye = new TargetSensor { Slot = "Eye", TargetId = aTargetId };
+        var joints = new JointSensor(GaitModule.Joints) { Slot = "Joints" };
+        var clock = new ClockSensor { Slot = "Clock", Frequency = 2.5f };
+        var feel = new FeelSensor { Slot = "Feel" };
+        var legs = new SpineActuator(GaitModule.Joints) { Slot = "Legs" };
+        spider.Body.Sensors.Add(eye);
+        spider.Body.Sensors.Add(joints);
+        spider.Body.Sensors.Add(clock);
+        spider.Body.Sensors.Add(feel);
+        spider.Body.Actuators.Add(legs);
+        BuildBrain(brain, [("Eye", eye), ("Joints", joints), ("Clock", clock), ("Feel", feel)], aController, legs);
+        spider.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
+        return spider;
+    }
+
+    /// <summary>Pająk z generatorem kłusa: ręczne parametry jako snapshot „ręczne parametry”, chód wylosowany.</summary>
+    public static SpiderCreature CreateLearningSpider(Vector3 aPosition, float aYaw, Guid? aTargetId)
+    {
+        var gait = new GaitModule { Name = "Chód" };
+        var spider = CreateSpider(aPosition, aYaw, SpiderColor, aTargetId, gait);
+        spider.Brain!.Capture("ręczne parametry", gait);
+        gait.Randomize();
+        return spider;
+    }
+
+    /// <summary>
+    /// Sieć pająka: wejścia Sin, Cos (zegar), kierunek do celu (bok, przód), szczelina/4; warstwa ukryta 10; wyjścia
+    /// Yaw/Pitch 0–7 (skręt kolan jest ignorowany przez ciało). Wagi losowe.
+    /// </summary>
+    public static NeuralNetworkModule CreateSpiderNeuralModule()
+    {
+        string[] inputs = [ClockSensor.SinPort, ClockSensor.CosPort, "Found * DirectionY", "Found * DirectionX", "Found * Gap / 4"];
+        var outputs = SnakeNetworkOutputs(GaitModule.Joints);
+        var module = new NeuralNetworkModule(new NeuralNetwork(inputs.Length, 10, outputs.Length)) { Name = "Neural" };
+        module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetPorts]);
+        module.Inputs.AddRange(inputs.Select(aExpression => new NeuralInput(aExpression)));
+        module.Outputs.AddRange(outputs.Select(aPort => new NeuralOutput(aPort)));
+        return module;
+    }
+
+    public static SpiderCreature CreateNeuralSpider(Vector3 aPosition, float aYaw, Guid? aTargetId) =>
+        CreateSpider(aPosition, aYaw, NeuralSpiderColor, aTargetId, CreateSpiderNeuralModule());
+}

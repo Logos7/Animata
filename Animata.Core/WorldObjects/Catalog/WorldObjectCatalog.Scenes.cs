@@ -1,0 +1,116 @@
+using System.Numerics;
+using Animata.Core.Actuators;
+using Animata.Core.Bodies;
+using Animata.Core.Brains;
+using Animata.Core.Brains.Modules;
+using Animata.Core.Brains.Neural;
+using Animata.Core.Entities;
+using Animata.Core.Sensors;
+using Animata.Core.Worlds;
+
+namespace Animata.Core.WorldObjects;
+
+// Gotowe sceny: demo, węże, pająki.
+public static partial class WorldObjectCatalog
+{
+    /// <summary>
+    /// Scena węży: podłoga 30 × 30 m, kulka na płycie, kilka płaskich płyt terenu (4–10 cm) i dwa węże —
+    /// z CPG i z własną siecią. Oba mają losowe parametry i uczą się dopiero po starcie nauki.
+    /// </summary>
+    public static DemoScene CreateSnakeScene()
+    {
+        var world = new World();
+        world.Add(Floor.At(30, 30));
+        Slab[] slabs =
+        [
+            CreateSlab(new Vector3(0.5f, 0.8f, 0), new Vector3(2.2f, 1.6f, 0.06f), 0.3f),
+            CreateSlab(new Vector3(-1.2f, 3.6f, 0), new Vector3(1.4f, 2.4f, 0.04f), -0.5f),
+            CreateSlab(new Vector3(2.6f, -1.6f, 0), new Vector3(1.8f, 1.2f, 0.08f), 0.9f),
+            CreateSlab(new Vector3(4.2f, 3.2f, 0), new Vector3(2, 2, 0.1f)),
+            CreateSlab(new Vector3(-3.4f, 0.6f, 0), new Vector3(1.2f, 1.2f, 0.05f), 0.2f)
+        ];
+        for (var index = 0; index < slabs.Length; index++)
+        {
+            slabs[index].Name = $"Płyta {index + 1}";
+            world.Add(slabs[index]);
+        }
+
+        var target = CreateTargetBall(new Vector3(4.2f, 3.2f, 0));
+        target.Name = "Kulka";
+        world.Add(target);
+        Terrain.Snap(world, target);
+        var snake = CreateLearningSnake(new Vector3(-4.5f, -2.5f, 0), 0.6f, target.Id);
+        snake.Name = "Wąż CPG";
+        world.Add(snake);
+        var neural = CreateNeuralSnake(new Vector3(-5.5f, 3.5f, 0), -0.1f, target.Id);
+        neural.Name = "Wąż NN";
+        world.Add(neural);
+        return new DemoScene(world, [snake, neural]);
+    }
+
+    /// <summary>Scena pająków: podłoga 30 × 30, kilka niskich płyt, kulka, pająk z chodem (CPG) i pająk z siecią.</summary>
+    public static DemoScene CreateSpiderScene()
+    {
+        var world = new World();
+        world.Add(Floor.At(30, 30));
+        Slab[] slabs =
+        [
+            CreateSlab(new Vector3(0, 0.5f, 0), new Vector3(1.6f, 2.4f, 0.04f), 0.2f),
+            CreateSlab(new Vector3(2.8f, -1.5f, 0), new Vector3(1.4f, 1.4f, 0.06f), -0.4f),
+            CreateSlab(new Vector3(-2.2f, 2.8f, 0), new Vector3(2, 1, 0.05f), 0.8f)
+        ];
+        for (var index = 0; index < slabs.Length; index++)
+        {
+            slabs[index].Name = $"Płyta {index + 1}";
+            world.Add(slabs[index]);
+        }
+        var target = CreateTargetBall(new Vector3(4, 2, 0));
+        target.Name = "Kulka";
+        world.Add(target);
+        Terrain.Snap(world, target);
+        var gait = CreateLearningSpider(new Vector3(-4, -2, 0), 0.4f, target.Id);
+        gait.Name = "Pająk";
+        world.Add(gait);
+        var neural = CreateNeuralSpider(new Vector3(-4.5f, 1.5f, 0), 0, target.Id);
+        neural.Name = "Pająk NN";
+        world.Add(neural);
+        return new DemoScene(world, [gait, neural]);
+    }
+
+    /// <summary>
+    /// Dwa tory, żeby stwory nie tłoczyły się przy jednym celu:
+    /// - dół: kulka za czterema słupkami i dwa autka z wąsami (sterownik i losowa sieć),
+    /// - góra: wolny tor z własną kulką i dwa walce bez wąsów (sterownik i losowa sieć).
+    /// Ręczne wagi sieci walca są zapisane w jej mózgu jako snapshot „ręczne wagi”.
+    /// </summary>
+    public static DemoScene CreateDemo()
+    {
+        var world = new World();
+        world.Add(Floor.At(22, 16));
+        var carTarget = CreateTargetBall(new Vector3(5, -1.5f, 0));
+        var cylinderTarget = CreateTargetBall(new Vector3(5, 5, 0));
+        carTarget.Name = "Kulka (dół)";
+        cylinderTarget.Name = "Kulka (góra)";
+        world.Add(carTarget);
+        world.Add(cylinderTarget);
+
+        world.Add(CreateObstacle(new Vector3(1.5f, -1.3f, 0), 0.8f));
+        world.Add(CreateObstacle(new Vector3(-0.5f, 0.6f, 0), 0.5f));
+        world.Add(CreateObstacle(new Vector3(-0.5f, -3.9f, 0), 0.6f));
+        world.Add(CreateObstacle(new Vector3(3.4f, -3.5f, 0), 0.4f));
+
+        var controllerCar = CreateControllerCar(new Vector3(-5, -2.7f, 0), 0, carTarget.Id);
+        var neuralCar = CreateNeuralCar(new Vector3(-5, -0.3f, 0), 0, carTarget.Id);
+        var controller = CreateControllerSeeker(new Vector3(-5, 3.8f, 0), cylinderTarget.Id);
+        var neural = CreateLearningSeeker(new Vector3(-5, 6.2f, 0), cylinderTarget.Id);
+        controllerCar.Name = "Autko sterownik";
+        neuralCar.Name = "Autko NN";
+        controller.Name = "Walec sterownik";
+        neural.Name = "Walec NN";
+
+        ActiveEntity[] creatures = [controllerCar, neuralCar, controller, neural];
+        foreach (var creature in creatures)
+            world.Add(creature);
+        return new DemoScene(world, creatures);
+    }
+}
