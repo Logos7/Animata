@@ -1,0 +1,11 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Animata.Core/Animata.Core.csproj" />
+  <Project Path="Animata.Rendering.HelixToolkit/Animata.Rendering.HelixToolkit.csproj" />
+  <Project Path="Animata.Studio/Animata.Studio.csproj" />
+  <Project Path="Animata.Tests/Animata.Tests.csproj" />
+</Solution>

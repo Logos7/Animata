@@ -1,0 +1,13 @@
+bin/
+obj/
+TestResults/
+artifacts/
+publish/
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.log
+*.zip
+repomix-output.*

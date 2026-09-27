@@ -1,0 +1,89 @@
+using System.Numerics;
+using Animata.Core.Entities;
+using Animata.Core.WorldObjects;
+using HelixToolkit.Avalonia.SharpDX;
+using HelixToolkit.Geometry;
+using HelixToolkit.Maths;
+using HelixToolkit.SharpDX;
+
+namespace Animata.Rendering.HelixToolkit;
+
+/// <summary>Siatki i materiały encji. Wymiary tutaj muszą się zgadzać z hitboxami w <see cref="ScenePicker"/>.</summary>
+internal static class SceneMeshes
+{
+    public const float WheelRadius = 0.13f;
+    private const float WheelWidth = 0.1f;
+
+    /// <summary>Nadwozie autka wisi na kołach: dół na wysokości promienia koła.</summary>
+    public const float CarClearance = WheelRadius;
+
+    public static bool CanDraw(Entity aEntity) => aEntity is CylinderCreature or TargetBall or CarCreature or Obstacle;
+
+    public static global::HelixToolkit.SharpDX.MeshGeometry3D CreateGeometry(Entity aEntity)
+    {
+        var mesh = new MeshBuilder();
+        switch (aEntity)
+        {
+            case CylinderCreature cylinder:
+                mesh.AddCylinder(Vector3.Zero, new Vector3(0, 0, cylinder.Height), cylinder.Radius, 48, true, true);
+                mesh.AddSphere(new Vector3(cylinder.Radius * 1.08f, 0, cylinder.Height * 0.5f), cylinder.Radius * 0.22f);
+                break;
+            case TargetBall target:
+                mesh.AddSphere(new Vector3(0, 0, target.Radius), target.Radius);
+                break;
+            case CarCreature car:
+                AddCar(mesh, car);
+                break;
+            case Obstacle obstacle:
+                mesh.AddCylinder(Vector3.Zero, new Vector3(0, 0, obstacle.Height), obstacle.Radius, 32, true, true);
+                break;
+        }
+
+        return mesh.ToMeshGeometry3D();
+    }
+
+    /// <summary>Wymiary wpływające na siatkę — zmiana oznacza, że trzeba ją przebudować.</summary>
+    public static Vector3 ShapeOf(Entity aEntity) => aEntity switch
+    {
+        CylinderCreature cylinder => new Vector3(cylinder.Radius, cylinder.Height, 0),
+        TargetBall target => new Vector3(target.Radius, 0, 0),
+        CarCreature car => new Vector3(car.Length, car.Width, car.Height),
+        Obstacle obstacle => new Vector3(obstacle.Radius, obstacle.Height, 0),
+        _ => Vector3.Zero
+    };
+
+    public static PhongMaterial MaterialFor(Entity aEntity, bool aSelected) => aEntity switch
+    {
+        CylinderCreature creature => BodyMaterial(creature.Color, aSelected),
+        CarCreature car => BodyMaterial(car.Color, aSelected),
+        Obstacle => aSelected ? Material(0.8f, 0.8f, 0.85f) : Material(0.5f, 0.5f, 0.55f),
+        TargetBall => aSelected ? Material(1f, 1f, 0.4f) : Material(1f, 0.67f, 0.2f),
+        _ => Material(0.5f, 0.5f, 0.5f)
+    };
+
+    public static PhongMaterial Material(float aRed, float aGreen, float aBlue) => new()
+    {
+        DiffuseColor = new Color4(aRed, aGreen, aBlue, 1),
+        AmbientColor = new Color4(aRed * 0.35f, aGreen * 0.35f, aBlue * 0.35f, 1),
+        SpecularColor = new Color4(0.25f, 0.25f, 0.25f, 1)
+    };
+
+    private static PhongMaterial BodyMaterial(Vector3 aColor, bool aSelected)
+    {
+        var color = aSelected ? Vector3.Lerp(aColor, Vector3.One, 0.45f) : aColor;
+        return Material(color.X, color.Y, color.Z);
+    }
+
+    /// <summary>Autko: nadwozie nad kołami, 4 koła, kulka na nosie pokazująca przód (+X).</summary>
+    private static void AddCar(MeshBuilder aMesh, CarCreature aCar)
+    {
+        aMesh.AddBox(new Vector3(0, 0, CarClearance + aCar.Height / 2), aCar.Length, aCar.Width, aCar.Height);
+        foreach (var x in new[] { -aCar.Length * 0.32f, aCar.Length * 0.32f })
+            foreach (var side in new[] { -1f, 1f })
+            {
+                var inner = new Vector3(x, side * aCar.Width / 2, WheelRadius);
+                aMesh.AddCylinder(inner, inner + new Vector3(0, side * WheelWidth, 0), WheelRadius, 16, true, true);
+            }
+        aMesh.AddSphere(new Vector3(aCar.Length / 2, 0, CarClearance + aCar.Height * 0.6f), 0.09f);
+    }
+}
