@@ -298,42 +298,45 @@ public sealed class StudioSession : IDisposable
     }
 
     /// <summary>
-    /// Przebudowuje autko z inną liczbą wąsów: nowe ciało i nowy mózg tego samego rodzaju (sterownik albo sieć),
-    /// w tym samym miejscu, z tą samą nazwą, kolorem i celem. Liczba wejść sieci się zmienia, więc wagi, snapshoty
-    /// i edycje grafu przepadają. Zwraca nowe autko albo null, gdy mózgu nie da się odtworzyć (ani sieci, ani AvoidAndSeek).
+    /// Zmienia liczbę wąsów stwora w miejscu (ten sam stwór i mózg, patrz <see cref="WhiskerRewiring"/>): sieć zachowuje
+    /// przeliczone wagi, AvoidAndSeek parametry, snapshoty są przeliczane. Trwająca nauka jest zatrzymywana i wznawiana
+    /// już w ciele z nową liczbą wąsów. Zwraca false (z powodem w <see cref="Status"/>), gdy się nie da.
     /// </summary>
-    public CarCreature? SetWhiskers(CarCreature aCar, int aWhiskers)
+    public bool SetWhiskers(ActiveEntity aCreature, int aWhiskers)
     {
         if (!WorldObjectCatalog.IsValidWhiskerCount(aWhiskers))
         {
-            Status = $"autko ma nieparzystą liczbę wąsów od 1 do {WorldObjectCatalog.MaxWhiskers}";
-            return null;
+            Status = $"liczba wąsów musi być nieparzysta, od 1 do {WorldObjectCatalog.MaxWhiskers}";
+            return false;
         }
-        if (WorldObjectCatalog.WhiskerCountOf(aCar) == aWhiskers)
-            return aCar;
+        if (WorldObjectCatalog.WhiskerCountOf(aCreature) == aWhiskers)
+            return true;
 
-        var neural = TrainingController.FindNetwork(aCar) is not null;
-        if (!neural && aCar.Brain?.Graph.Descendants().OfType<AvoidAndSeekModule>().Any() != true)
+        var brain = aCreature.Brain;
+        var training = brain is not null && Training.IsTraining(brain);
+        if (training)
+            Training.Stop(brain!);
+        try
         {
-            Status = "tego mózgu nie umiem przebudować (brak sieci i AvoidAndSeek)";
-            return null;
+            WhiskerRewiring.SetCount(aCreature, aWhiskers);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or BrainException)
+        {
+            Status = exception.Message;
+            if (training)
+                Training.Start(aCreature);
+            return false;
         }
 
-        var heading = Vector3.Transform(Vector3.UnitX, aCar.Body.Rotation);
-        var yaw = MathF.Atan2(heading.Y, heading.X);
-        var targetId = aCar.Body.Sensors.OfType<TargetSensor>().FirstOrDefault()?.TargetId;
-        var car = neural
-            ? WorldObjectCatalog.CreateNeuralCar(aCar.Body.Position, yaw, targetId, aWhiskers)
-            : WorldObjectCatalog.CreateControllerCar(aCar.Body.Position, yaw, targetId, aWhiskers);
-        car.Name = aCar.Name;
-        car.Color = aCar.Color;
-
-        Remove(aCar);
-        World.Add(car);
-        if (neural)
-            Training.Start(car);
-        Status = $"{NameOf(car)}: {Whiskers(aWhiskers)}" + (neural ? " — nowa sieć, nauka od zera" : string.Empty);
-        return car;
+        if (brain is not null)
+        {
+            History.Forget(brain);
+            _progress.Remove(brain);
+        }
+        if (training)
+            Training.Start(aCreature);
+        Status = $"{NameOf(aCreature)}: {Whiskers(aWhiskers)}" + (training ? " — nauka wznowiona od przeliczonych wag" : string.Empty);
+        return true;
     }
 
     private TargetBall? NearestTarget(Vector3 aPosition) => World.Entities.OfType<TargetBall>()

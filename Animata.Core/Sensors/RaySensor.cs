@@ -13,23 +13,38 @@ namespace Animata.Core.Sensors;
 /// </summary>
 public sealed class RaySensor : Sensor
 {
-    private readonly float[] _angles;
-    private readonly string[] _ports;
-    private readonly float[] _distances;
+    private float[] _angles = [];
+    private string[] _ports = [];
+    private float[] _distances = [];
     private readonly Dictionary<string, float> _readings = [];
 
     public RaySensor(IEnumerable<float> aAngles, float aRange = 3)
     {
-        _angles = aAngles.ToArray();
-        if (_angles.Length == 0 || _angles.Any(aAngle => !float.IsFinite(aAngle)))
-            throw new ArgumentException("A ray sensor needs at least one finite angle.", nameof(aAngles));
-        _ports = Enumerable.Range(0, _angles.Length).Select(PortName).ToArray();
-        _distances = new float[_angles.Length];
         Range = aRange;
-        Array.Fill(_distances, aRange);
+        SetAngles(aAngles);
+    }
+
+    /// <summary>
+    /// Nowe kąty promieni (ten sam sensor, to samo Id): porty stają się Ray0…Ray{n−1}.
+    /// Mózg trzeba dopasować osobno — robi to <c>WhiskerRewiring.SetCount</c>.
+    /// </summary>
+    public void SetAngles(IEnumerable<float> aAngles)
+    {
+        var angles = aAngles.ToArray();
+        if (angles.Length == 0 || angles.Any(aAngle => !float.IsFinite(aAngle)))
+            throw new ArgumentException("A ray sensor needs at least one finite angle.", nameof(aAngles));
+        _angles = angles;
+        _ports = Enumerable.Range(0, angles.Length).Select(PortName).ToArray();
+        _distances = new float[angles.Length];
+        Array.Fill(_distances, Range);
+        _readings.Clear();
         foreach (var port in _ports)
             _readings[port] = 0;
     }
+
+    /// <summary>Czy nazwa portu wygląda jak port wąsa („Ray” + numer).</summary>
+    public static bool IsPortName(string aPort) =>
+        aPort.Length > 3 && aPort.StartsWith("Ray", StringComparison.Ordinal) && aPort[3..].All(char.IsAsciiDigit);
 
     /// <summary>Wachlarz <paramref name="aCount"/> promieni równomiernie od −spread/2 do +spread/2 (rad).</summary>
     public static RaySensor Fan(int aCount, float aSpread, float aRange = 3) =>

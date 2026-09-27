@@ -20,11 +20,11 @@ public sealed class AvoidAndSeekModule : BrainModule
 {
     private static readonly string[] Outputs = [SteeringDriveActuator.SteerPort, SteeringDriveActuator.ThrottlePort];
 
-    private readonly float[] _rayAngles;
-    private readonly string[] _rayPorts;
-    private readonly string[] _inputs;
-    private readonly float[] _proximity;
-    private readonly float _pushScale;
+    private float[] _rayAngles = [];
+    private string[] _rayPorts = [];
+    private string[] _inputs = [];
+    private float[] _proximity = [];
+    private float _pushScale;
     private readonly Dictionary<string, float> _command = new()
     {
         [SteeringDriveActuator.SteerPort] = 0,
@@ -37,7 +37,13 @@ public sealed class AvoidAndSeekModule : BrainModule
     private float _reverseSteer;
 
     /// <param name="aRayAngles">Kąty wąsów w radianach, w tej samej kolejności co porty Ray{i} sensora.</param>
-    public AvoidAndSeekModule(IEnumerable<float> aRayAngles)
+    public AvoidAndSeekModule(IEnumerable<float> aRayAngles) => SetRayAngles(aRayAngles);
+
+    /// <summary>
+    /// Nowe kąty wąsów (np. po zmianie ich liczby w ciele): porty Ray{i} idą za nimi, parametry zostają,
+    /// pamięć chwilowa jest czyszczona. Połączenia w grafie poprawia wołający.
+    /// </summary>
+    public void SetRayAngles(IEnumerable<float> aRayAngles)
     {
         _rayAngles = aRayAngles.ToArray();
         _rayPorts = Enumerable.Range(0, _rayAngles.Length).Select(RaySensor.PortName).ToArray();
@@ -51,6 +57,7 @@ public sealed class AvoidAndSeekModule : BrainModule
             TargetSensor.FoundPort, TargetSensor.GapPort, TargetSensor.DirectionXPort, TargetSensor.DirectionYPort,
             .. _rayPorts
         ];
+        Reset();
     }
 
     public IReadOnlyList<float> RayAngles => _rayAngles;
@@ -241,8 +248,8 @@ public sealed class AvoidAndSeekModule : BrainModule
     {
         if (aState is not AvoidAndSeekState state)
             throw new ArgumentException($"Expected {nameof(AvoidAndSeekState)}, got {aState.GetType().Name}.", nameof(aState));
-        if (!state.RayAngles.SequenceEqual(_rayAngles))
-            throw new ArgumentException("Snapshot was taken with different ray angles.", nameof(aState));
+        // Kąty należą do ciała (liczba wąsów), nie do parametrów sterownika: snapshot z inną liczbą wąsów
+        // przywraca tylko parametry, a kąty zostają takie, jak ma teraz ciało.
         SteerGain = state.SteerGain;
         AvoidGain = state.AvoidGain;
         PathWidth = state.PathWidth;

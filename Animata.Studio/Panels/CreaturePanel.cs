@@ -8,6 +8,7 @@ using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
+using Animata.Core.WorldObjects;
 using Animata.Studio.Controls;
 using Animata.Studio.Kit;
 using Animata.Studio.Navigation;
@@ -31,6 +32,7 @@ public sealed class CreaturePanel : StudioPanel
     private TextBlock? _brainInfo;
     private int _snapshotCount = -1;
     private float _snapshotCheck;
+    private int _builtWhiskers;
 
     public CreaturePanel(StudioSession aSession, ActiveEntity aCreature) : base(aSession, StudioSession.NameOf(aCreature))
     {
@@ -41,6 +43,7 @@ public sealed class CreaturePanel : StudioPanel
     protected override Control Build()
     {
         _updaters.Clear();
+        _builtWhiskers = WorldObjectCatalog.WhiskerCountOf(_creature);
         var controllers = _brain.Graph.Modules.Where(aModule => aModule is not SensorModule and not ActuatorModule)
             .Select(GraphCanvas.TitleOf).ToList();
         var titleExtra = Ui.HStack(8, Ui.Dot(Ui.ColorOf(_creature)),
@@ -102,6 +105,9 @@ public sealed class CreaturePanel : StudioPanel
         var snapshotsHead = Ui.Header("Snapshoty mózgu");
         snapshotsHead.Margin = new Thickness(0, 6, 0, 0);
         effects.Children.Add(snapshotsHead);
+        // Lista snapshotów przeżywa przebudowę panelu — najpierw odpina się od starej karty.
+        if (_snapshots.Parent is Border oldCard)
+            oldCard.Child = null;
         effects.Children.Add(Ui.Card(_snapshots, 6));
         var right2 = Ui.Scroll(effects);
         Grid.SetColumn(right2, 2);
@@ -192,6 +198,8 @@ public sealed class CreaturePanel : StudioPanel
             {
                 content.Children.Add(CardHead(Icons.Whiskers, module is not null ? GraphCanvas.TitleOf(module) : "Wąsy",
                     $"RaySensor ×{rays.Angles.Count} · {rays.Range:0.#} m"));
+                // Karta przebuduje się sama (Refresh widzi inną liczbę wąsów), więc lista nie potrzebuje własnej reakcji.
+                content.Children.Add(Ui.Row("Liczba wąsów", PanelParts.WhiskerPicker(Session, _creature), 34));
                 var gauges = new List<(Gauge Gauge, TextBlock Value)>();
                 for (var ray = 0; ray < rays.Angles.Count; ray++)
                 {
@@ -350,6 +358,9 @@ public sealed class CreaturePanel : StudioPanel
 
     public override void Refresh(float aDelta)
     {
+        // Liczba wąsów zmieniona (tu, w scenie albo w grafie) — karty, schemat i podgląd grafu od nowa.
+        if (WorldObjectCatalog.WhiskerCountOf(_creature) != _builtWhiskers)
+            Child = Build();
         foreach (var update in _updaters)
             update();
         _body?.InvalidateVisual();

@@ -9,7 +9,7 @@ namespace Animata.Core.Brains.Modules;
 /// </summary>
 public sealed class SensorModule : BrainModule
 {
-    private readonly string[] _ports;
+    private string[] _ports;
 
     public SensorModule(Sensor aSensor) : this(aSensor.Id, aSensor.OutputPorts)
     {
@@ -22,6 +22,9 @@ public sealed class SensorModule : BrainModule
     }
 
     public Guid SensorId { get; }
+
+    /// <summary>Kopiuje porty z sensora na nowo (np. po zmianie liczby wąsów). Połączenia poprawia wołający.</summary>
+    public void SetPorts(IEnumerable<string> aPorts) => _ports = aPorts.ToArray();
 
     public override IReadOnlyList<string> InputPorts => [];
     public override IReadOnlyList<string> OutputPorts => _ports;

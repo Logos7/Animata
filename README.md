@@ -37,7 +37,9 @@ and let it run on.
   a car with front-wheel steering and a real turning radius.
 - **Senses.** An eye that tracks a target (distance, gap, direction in the creature's own frame) and whiskers: rays
   that report how close obstacles are. A car can have any odd number of whiskers from 1 to 25, spread over 120°;
-  its controller, its network and the hidden training copies all follow that number.
+  the number can be changed on a living car (scene, creature view or graph inspector): the same brain is rewired in
+  place, a network gets weights for the new whiskers derived from the nearest old ones instead of starting over,
+  and training continues in bodies with the new whisker count.
 - **Brains as graphs.** Sensor → logic → actuator graphs with validation (unknown ports, cycles, double-driven
   actuators and bad configuration are errors, not silent zeros). Logic can be a hand-written controller, a neural
   network whose inputs are small expressions over sensor ports, a router, a constant, or a **subgraph** (composite

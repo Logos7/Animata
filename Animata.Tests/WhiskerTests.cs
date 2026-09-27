@@ -1,6 +1,7 @@
 using System.Numerics;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
+using Animata.Core.Brains.Neural;
 using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
@@ -115,5 +116,95 @@ public class WhiskerTests
         var result = SeekTargetTask.Run(WorldObjectCatalog.CreateAvoidController(aCount), [TestWorlds.OpenRoad()], rig.DefaultOptions, rig)[0];
 
         Assert.True(result.Reached, $"gap {result.FinalGap:0.00}");
+    }
+
+    // ---------- zmiana liczby wąsów w miejscu ----------
+
+    [Fact]
+    public void SetCount_KeepsTheSameCreatureSensorAndController()
+    {
+        var world = new World();
+        var target = WorldObjectCatalog.CreateTargetBall(new Vector3(6, 0, 0));
+        world.Add(target);
+        var car = WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, target.Id);
+        world.Add(car);
+        var sensor = car.Body.Sensors.OfType<RaySensor>().Single();
+        var controller = car.Brain!.Graph.Modules.OfType<AvoidAndSeekModule>().Single();
+        controller.AvoidGain = 3;
+
+        WhiskerRewiring.SetCount(car, 9);
+
+        Assert.Same(sensor, car.Body.Sensors.OfType<RaySensor>().Single());
+        Assert.Equal(9, sensor.Angles.Count);
+        Assert.Same(controller, car.Brain.Graph.Modules.OfType<AvoidAndSeekModule>().Single());
+        Assert.Equal(9, controller.RayAngles.Count);
+        Assert.Equal(3, controller.AvoidGain);
+        var source = car.Brain.Graph.Modules.OfType<SensorModule>().Single(aModule => aModule.SensorId == sensor.Id);
+        Assert.Equal(9, source.OutputPorts.Count);
+        for (var ray = 0; ray < 9; ray++)
+            Assert.Contains(car.Brain.Graph.Connections, aLink =>
+                aLink.SourceId == source.Id && aLink.TargetId == controller.Id && aLink.TargetPort == RaySensor.PortName(ray));
+        car.Brain.Graph.Validate();
+        for (var tick = 0; tick < 10; tick++)
+            world.Update(1f / 30f);
+
+        WhiskerRewiring.SetCount(car, 3);
+        Assert.Equal(3, sensor.Angles.Count);
+        Assert.DoesNotContain(car.Brain.Graph.Connections, aLink => aLink.SourcePort == RaySensor.PortName(3));
+        world.Update(1f / 30f);
+    }
+
+    [Fact]
+    public void SetCount_NetworkKeepsItsWeightsForTheTarget()
+    {
+        var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null);
+        var network = car.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
+        float[] Output(int aRays) =>
+            network.Network.Evaluate([0.3f, 0.8f, 0.5f, .. new float[aRays]]).ToArray();
+        var before = Output(5);
+
+        WhiskerRewiring.SetCount(car, 11);
+
+        Assert.Same(network, car.Brain.Graph.Modules.OfType<NeuralNetworkModule>().Single());
+        Assert.Equal(3 + 11, network.Network.Layers[0]);
+        Assert.Equal(11, network.Ports.Count(RaySensor.IsPortName));
+        // Wolna droga (wąsy = 0): sieć jedzie do celu dokładnie tak jak przed zmianą.
+        Assert.Equal(before, Output(11));
+        car.Brain.Graph.Validate();
+
+        // Nauka po zmianie: rig ma 11 wąsów, a szablon sieci się w nim buduje.
+        _ = new SeekTargetTask((NeuralNetworkState)network.CaptureState(), SeekRigs.For(car));
+    }
+
+    [Fact]
+    public void SetCount_ConvertsSnapshotsSoTheyStillRestore()
+    {
+        var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null);
+        var brain = car.Brain!;
+        var network = brain.Graph.Modules.OfType<NeuralNetworkModule>().Single();
+        var snapshot = brain.Capture("przed");
+        network.Network.Randomize();
+
+        WhiskerRewiring.SetCount(car, 7);
+        brain.Restore(brain.Snapshots.Single());
+
+        Assert.Equal(snapshot.Id, brain.Snapshots.Single().Id);
+        Assert.Equal(3 + 7, network.Network.Layers[0]);
+        brain.Graph.Validate();
+    }
+
+    [Fact]
+    public void SetCount_RefusesNetworkWithWhiskersInsideAnExpression_AndChangesNothing()
+    {
+        var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null);
+        var network = car.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
+        network.Inputs[^1] = new NeuralInput("Ray0 + Ray4");
+        car.Brain.Graph.Invalidate();
+
+        var error = Assert.Throws<InvalidOperationException>(() => WhiskerRewiring.SetCount(car, 9));
+
+        Assert.Contains("Ray0 + Ray4", error.Message);
+        Assert.Equal(5, WorldObjectCatalog.WhiskerCountOf(car));
+        Assert.Equal(8, network.Network.Layers[0]);
     }
 }

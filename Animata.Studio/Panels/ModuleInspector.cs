@@ -228,6 +228,7 @@ public sealed class ModuleInspector
         switch (sensor)
         {
             case RaySensor rays:
+                section.Children.Add(Ui.Row("Liczba wąsów", PanelParts.WhiskerPicker(_session, _creature, () => Changed?.Invoke()), 34));
                 section.Children.Add(Ui.Row("Promienie", string.Join(" ", rays.Angles.Select(aAngle => $"{aAngle * 180 / MathF.PI:+0;−0;0}°")), true));
                 section.Children.Add(Ui.Row("Zasięg [m]", Ui.Field(Ui.F(rays.Range), aText =>
                 {

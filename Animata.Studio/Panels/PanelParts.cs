@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Threading;
 using Animata.Core.Entities;
 using Animata.Core.Training;
+using Animata.Core.WorldObjects;
 using Animata.Studio.Controls;
 using Animata.Studio.Kit;
 using Animata.Studio.Session;
@@ -12,6 +14,35 @@ namespace Animata.Studio.Panels;
 /// <summary>Kawałki UI wspólne dla kilku paneli.</summary>
 public static class PanelParts
 {
+    /// <summary>
+    /// Lista liczby wąsów (1, 3, …, 25) stwora z wąsami. Zmiana idzie w miejscu (<see cref="StudioSession.SetWhiskers"/>),
+    /// po niej — już po obsłudze zdarzenia listy — woła <paramref name="aChanged"/> (np. przebudowa panelu).
+    /// </summary>
+    public static Control WhiskerPicker(StudioSession aSession, ActiveEntity aCreature, Action? aChanged = null)
+    {
+        var picker = new ComboBox
+        {
+            ItemsSource = WorldObjectCatalog.WhiskerCounts,
+            SelectedItem = WorldObjectCatalog.WhiskerCountOf(aCreature),
+            MinWidth = 96
+        };
+        ToolTip.SetTip(picker, "Liczba wąsów (nieparzysta, wachlarz 120°). Mózg dopasowuje się sam: sieć dostaje przeliczone wagi, a nie losowe.");
+        // Klik w listę nie może przejść do karty pod nią (karty w panelu stwora po kliknięciu wjeżdżają do grafu).
+        picker.Tapped += (_, aEvent) => aEvent.Handled = true;
+        picker.SelectionChanged += (_, _) =>
+        {
+            if (picker.SelectedItem is not int count || count == WorldObjectCatalog.WhiskerCountOf(aCreature))
+                return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!aSession.SetWhiskers(aCreature, count))
+                    picker.SelectedItem = WorldObjectCatalog.WhiskerCountOf(aCreature);
+                aChanged?.Invoke();
+            });
+        };
+        return picker;
+    }
+
     /// <summary>
     /// Karta nauki stwora: pokolenie, mistrz, wykres, stop/wznów, losowanie. Odświeżanie dopisuje do <paramref name="aUpdaters"/>.
     /// </summary>

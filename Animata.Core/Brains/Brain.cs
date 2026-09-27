@@ -83,6 +83,16 @@ public class Brain
 
     public bool RemoveSnapshot(BrainSnapshot aSnapshot) => _snapshots.Remove(aSnapshot);
 
+    /// <summary>Podmienia snapshot na tym samym miejscu listy (np. przeliczony na nowy kształt sieci). False, gdy go nie było.</summary>
+    public bool ReplaceSnapshot(BrainSnapshot aOld, BrainSnapshot aNew)
+    {
+        var index = _snapshots.IndexOf(aOld);
+        if (index < 0)
+            return false;
+        _snapshots[index] = aNew;
+        return true;
+    }
+
     private List<ModuleSnapshot> Collect(IEnumerable<BrainModule>? aModules)
     {
         var entries = new List<ModuleSnapshot>();

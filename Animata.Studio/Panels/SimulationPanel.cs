@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
@@ -397,7 +396,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             details.Children.Add(Ui.Row("Mózg", controllers.Count > 0 ? string.Join(", ", controllers) : "—"));
             details.Children.Add(Ui.Row("Zmysły", string.Join(", ", active.Body.Sensors.Select(SensorName))));
             if (active is CarCreature car)
-                details.Children.Add(Ui.Row("Wąsy", WhiskerPicker(car)));
+                details.Children.Add(Ui.Row("Wąsy", PanelParts.WhiskerPicker(Session, car, () => _propertiesBuilt = false)));
             details.Children.Add(Ui.Row("Napęd", string.Join(", ", active.Body.Actuators.Select(aActuator => aActuator.GetType().Name.Replace("Actuator", string.Empty)))));
             _properties.Children.Add(details);
 
@@ -596,31 +595,10 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         return parent;
     }
 
-    /// <summary>Lista liczby wąsów we właściwościach autka; zmiana przebudowuje autko (nowy mózg).</summary>
-    private Control WhiskerPicker(CarCreature aCar)
+    private void SetWhiskers(ActiveEntity aCreature, int aCount)
     {
-        var picker = new ComboBox
-        {
-            ItemsSource = WorldObjectCatalog.WhiskerCounts,
-            SelectedItem = WorldObjectCatalog.WhiskerCountOf(aCar),
-            MinWidth = 110
-        };
-        ToolTip.SetTip(picker, "Zmiana przebudowuje autko: ten sam rodzaj mózgu, ale od nowa (sieć uczy się od zera).");
-        picker.SelectionChanged += (_, _) =>
-        {
-            if (picker.SelectedItem is int count && count != WorldObjectCatalog.WhiskerCountOf(aCar))
-                // Po zakończeniu obsługi zdarzenia: przebudowa odświeża panel właściwości razem z tą listą.
-                Dispatcher.UIThread.Post(() => SetWhiskers(aCar, count));
-        };
-        return picker;
-    }
-
-    private void SetWhiskers(CarCreature aCar, int aCount)
-    {
-        if (!Session.World.Contains(aCar))
-            return;
-        if (Session.SetWhiskers(aCar, aCount) is { } rebuilt)
-            SelectNew(rebuilt);
+        if (Session.World.Contains(aCreature) && Session.SetWhiskers(aCreature, aCount))
+            _propertiesBuilt = false;
     }
 
     private void SelectNew(Entity aEntity)
