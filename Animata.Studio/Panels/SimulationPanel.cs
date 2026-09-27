@@ -135,7 +135,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         view.Children.Add(Overlay(_time, HorizontalAlignment.Left, VerticalAlignment.Top));
         view.Children.Add(Overlay(new TextBlock
         {
-            Text = "Dwuklik: wejdź w stwora · LPM: przesuń · PPM: menu, przytrzymany: rozglądanie · WSADQE / kółko: lot",
+            Text = "Dwuklik: wejdź w stwora · LPM: przesuń, z pustego miejsca: ramka · Ctrl/Shift+klik: wiele · PPM: menu · WSADQE / kółko: lot",
             FontSize = 12,
             Foreground = OverlayText
         }, HorizontalAlignment.Left, VerticalAlignment.Bottom));
@@ -315,7 +315,16 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 Focusable = false
             };
             var target = entity;
-            button.Click += (_, _) => _renderer.Select(target);
+            // Klik zaznacza, Ctrl+klik przełącza, Shift+klik dokłada (jak w widoku 3D).
+            button.Tapped += (_, aEvent) =>
+            {
+                if ((aEvent.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+                    _renderer.Toggle(target);
+                else if ((aEvent.KeyModifiers & KeyModifiers.Shift) != 0)
+                    _renderer.SelectMany(_renderer.Selection.Append(target), target);
+                else
+                    _renderer.Select(target);
+            };
             button.DoubleTapped += (_, _) =>
             {
                 if (target is ActiveEntity creature)
@@ -329,7 +338,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     private void UpdateListSelection()
     {
         foreach (var (entity, item) in _items)
-            item.Button.Background = entity == _renderer.SelectedEntity ? Ui.Brush(StudioTheme.Palette.AccentSoft) : Brushes.Transparent;
+            item.Button.Background = entity == _renderer.SelectedEntity ? Ui.Brush(StudioTheme.Palette.AccentSoft)
+                : _renderer.Selection.Contains(entity) ? Ui.Brush(StudioPalette.WithAlpha(StudioTheme.Palette.Accent, 0.12))
+                : Brushes.Transparent;
     }
 
     // ---------- właściwości ----------
@@ -341,6 +352,13 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         _properties.Children.Clear();
         var entity = _renderer.SelectedEntity is { } selected && Session.World.Contains(selected) ? selected : null;
         _propertiesOf = entity;
+
+        var selection = _renderer.Selection.Where(Session.World.Contains).ToList();
+        if (selection.Count > 1)
+        {
+            BuildSelectionSummary(selection);
+            return;
+        }
 
         if (entity is null)
         {
@@ -455,6 +473,56 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         }
     }
 
+    /// <summary>Właściwości przy wielu zaznaczonych: lista, akcje na całym zaznaczeniu.</summary>
+    private void BuildSelectionSummary(List<Entity> aSelection)
+    {
+        _properties.Children.Add(Ui.VStack(2,
+            Ui.Text($"Zaznaczono {aSelection.Count}", 16, "Studio.Text", FontWeight.SemiBold),
+            Ui.Text(string.Join(" · ", aSelection.GroupBy(aEntity => aEntity switch
+            {
+                ActiveEntity => "stwory",
+                TargetBall => "kulki",
+                Obstacle => "słupki",
+                Slab => "płyty",
+                _ => "inne"
+            }).Select(aGroup => $"{aGroup.Count()} {aGroup.Key}")), 12.5, "Studio.Text3")));
+
+        Button Wide(string aText, Action aClick, string aIcon, string aShortcut)
+        {
+            var button = Ui.Button(aText, aClick, aIcon, aShortcut: aShortcut);
+            button.HorizontalAlignment = HorizontalAlignment.Stretch;
+            button.HorizontalContentAlignment = HorizontalAlignment.Center;
+            return button;
+        }
+        _properties.Children.Add(Ui.VStack(6,
+            Wide("Kopiuj", CopySelection, Icons.Composite, "Ctrl+C"),
+            Wide("Wytnij", CutSelection, Icons.Ungroup, "Ctrl+X"),
+            Wide("Usuń", () => RemoveEntities(aSelection), Icons.Trash, "Del")));
+
+        var list = Ui.VStack(0, Ui.Header("Zaznaczone"));
+        foreach (var entity in aSelection)
+        {
+            var target = entity;
+            var row = new Button
+            {
+                Content = Ui.HStack(10, Ui.Dot(Ui.ColorOf(entity)), Ui.Text(StudioSession.NameOf(entity), 13)),
+                Height = 30,
+                Padding = new Thickness(8, 0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Background = entity == _renderer.SelectedEntity ? Ui.Brush(StudioTheme.Palette.AccentSoft) : Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Focusable = false
+            };
+            ToolTip.SetTip(row, "Klik — zaznacz tylko tę encję");
+            row.Click += (_, _) => _renderer.Select(target);
+            list.Children.Add(row);
+        }
+        _properties.Children.Add(list);
+        _properties.Children.Add(Wrap(Ui.Text("Przeciągnij jedną z zaznaczonych w 3D — przesuwa się całe zaznaczenie. " +
+            "Ctrl+klik przełącza, Shift+klik dokłada, ramka od pustego miejsca zaznacza obszar.", 12, "Studio.Text3")));
+    }
+
     private static Control Wrap(TextBlock aText)
     {
         aText.TextWrapping = TextWrapping.Wrap;
@@ -529,11 +597,13 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         Enter(new CreaturePanel(Session, aCreature), origin);
     }
 
-    /// <summary>Zaznaczony stwór z siecią albo — bez zaznaczenia stwora z siecią — wszystkie stwory z siecią.</summary>
-    private List<ActiveEntity> TrainingScope() =>
-        _renderer.SelectedEntity is ActiveEntity selected && TrainingController.FindTrainable(selected) is not null && Session.World.Contains(selected)
-            ? [selected]
-            : Session.NeuralCreatures.ToList();
+    /// <summary>Zaznaczone stwory z uczonym modułem albo — gdy żadnego takiego nie zaznaczono — wszystkie takie stwory.</summary>
+    private List<ActiveEntity> TrainingScope()
+    {
+        var selected = _renderer.Selection.OfType<ActiveEntity>()
+            .Where(aCreature => TrainingController.FindTrainable(aCreature) is not null && Session.World.Contains(aCreature)).ToList();
+        return selected.Count > 0 ? selected : Session.NeuralCreatures.ToList();
+    }
 
     /// <summary>Mózg zaznaczonego stwora, a bez zaznaczenia — pierwszego stwora z siecią.</summary>
     private Core.Brains.Brain? TargetBrain() =>
@@ -559,13 +629,26 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
     public override bool HandleKey(KeyEventArgs aEvent)
     {
+        var control = (aEvent.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
         switch (aEvent.Key)
         {
             case Key.Space:
                 Session.TogglePause();
                 return true;
-            case Key.Delete when _renderer.SelectedEntity is { } selected:
-                RemoveEntity(selected);
+            case Key.Delete when _renderer.Selection.Count > 0:
+                RemoveEntities(_renderer.Selection);
+                return true;
+            case Key.C when control:
+                CopySelection();
+                return true;
+            case Key.X when control:
+                CutSelection();
+                return true;
+            case Key.V when control:
+                PasteAt(_renderer.GroundUnderPointer);
+                return true;
+            case Key.A when control:
+                _renderer.SelectMany(Session.World.Entities.Where(aEntity => !aEntity.IsFixed));
                 return true;
             case Key.Insert:
                 SelectNew(Session.AddTarget(_renderer.GroundPointAtCenter()));
@@ -588,7 +671,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             case Key.K:
                 Session.Randomize(TrainingScope());
                 return true;
-            case Key.S when (aEvent.KeyModifiers & KeyModifiers.Control) != 0:
+            case Key.S when control:
                 SaveSnapshot();
                 return true;
             case Key.Z:
@@ -611,14 +694,27 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         var at = aContext.Ground ?? _renderer.GroundPointAtCenter();
         var menu = new ContextMenu();
 
+        var selection = _renderer.Selection.Where(Session.World.Contains).ToList();
         if (aContext.Entity is { } entity && Session.World.Contains(entity))
         {
-            menu.Items.Add(new MenuItem { Header = StudioSession.NameOf(entity), IsEnabled = false });
-            if (entity is ActiveEntity { Brain: not null } creature)
+            var many = selection.Count > 1 && selection.Contains(entity);
+            menu.Items.Add(new MenuItem { Header = many ? $"Zaznaczono {selection.Count}" : StudioSession.NameOf(entity), IsEnabled = false });
+            if (!many && entity is ActiveEntity { Brain: not null } creature)
                 menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
-            if (entity is TargetBall ball)
+            if (!many && entity is TargetBall ball)
                 menu.Items.Add(Item("Wszystkie oczy na tę kulkę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
-            menu.Items.Add(Item("Usuń", Icons.Trash, () => RemoveEntity(entity), Key.Delete));
+            if (!entity.IsFixed)
+            {
+                menu.Items.Add(Item("Kopiuj", Icons.Composite, CopySelection, Key.C, KeyModifiers.Control));
+                menu.Items.Add(Item("Wytnij", Icons.Ungroup, CutSelection, Key.X, KeyModifiers.Control));
+            }
+            menu.Items.Add(Item(many ? $"Usuń ({selection.Count})" : "Usuń", Icons.Trash,
+                () => RemoveEntities(many ? selection : [entity]), Key.Delete));
+            menu.Items.Add(new Separator());
+        }
+        if (StudioSession.HasClipboard)
+        {
+            menu.Items.Add(Item("Wklej tutaj", Icons.Plus, () => PasteAt(at), Key.V, KeyModifiers.Control));
             menu.Items.Add(new Separator());
         }
 
@@ -634,11 +730,11 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         menu.Open(_renderer.View);
     }
 
-    private static MenuItem Item(string aHeader, string aIcon, Action aClick, Key? aKey = null)
+    private static MenuItem Item(string aHeader, string aIcon, Action aClick, Key? aKey = null, KeyModifiers aModifiers = KeyModifiers.None)
     {
         var item = new MenuItem { Header = aHeader, Icon = Ui.Icon(aIcon, 14) };
         if (aKey is { } key)
-            item.InputGesture = new KeyGesture(key);
+            item.InputGesture = new KeyGesture(key, aModifiers);
         item.Click += (_, _) => aClick();
         return item;
     }
@@ -714,13 +810,37 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         _propertiesBuilt = false;
     }
 
-    private void RemoveEntity(Entity aEntity)
+    private void RemoveEntities(IReadOnlyList<Entity> aEntities)
     {
-        Session.Remove(aEntity);
-        if (aEntity.IsFixed)
-            return;
-        _renderer.Select(null);
+        var entities = aEntities.ToList();
+        if (entities.Count == 1)
+            Session.Remove(entities[0]);
+        else
+            Session.Remove(entities);
         _renderer.Sync(Session.World);
+        _propertiesBuilt = false;
+    }
+
+    private void CopySelection() => Session.Copy(_renderer.Selection);
+
+    private void CutSelection()
+    {
+        if (Session.Cut(_renderer.Selection) > 0)
+        {
+            _renderer.Sync(Session.World);
+            _propertiesBuilt = false;
+        }
+    }
+
+    /// <summary>Wkleja schowek (środek w punkcie, bez punktu — obok oryginałów) i zaznacza wklejone.</summary>
+    private void PasteAt(Vector3? aAt)
+    {
+        var pasted = Session.Paste(aAt);
+        if (pasted.Count == 0)
+            return;
+        _renderer.Sync(Session.World);
+        _renderer.SelectMany(pasted);
+        _propertiesBuilt = false;
     }
 
     public void Dispose()

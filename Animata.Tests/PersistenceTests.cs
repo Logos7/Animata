@@ -165,6 +165,40 @@ public class PersistenceTests
     }
 
     [Fact]
+    public void Copies_GetNewIds_OffsetPositions_AndFollowCopiedTargets()
+    {
+        using var world = WorldObjectCatalog.CreateSnakeScene().World;
+        var neural = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż NN");
+        var cpg = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż CPG");
+        var target = world.Entities.OfType<TargetBall>().Single();
+        var slab = world.Entities.OfType<Slab>().First();
+
+        var documents = WorldFile.CaptureEntities([neural, target, slab, cpg]);
+        var offset = new Vector3(2, -1, 0);
+        var copies = WorldFile.RestoreCopies(documents, offset);
+        Assert.Equal(4, copies.Count);
+        Assert.All(copies, aCopy => Assert.Null(world.Find(aCopy.Id)));
+        foreach (var copy in copies)
+            world.Add(copy);
+
+        var neuralCopy = (SnakeCreature)copies[0];
+        var targetCopy = (TargetBall)copies[1];
+        Assert.Equal(neural.Body.Position + offset, neuralCopy.Body.Position);
+        Assert.Equal(target.Body.Position + offset, targetCopy.Body.Position);
+        Assert.Equal(targetCopy.Id, neuralCopy.Body.Sensors.OfType<TargetSensor>().Single().TargetId);
+        Assert.Equal(slab.Size, ((Slab)copies[2]).Size);
+        Assert.True(neural.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()!
+            .SameAs(neuralCopy.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()));
+        Assert.Equal(cpg.Brain!.Snapshots.Count, ((SnakeCreature)copies[3]).Brain!.Snapshots.Count);
+
+        // Kopia sama (bez kulki) poluje na tę samą kulkę co oryginał.
+        var alone = WorldFile.RestoreCopies(WorldFile.CaptureEntities([neural]), Vector3.UnitX);
+        Assert.Equal(target.Id, alone[0].Body.Sensors.OfType<TargetSensor>().Single().TargetId);
+        world.Add(alone[0]);
+        world.Update(Delta);
+    }
+
+    [Fact]
     public void NewerFormat_IsRejected()
     {
         var json = WorldFile.ToJson(new WorldDocument(WorldFile.Format + 1, "przyszłość", 0, []));

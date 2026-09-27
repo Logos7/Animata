@@ -131,7 +131,9 @@ dotnet run --project Animata.Studio
 | Everywhere | Double-click | Zoom into a creature or subgraph (cards in a creature open with a single click) |
 | Everywhere | Esc · Alt+← · mouse Back | Zoom out one level |
 | Scene, creature, graph | Space | Pause / resume the world |
-| Scene | LMB drag | Move entities |
+| Scene | LMB drag | Move entities (dragging one of several selected moves them all) |
+| Scene | LMB drag from empty space · Ctrl+click · Shift+click · Ctrl+A | Box-select · toggle · add to selection · select all |
+| Scene | Del · Ctrl+C · Ctrl+X · Ctrl+V | Delete the whole selection · copy · cut · paste under the mouse (brains, snapshots and settings included; works across scenes) |
 | Scene | RMB click | Context menu: insert a car, cylinder, CPG snake or neural snake (random parameters, not learning until you start it), a slab, a target or a post where you clicked; on an entity: enter, aim eyes, delete |
 | Scene | RMB drag · WSADQE · wheel | Look around · fly · fly forward/back (the wheel works like W/S) |
 | Scene | Ins · O · P · T · Del | Add target · add post · add slab · aim all eyes at the selected target · delete |

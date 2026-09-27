@@ -490,6 +490,110 @@ public sealed class StudioSession : IDisposable
         World.Remove(aEntity);
     }
 
+    /// <summary>Usuwa wiele encji naraz (nieruszalne pomija). Zwraca liczbę usuniętych.</summary>
+    public int Remove(IEnumerable<Entity> aEntities)
+    {
+        var removed = 0;
+        foreach (var entity in aEntities.ToList())
+        {
+            if (entity.IsFixed || !World.Contains(entity))
+                continue;
+            Remove(entity);
+            removed++;
+        }
+        Status = removed == 1 ? "usunięto 1 encję" : $"usunięto {removed} encji";
+        return removed;
+    }
+
+    // ---------- schowek (wspólny dla wszystkich scen) ----------
+
+    private static IReadOnlyList<EntityDocument> _clipboard = [];
+    private static Vector3 _clipboardCenter;
+    private int _pasteCount;
+
+    public static bool HasClipboard => _clipboard.Count > 0;
+
+    /// <summary>
+    /// Kopiuje encje do schowka (całe: ciało, mózg, snapshoty, ustawienia — jak w pliku świata). Nieruszalne (podłoga)
+    /// są pomijane. Schowek jest wspólny dla scen — można wkleić w drugiej scenie.
+    /// </summary>
+    public int Copy(IEnumerable<Entity> aEntities)
+    {
+        var entities = aEntities.Where(aEntity => !aEntity.IsFixed && World.Contains(aEntity)).ToList();
+        if (entities.Count == 0)
+        {
+            Status = "nic do skopiowania";
+            return 0;
+        }
+        try
+        {
+            _clipboard = WorldFile.CaptureEntities(entities);
+        }
+        catch (NotSupportedException exception)
+        {
+            Status = $"nie skopiowano: {exception.Message}";
+            return 0;
+        }
+        _clipboardCenter = entities.Aggregate(Vector3.Zero, (aSum, aEntity) => aSum + aEntity.Body.Position) / entities.Count;
+        _pasteCount = 0;
+        Status = entities.Count == 1 ? $"skopiowano: {NameOf(entities[0])}" : $"skopiowano {entities.Count} encji";
+        return entities.Count;
+    }
+
+    /// <summary>Kopiuje do schowka i usuwa ze sceny.</summary>
+    public int Cut(IEnumerable<Entity> aEntities)
+    {
+        var entities = aEntities.Where(aEntity => !aEntity.IsFixed && World.Contains(aEntity)).ToList();
+        var copied = Copy(entities);
+        if (copied == 0)
+            return 0;
+        foreach (var entity in entities)
+            Remove(entity);
+        Status = copied == 1 ? $"wycięto: {NameOf(entities[0])}" : $"wycięto {copied} encji";
+        return copied;
+    }
+
+    /// <summary>
+    /// Wkleja schowek: środek wklejanych encji w <paramref name="aAt"/> (np. punkt pod kursorem), a bez punktu — obok
+    /// oryginałów (każde kolejne wklejenie o metr dalej). Kopie mają nowe Id i nazwy, nie uczą się; przy przyciąganiu
+    /// stają na terenie. Zwraca wklejone encje.
+    /// </summary>
+    public IReadOnlyList<Entity> Paste(Vector3? aAt = null)
+    {
+        if (_clipboard.Count == 0)
+        {
+            Status = "schowek jest pusty";
+            return [];
+        }
+        _pasteCount++;
+        var offset = aAt is { } at
+            ? new Vector3(at.X - _clipboardCenter.X, at.Y - _clipboardCenter.Y, 0)
+            : new Vector3(_pasteCount, _pasteCount, 0);
+        IReadOnlyList<Entity> copies;
+        try
+        {
+            copies = WorldFile.RestoreCopies(_clipboard, offset);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException or BrainException)
+        {
+            Status = $"nie wklejono: {exception.Message}";
+            return [];
+        }
+        foreach (var copy in copies)
+        {
+            if (!string.IsNullOrWhiteSpace(copy.Name))
+                copy.Name = UniqueName(copy.Name);
+            World.Add(copy);
+            if (SnapToGround)
+            {
+                var position = copy.Body.Position;
+                copy.Place(position with { Z = GroundAt(position, copy) }, copy.Body.Rotation);
+            }
+        }
+        Status = copies.Count == 1 ? $"wklejono: {NameOf(copies[0])}" : $"wklejono {copies.Count} encji";
+        return copies;
+    }
+
     /// <summary>Scena od zera: zatrzymuje nauki, czyści historię. Nauka nie startuje sama (L ją włącza).</summary>
     public void ResetScene()
     {

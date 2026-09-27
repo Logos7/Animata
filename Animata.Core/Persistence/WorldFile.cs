@@ -127,6 +127,38 @@ public static class WorldFile
     public static WorldDocument Capture(World aWorld, string aName = "", double aTime = 0) =>
         new(Format, aName, aTime, [.. aWorld.Entities.Select(CaptureEntity)]);
 
+    // ---------- schowek: kopie encji ----------
+
+    /// <summary>Encje jako dokumenty (do schowka: kopiuj / wytnij). Rzuca <see cref="NotSupportedException"/> jak <see cref="Capture"/>.</summary>
+    public static IReadOnlyList<EntityDocument> CaptureEntities(IEnumerable<Entity> aEntities) =>
+        [.. aEntities.Select(CaptureEntity)];
+
+    /// <summary>
+    /// Nowe encje z dokumentów (wklej): każda dostaje nowe Id i pozycję przesuniętą o <paramref name="aOffset"/>; mózgi,
+    /// snapshoty i ustawienia są kopiami. Cel oka wskazujący na encję wklejaną razem z nim przechodzi na jej kopię,
+    /// inny cel zostaje (kopia stwora poluje na tę samą kulkę co oryginał). Nic nie trafia do świata — to robi wołający.
+    /// </summary>
+    public static IReadOnlyList<Entity> RestoreCopies(IReadOnlyList<EntityDocument> aDocuments, Vector3 aOffset)
+    {
+        var ids = aDocuments.ToDictionary(aDocument => aDocument.Id, _ => Guid.NewGuid());
+        Guid? Remap(Guid? aTarget) => aTarget is { } target && ids.TryGetValue(target, out var copy) ? copy : aTarget;
+
+        var copies = new List<Entity>(aDocuments.Count);
+        foreach (var document in aDocuments)
+        {
+            var position = ToVector(document.Position) + aOffset;
+            EntityDocument moved = document switch
+            {
+                CarDocument car => car with { Target = Remap(car.Target) },
+                CylinderDocument cylinder => cylinder with { Target = Remap(cylinder.Target) },
+                SnakeDocument snake => snake with { Target = Remap(snake.Target) },
+                _ => document
+            };
+            copies.Add(RestoreEntity(moved with { Id = ids[document.Id], Position = Vector(position) }));
+        }
+        return copies;
+    }
+
     private static EntityDocument CaptureEntity(Entity aEntity)
     {
         var position = Vector(aEntity.Body.Position);
