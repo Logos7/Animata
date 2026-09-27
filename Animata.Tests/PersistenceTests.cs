@@ -127,6 +127,36 @@ public class PersistenceTests
     }
 
     [Fact]
+    public void File_PointsAtCurrentSnapshot_AndLoadingStartsFromIt()
+    {
+        using var world = WorldObjectCatalog.CreateSnakeScene().World;
+        var snake = world.Entities.OfType<SnakeCreature>().Single();
+        var cpg = snake.Brain!.Graph.Modules.OfType<CpgModule>().Single();
+        var random = snake.Brain.Capture("losowe", cpg);
+        var manual = snake.Brain.Snapshots.Single(aSnapshot => aSnapshot.Label == "ręczne parametry");
+        snake.Brain.Restore(manual);
+        Assert.Same(manual, snake.Brain.CurrentSnapshot());
+
+        // Plik wskazuje „ręczne parametry”, choć zapisany stan modułu podmieniamy na losowy — wygrywa snapshot.
+        var document = WorldFile.Capture(world, "test", 0);
+        var snakeDocument = document.Entities.OfType<SnakeDocument>().Single();
+        Assert.Equal(manual.Id, snakeDocument.Brain.Current);
+        var randomState = random.Modules.Single().State;
+        var modules = snakeDocument.Brain.Modules
+            .Select(aModule => aModule.Id == cpg.Id ? new StateNode(aModule.Id, aModule.Name, randomState) : aModule).ToList();
+        var edited = document with
+        {
+            Entities = [.. document.Entities.Select(aEntity => aEntity == snakeDocument
+                ? snakeDocument with { Brain = snakeDocument.Brain with { Modules = modules } } : aEntity)]
+        };
+
+        using var restored = WorldFile.Restore(WorldFile.FromJson(WorldFile.ToJson(edited))).World;
+        var twin = restored.Entities.OfType<SnakeCreature>().Single();
+        Assert.Equal(manual.Id, twin.Brain!.CurrentSnapshot()!.Id);
+        Assert.True(twin.Brain.Graph.Modules.OfType<CpgModule>().Single().CaptureState()!.SameAs(manual.Modules.Single().State));
+    }
+
+    [Fact]
     public void NewerFormat_IsRejected()
     {
         var json = WorldFile.ToJson(new WorldDocument(WorldFile.Format + 1, "przyszłość", 0, []));

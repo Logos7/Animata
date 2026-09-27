@@ -11,7 +11,7 @@ using Animata.Core.Worlds;
 
 namespace Animata.Studio.Session;
 
-/// <summary>Zwierzątka, które da się wstawić do sceny — każde z uczonym mózgiem (sieć albo CPG), od razu się uczy.</summary>
+/// <summary>Zwierzątka, które da się wstawić do sceny — każde z uczonym mózgiem (sieć albo CPG) z losowymi parametrami; uczy się dopiero po starcie przez użytkownika.</summary>
 public enum CreatureKind
 {
     Car,
@@ -81,12 +81,6 @@ public sealed class StudioSession : IDisposable
         Obstacle obstacle => $"Słupek r {obstacle.Radius:0.0#}",
         _ => aEntity.GetType().Name
     };
-
-    public void StartTrainingAll()
-    {
-        foreach (var creature in NeuralCreatures)
-            Training.Start(creature);
-    }
 
     /// <summary>Wywoływane co klatkę UI: przenosi mistrzów z nauki, notuje postęp i przesuwa symulację.</summary>
     public void Tick()
@@ -258,7 +252,7 @@ public sealed class StudioSession : IDisposable
     }
 
     /// <summary>
-    /// Wstawia zwierzątko w punkcie podłoża: patrzy na najbliższą kulkę i na nią poluje, od razu się uczy
+    /// Wstawia zwierzątko w punkcie podłoża: patrzy na najbliższą kulkę i na nią poluje; ma losowe parametry i nie uczy się, dopóki użytkownik nie włączy nauki
     /// (autko i walec — sieć neuronowa, wąż — CPG). Liczbę wąsów i segmentów zmienia się potem we właściwościach.
     /// </summary>
     public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition)
@@ -275,8 +269,6 @@ public sealed class StudioSession : IDisposable
         creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));
         creature.Name = UniqueName(KindName(aKind));
         World.Add(creature);
-        if (TrainingController.FindTrainable(creature) is not null)
-            Training.Start(creature);
         Status = target is null ? $"dodano: {creature.Name} (brak kulki — dodaj cel)" : $"dodano: {creature.Name}";
         return creature;
     }
@@ -454,18 +446,30 @@ public sealed class StudioSession : IDisposable
         World.Remove(aEntity);
     }
 
-    /// <summary>Scena od zera: zatrzymuje nauki, czyści historię, startuje naukę stworów z uczonym modułem.</summary>
+    /// <summary>Scena od zera: zatrzymuje nauki, czyści historię. Nauka nie startuje sama (L ją włącza).</summary>
     public void ResetScene()
     {
         Replace(_factory(), 0);
-        Status = $"{Name}: od nowa";
-        StartTrainingAll();
+        Status = $"{Name}: od nowa — L włącza naukę";
     }
 
-    /// <summary>Zapis sceny (świat, mózgi, snapshoty) do dokumentu JSON.</summary>
-    public WorldDocument Save() => WorldFile.Capture(World, Name, SimTime);
+    /// <summary>
+    /// Zapis sceny (świat, mózgi, snapshoty) do dokumentu JSON. Stwór z uczonym modułem, którego stan nie jest żadnym
+    /// ze snapshotów, dostaje najpierw snapshot „zapis” — plik zawsze wskazuje bieżący snapshot, od którego stwór
+    /// wystartuje po wczytaniu.
+    /// </summary>
+    public WorldDocument Save()
+    {
+        foreach (var creature in Creatures)
+            if (creature.Brain is { } brain && TrainingController.FindTrainable(creature) is { } module && brain.CurrentSnapshot() is null)
+                brain.Capture("zapis", module);
+        return WorldFile.Capture(World, Name, SimTime);
+    }
 
-    /// <summary>Wczytuje zapisany świat w miejsce obecnego. Nauka nie startuje sama (L ją włącza).</summary>
+    /// <summary>
+    /// Wczytuje zapisany świat w miejsce obecnego; mózgi są w stanie bieżącego snapshotu z pliku.
+    /// Nauka nie startuje sama (L ją włącza) i rusza od tego stanu.
+    /// </summary>
     public void Load(WorldDocument aDocument)
     {
         var scene = WorldFile.Restore(aDocument);

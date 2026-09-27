@@ -41,9 +41,7 @@ public sealed class StudioWindow : Window
         Opened += (_, _) =>
         {
             _navigator.Push(new MenuPanel(_scenes.Select(aScene => new MenuScene(aScene.Session, aScene.Panel)).ToList()));
-            // Stwory z uczonym modułem (fioletowe) startują z losowych parametrów i od razu się uczą — każdy w swoim wątku.
-            foreach (var (session, _) in _scenes)
-                session.StartTrainingAll();
+            // Nauka nie startuje sama: stwory z uczonym modułem (fioletowe) mają losowe parametry, uczą się po L / „Ucz”.
             _clock.Start();
             _timer.Start();
         };

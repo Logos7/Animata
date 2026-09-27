@@ -57,7 +57,8 @@ public sealed record BrainDocument(
     IReadOnlyList<ModuleDocument> Modules,
     IReadOnlyList<BrainConnection> Connections,
     IReadOnlyDictionary<Guid, float[]> Positions,
-    IReadOnlyList<BrainSnapshot> Snapshots);
+    IReadOnlyList<BrainSnapshot> Snapshots,
+    Guid? Current = null);
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(SensorNode), "sensor")]
@@ -132,11 +133,11 @@ public static class WorldFile
             Obstacle obstacle => new ObstacleDocument(obstacle.Id, obstacle.Name, position, rotation, obstacle.Radius, obstacle.Height),
             CarCreature car => new CarDocument(car.Id, car.Name, position, rotation, Vector(car.Color),
                 WorldObjectCatalog.WhiskerCountOf(car), car.Body.Sensors.OfType<RaySensor>().FirstOrDefault()?.Range ?? WorldObjectCatalog.WhiskerRange,
-                TargetOf(car), CaptureBrain(car.Brain!.Graph, car.Brain.Snapshots), DriveOf(car)),
+                TargetOf(car), CaptureBrain(car.Brain!), DriveOf(car)),
             CylinderCreature cylinder => new CylinderDocument(cylinder.Id, cylinder.Name, position, rotation, Vector(cylinder.Color),
-                TargetOf(cylinder), CaptureBrain(cylinder.Brain!.Graph, cylinder.Brain.Snapshots), DriveOf(cylinder)),
+                TargetOf(cylinder), CaptureBrain(cylinder.Brain!), DriveOf(cylinder)),
             SnakeCreature snake => new SnakeDocument(snake.Id, snake.Name, position, rotation, Vector(snake.Color), snake.Segments,
-                TargetOf(snake), CaptureBrain(snake.Brain!.Graph, snake.Brain.Snapshots)),
+                TargetOf(snake), CaptureBrain(snake.Brain!)),
             _ => throw new NotSupportedException($"Zapis nie zna encji {aEntity.GetType().Name}.")
         };
     }
@@ -170,6 +171,10 @@ public static class WorldFile
     }
 
     private static Guid? TargetOf(Entity aCreature) => aCreature.Body.Sensors.OfType<TargetSensor>().FirstOrDefault()?.TargetId;
+
+    /// <summary>Mózg stwora: graf, snapshoty i wskazanie bieżącego snapshotu (<see cref="Brain.CurrentSnapshot"/>).</summary>
+    private static BrainDocument CaptureBrain(Brain aBrain) =>
+        CaptureBrain(aBrain.Graph, aBrain.Snapshots) with { Current = aBrain.CurrentSnapshot()?.Id };
 
     private static BrainDocument CaptureBrain(BrainGraph aGraph, IReadOnlyList<BrainSnapshot> aSnapshots, IEnumerable<BrainModule>? aSkip = null)
     {
@@ -271,7 +276,9 @@ public static class WorldFile
         return entity;
     }
 
-    /// <summary>Zastępuje graf mózgu zapisanym (moduły, połączenia, położenia) i dokłada zapisane snapshoty.</summary>
+    /// <summary>
+    /// Zastępuje graf mózgu zapisanym (moduły, połączenia, położenia), dokłada zapisane snapshoty i przywraca bieżący.
+    /// </summary>
     private static void RestoreBrain(Brain aBrain, BrainDocument aDocument)
     {
         FillGraph(aBrain.Graph, aDocument);
@@ -279,6 +286,9 @@ public static class WorldFile
             aBrain.RemoveSnapshot(snapshot);
         foreach (var snapshot in aDocument.Snapshots)
             aBrain.AddSnapshot(snapshot);
+        // Stwór startuje ze wskazanego snapshotu (stan modułów w pliku powinien być z nim zgodny — snapshot rozstrzyga).
+        if (aDocument.Current is { } current && aBrain.Snapshots.FirstOrDefault(aSnapshot => aSnapshot.Id == current) is { } start)
+            aBrain.Restore(start);
         aBrain.Graph.InvalidateDeep();
         aBrain.Graph.Validate();
     }

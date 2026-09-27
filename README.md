@@ -51,7 +51,10 @@ and let it run on.
   actuators and bad configuration are errors, not silent zeros). Logic can be a hand-written controller, a neural
   network whose inputs are small expressions over sensor ports, a router, a constant, or a **subgraph** (composite
   pattern, any depth) with group/ungroup that keeps the wiring intact.
-- **Background evolution.** A genetic algorithm trains network weights on its own thread. The scene only receives the
+- **Background evolution.** Nothing learns until you start it (L, or the training button). New creatures start
+  from random parameters; a creature loaded from a file starts from the snapshot the file marks as current (saving
+  marks the snapshot matching the brain's state, adding a „zapis” snapshot if none does). A genetic algorithm trains
+  the parameters on its own thread, starting from the creature's current ones. The scene only receives the
   *champion*, the best candidate on a fixed validation set, so creatures change rarely and only for the better.
 - **Snapshots.** Any brain's parameters can be captured, compared and restored. Training writes its own snapshots and
   undo walks back through them.
@@ -124,7 +127,7 @@ dotnet run --project Animata.Studio
 | Everywhere | Esc · Alt+← · mouse Back | Zoom out one level |
 | Scene, creature, graph | Space | Pause / resume the world |
 | Scene | LMB drag | Move entities |
-| Scene | RMB click | Context menu: insert a car, cylinder or snake (they start learning), a target or a post where you clicked; on an entity: enter, aim eyes, delete |
+| Scene | RMB click | Context menu: insert a car, cylinder or snake (random parameters, not learning until you start it), a target or a post where you clicked; on an entity: enter, aim eyes, delete |
 | Scene | RMB drag · WSADQE · wheel | Look around · fly · fly forward/back (the wheel works like W/S) |
 | Scene | Ins · O · T · Del | Add target · add post · aim all eyes at the selected target · delete |
 | Scene | L · K | Start/stop training · random weights and retrain |

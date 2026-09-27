@@ -44,6 +44,17 @@ public class Brain
     }
 
     /// <summary>
+    /// Bieżący snapshot: najnowszy, którego przywrócenie niczego by nie zmieniło (stan mózgu = ten snapshot), albo null.
+    /// </summary>
+    public BrainSnapshot? CurrentSnapshot()
+    {
+        for (var index = Snapshots.Count - 1; index >= 0; index--)
+            if (Matches(Snapshots[index]))
+                return Snapshots[index];
+        return null;
+    }
+
+    /// <summary>
     /// Czy moduły mają dokładnie stan zapisany w snapshocie, czyli czy <see cref="Restore"/> niczego by nie zmienił.
     /// Wpisy modułów, których nie ma już w grafie, są pomijane.
     /// </summary>
