@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Numerics;
 using Animata.Core.Actuators;
 using Animata.Core.Brains;
@@ -79,11 +80,27 @@ public static class SeekRigs
             + 0.25f * MathF.Min(MathF.Abs(aCommand.GetValueOrDefault(DiskDriveActuator.TurnPort)), 1),
         new SeekTargetOptions());
 
-    /// <summary>Autko z wąsami, 1–3 słupki na drodze, cel 5–9 m, dłuższe próby (autko nie skręca w miejscu).</summary>
-    public static readonly SeekRig Car = new(
-        "autko",
+    private static readonly ConcurrentDictionary<int, SeekRig> CarRigs = new();
+
+    /// <summary>Autko z domyślną liczbą wąsów (<see cref="WorldObjectCatalog.DefaultWhiskers"/>).</summary>
+    public static SeekRig Car => CarWith(WorldObjectCatalog.DefaultWhiskers);
+
+    /// <summary>
+    /// Autko z <paramref name="aWhiskers"/> wąsami, 1–3 słupki na drodze, cel 5–9 m, dłuższe próby
+    /// (autko nie skręca w miejscu). Ciało w rigu ma tyle wąsów, ile sieć ma wejść Ray{i}.
+    /// </summary>
+    public static SeekRig CarWith(int aWhiskers)
+    {
+        if (!WorldObjectCatalog.IsValidWhiskerCount(aWhiskers))
+            throw new ArgumentOutOfRangeException(nameof(aWhiskers), aWhiskers,
+                $"Autko ma nieparzystą liczbę wąsów od 1 do {WorldObjectCatalog.MaxWhiskers}.");
+        return CarRigs.GetOrAdd(aWhiskers, CreateCarRig);
+    }
+
+    private static SeekRig CreateCarRig(int aWhiskers) => new(
+        aWhiskers == WorldObjectCatalog.DefaultWhiskers ? "autko" : $"autko ×{aWhiskers}",
         (aTargetId, aController) =>
-            WorldObjectCatalog.CreateCar(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, aTargetId, aController),
+            WorldObjectCatalog.CreateCar(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, aTargetId, aController, aWhiskers),
         aCommand => MathF.Min(MathF.Abs(aCommand.GetValueOrDefault(SteeringDriveActuator.ThrottlePort)), 1)
             + 0.25f * MathF.Min(MathF.Abs(aCommand.GetValueOrDefault(SteeringDriveActuator.SteerPort)), 1),
         new SeekTargetOptions
@@ -96,8 +113,14 @@ public static class SeekRigs
             ContactWeight = 2
         });
 
-    /// <summary>Rig pasujący do ciała stwora.</summary>
-    public static SeekRig For(Entity aCreature) => aCreature is CarCreature ? Car : Disk;
+    /// <summary>Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów).</summary>
+    public static SeekRig For(Entity aCreature)
+    {
+        if (aCreature is not CarCreature car)
+            return Disk;
+        var whiskers = WorldObjectCatalog.WhiskerCountOf(car);
+        return WorldObjectCatalog.IsValidWhiskerCount(whiskers) ? CarWith(whiskers) : Car;
+    }
 }
 
 /// <summary>

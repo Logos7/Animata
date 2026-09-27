@@ -24,6 +24,7 @@ public sealed class AvoidAndSeekModule : BrainModule
     private readonly string[] _rayPorts;
     private readonly string[] _inputs;
     private readonly float[] _proximity;
+    private readonly float _pushScale;
     private readonly Dictionary<string, float> _command = new()
     {
         [SteeringDriveActuator.SteerPort] = 0,
@@ -41,6 +42,10 @@ public sealed class AvoidAndSeekModule : BrainModule
         _rayAngles = aRayAngles.ToArray();
         _rayPorts = Enumerable.Range(0, _rayAngles.Length).Select(RaySensor.PortName).ToArray();
         _proximity = new float[_rayAngles.Length];
+        // Odpychanie sumuje wąsy boczne; skala sprowadza je do 4 bocznych wąsów (5 wąsów, na których dobrano AvoidGain),
+        // żeby gęstszy wachlarz nie pchał mocniej tylko dlatego, że ma więcej promieni.
+        var sideRays = _rayAngles.Count(aAngle => MathF.Abs(aAngle) > 1e-3f);
+        _pushScale = sideRays > 0 ? 4f / sideRays : 0;
         _inputs =
         [
             TargetSensor.FoundPort, TargetSensor.GapPort, TargetSensor.DirectionXPort, TargetSensor.DirectionYPort,
@@ -53,7 +58,7 @@ public sealed class AvoidAndSeekModule : BrainModule
     /// <summary>Skręt na radian różnicy między kursem a wybranym kierunkiem.</summary>
     public float SteerGain { get; set; } = 1.5f;
 
-    /// <summary>Siła odpychania od przeszkód czutych z boku (bliskość²).</summary>
+    /// <summary>Siła odpychania od przeszkód czutych z boku (bliskość², uśrednione jak dla 4 wąsów bocznych).</summary>
     public float AvoidGain { get; set; } = 4;
 
     /// <summary>Wąsy bliżej niż ten kąt (rad) od kierunku do celu decydują, czy droga jest wolna.</summary>
@@ -120,7 +125,7 @@ public sealed class AvoidAndSeekModule : BrainModule
             if (remaining > 0)
             {
                 var desired = ChooseDirection(bearing, aContext.Delta);
-                steer = Math.Clamp(desired * SteerGain + push * AvoidGain, -1, 1);
+                steer = Math.Clamp(desired * SteerGain + push * _pushScale * AvoidGain, -1, 1);
 
                 if (_reverseTime <= 0)
                 {

@@ -184,7 +184,7 @@ public sealed class CreaturePanel : StudioPanel
                         readings.GetValueOrDefault(TargetSensor.FoundPort) > 0);
                     target.Text = eye.TargetId is { } id && Session.World.Find(id) is { } found
                         ? $"cel: {StudioSession.NameOf(found)}"
-                        : "cel: brak (Insert w scenie dodaje kulkę)";
+                        : "cel: brak (w scenie: PPM → Kulka)";
                 });
                 break;
             }

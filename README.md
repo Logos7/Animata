@@ -36,7 +36,8 @@ and let it run on.
 - **World and bodies.** Entities on a plane with circle collisions. Two body types: a disc with differential drive and
   a car with front-wheel steering and a real turning radius.
 - **Senses.** An eye that tracks a target (distance, gap, direction in the creature's own frame) and whiskers: rays
-  that report how close obstacles are.
+  that report how close obstacles are. A car can have any odd number of whiskers from 1 to 25, spread over 120°;
+  its controller, its network and the hidden training copies all follow that number.
 - **Brains as graphs.** Sensor → logic → actuator graphs with validation (unknown ports, cycles, double-driven
   actuators and bad configuration are errors, not silent zeros). Logic can be a hand-written controller, a neural
   network whose inputs are small expressions over sensor ports, a router, a constant, or a **subgraph** (composite
@@ -103,11 +104,13 @@ dotnet run --project Animata.Studio
 
 | Where | Input | Action |
 | --- | --- | --- |
-| Everywhere | Double-click | Zoom into a creature, card or subgraph |
+| Everywhere | Double-click | Zoom into a creature or subgraph (cards in a creature open with a single click) |
 | Everywhere | Esc · Alt+← · mouse Back | Zoom out one level |
-| Everywhere | Space | Pause / resume the world |
-| Scene | LMB · RMB + WSADQE | Move entities · fly the camera |
-| Scene | Ins · O · Del | Add target · add post · delete |
+| Scene, creature, graph | Space | Pause / resume the world |
+| Scene | LMB drag | Move entities |
+| Scene | RMB click | Context menu: insert a car (1–25 whiskers), cylinder, target or post where you clicked; on an entity: enter, change whiskers, delete |
+| Scene | RMB drag · WSADQE · wheel | Look around · fly · fly forward/back (the wheel works like W/S) |
+| Scene | Ins · O · T · Del | Add target · add post · aim all eyes at the selected target · delete |
 | Scene | L · K | Start/stop training · random weights and retrain |
 | Scene, creature | Ctrl+S · Z | Snapshot the brain · step back through snapshots |
 | Brain graph | Drag output → input | Connect ports (grabbing a used input re-routes its wire) |

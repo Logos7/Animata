@@ -13,7 +13,8 @@ namespace Animata.Rendering.HelixToolkit;
 
 /// <summary>
 /// Widok świata w Helixie: modele encji (synchronizowane co klatkę z <see cref="Sync"/>), wąsy, zaznaczanie
-/// i przeciąganie encji lewym przyciskiem myszy, kamera latająca (<see cref="FlyCameraController"/>).
+/// i przeciąganie encji lewym przyciskiem myszy, kamera latająca (<see cref="FlyCameraController"/>),
+/// klik prawym przyciskiem (bez obracania kamerą) — <see cref="ContextRequested"/>.
 /// </summary>
 public sealed class SceneRenderer : IDisposable
 {
@@ -52,6 +53,7 @@ public sealed class SceneRenderer : IDisposable
             IsMoveEnabled = false
         };
         _cameraController = new FlyCameraController(_viewport, _camera);
+        _cameraController.ContextClicked += OnContextClicked;
         _whiskers = new WhiskerRenderer(_viewport);
         _viewport.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, true);
         _viewport.AddHandler(InputElement.PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel, true);
@@ -83,6 +85,11 @@ public sealed class SceneRenderer : IDisposable
 
     /// <summary>Dwuklik na encji — „wejdź w to”.</summary>
     public event Action<Entity>? EntityActivated;
+
+    /// <summary>
+    /// Klik prawym przyciskiem w widoku (menu podręczne). Encja pod kursorem jest już zaznaczona, zanim przyjdzie zdarzenie.
+    /// </summary>
+    public event Action<SceneContext>? ContextRequested;
 
     /// <summary>Punkt widoku (piksele viewportu), w którym widać środek encji; false, gdy jest za kamerą.</summary>
     public bool TryProject(Entity aEntity, out Point aPoint) =>
@@ -167,6 +174,7 @@ public sealed class SceneRenderer : IDisposable
         _viewport.RemoveHandler(InputElement.PointerMovedEvent, OnPointerMoved);
         _viewport.RemoveHandler(InputElement.PointerReleasedEvent, OnPointerReleased);
         _viewport.PointerCaptureLost -= OnPointerCaptureLost;
+        _cameraController.ContextClicked -= OnContextClicked;
         _cameraController.Dispose();
         _viewport.Dispose();
         _effects.Dispose();
@@ -232,6 +240,16 @@ public sealed class SceneRenderer : IDisposable
         pointer?.Capture(null);
     }
 
+    private void OnContextClicked(Point aPoint)
+    {
+        var entity = _world is not null && TryRay(aPoint, out var origin, out var direction)
+            ? ScenePicker.Pick(_world, origin, direction)
+            : null;
+        Select(entity);
+        Vector3? ground = TryGroundPoint(aPoint, 0, out var point) ? point : null;
+        ContextRequested?.Invoke(new SceneContext(aPoint, ground, entity));
+    }
+
     private bool TryRay(Point aPoint, out Vector3 aOrigin, out Vector3 aDirection) =>
         ScenePicker.TryRay(_camera, _viewport.Bounds.Size, aPoint, out aOrigin, out aDirection);
 
@@ -244,3 +262,6 @@ public sealed class SceneRenderer : IDisposable
 
     private readonly record struct ModelState(Vector3 Position, Quaternion Rotation, Vector3 Scale, Vector3 Shape);
 }
+
+/// <summary>Klik prawym przyciskiem w scenie: piksel viewportu, punkt podłoża pod kursorem (null — niebo), encja pod kursorem.</summary>
+public readonly record struct SceneContext(Point Point, Vector3? Ground, Entity? Entity);

@@ -89,6 +89,8 @@ public sealed class BodyDiagram : ThemedControl
 
         // Wąsy.
         var whiskers = _creature.Body.Sensors.OfType<RaySensor>().FirstOrDefault();
+        // Przy gęstym wachlarzu (do 25 wąsów) mniejsze kółka trafień, żeby się nie zlewały.
+        var blob = whiskers is { Angles.Count: > 7 } ? 7.0 : 14.0;
         if (whiskers is not null)
             for (var ray = 0; ray < whiskers.Angles.Count; ray++)
             {
@@ -100,7 +102,7 @@ public sealed class BodyDiagram : ThemedControl
                 var end = start + direction * reach * fraction;
                 aContext.DrawLine(Draw.Pen(hit ? StudioPalette.Bad : StudioPalette.WithAlpha(mono, 0.6), hit ? 2.5 : 1.5), start, end);
                 if (hit)
-                    aContext.DrawEllipse(Ui.Brush(StudioPalette.WithAlpha(StudioPalette.Obstacle, 0.6)), null, end + direction * 14, 14, 14);
+                    aContext.DrawEllipse(Ui.Brush(StudioPalette.WithAlpha(StudioPalette.Obstacle, 0.6)), null, end + direction * blob, blob, blob);
             }
 
         // Oko: kierunek do celu.

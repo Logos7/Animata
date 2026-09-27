@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
@@ -21,6 +22,8 @@ namespace Animata.Studio.Panels;
 /// <summary>
 /// Panel sceny: widok 3D w środku, z lewej lista encji, z prawej właściwości zaznaczonej, u dołu stan nauki.
 /// Dwuklik stwora (w 3D albo na liście) wjeżdża do niego — przejście wyrasta z miejsca, gdzie stwór jest na ekranie.
+/// Klik prawym przyciskiem w 3D otwiera menu podręczne: wstawianie stworów (autka z wybraną liczbą wąsów), kulek
+/// i słupków w miejscu kliknięcia, a na encji — wejście, wąsy, usunięcie.
 /// </summary>
 public sealed class SimulationPanel : StudioPanel, IDisposable
 {
@@ -60,6 +63,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             if (aEntity is ActiveEntity creature)
                 EnterCreature(creature);
         };
+        _renderer.ContextRequested += ShowContextMenu;
         StudioTheme.Changed += UpdateListSelection;
     }
 
@@ -123,7 +127,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         view.Children.Add(Overlay(_time, HorizontalAlignment.Left, VerticalAlignment.Top));
         view.Children.Add(Overlay(new TextBlock
         {
-            Text = "Dwuklik: wejdź w stwora · LPM: przesuń · PPM + WSADQE: kamera",
+            Text = "Dwuklik: wejdź w stwora · LPM: przesuń · PPM: menu, przytrzymany: rozglądanie · WSADQE / kółko: lot",
             FontSize = 12,
             Foreground = OverlayText
         }, HorizontalAlignment.Left, VerticalAlignment.Bottom));
@@ -392,6 +396,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 .Select(GraphCanvas.TitleOf).ToList() ?? [];
             details.Children.Add(Ui.Row("Mózg", controllers.Count > 0 ? string.Join(", ", controllers) : "—"));
             details.Children.Add(Ui.Row("Zmysły", string.Join(", ", active.Body.Sensors.Select(SensorName))));
+            if (active is CarCreature car)
+                details.Children.Add(Ui.Row("Wąsy", WhiskerPicker(car)));
             details.Children.Add(Ui.Row("Napęd", string.Join(", ", active.Body.Actuators.Select(aActuator => aActuator.GetType().Name.Replace("Actuator", string.Empty)))));
             _properties.Children.Add(details);
 
@@ -487,36 +493,22 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
     public override bool HandleKey(KeyEventArgs aEvent)
     {
-        var world = Session.World;
         switch (aEvent.Key)
         {
             case Key.Space:
                 Session.TogglePause();
                 return true;
             case Key.Delete when _renderer.SelectedEntity is { } selected:
-                Session.Remove(selected);
-                _renderer.Select(null);
-                _renderer.Sync(world);
+                RemoveEntity(selected);
                 return true;
             case Key.Insert:
-                var target = WorldObjectCatalog.CreateTargetBall(_renderer.GroundPointAtCenter());
-                world.Add(target);
-                foreach (var eye in Eyes())
-                    if (eye.TargetId is not { } id || world.Find(id) is null)
-                        eye.TargetId = target.Id;
-                _renderer.Sync(world);
-                _renderer.Select(target);
+                SelectNew(Session.AddTarget(_renderer.GroundPointAtCenter()));
                 return true;
             case Key.O:
-                var obstacle = WorldObjectCatalog.CreateObstacle(_renderer.GroundPointAtCenter());
-                world.Add(obstacle);
-                _renderer.Sync(world);
-                _renderer.Select(obstacle);
+                SelectNew(Session.AddObstacle(_renderer.GroundPointAtCenter()));
                 return true;
             case Key.T when _renderer.SelectedEntity is TargetBall chosen:
-                foreach (var eye in Eyes())
-                    eye.TargetId = chosen.Id;
-                Session.Status = $"wszystkie oczy patrzą na: {StudioSession.NameOf(chosen)}";
+                Session.AimAllEyes(chosen);
                 return true;
             case Key.L:
                 Session.ToggleTraining(TrainingScope());
@@ -538,8 +530,112 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         }
     }
 
-    private IEnumerable<TargetSensor> Eyes() =>
-        Session.Creatures.SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>());
+    // ---------- menu podręczne i wstawianie ----------
+
+    private void ShowContextMenu(SceneContext aContext)
+    {
+        if (Navigator?.Active != this)
+            return;
+        var at = aContext.Ground ?? _renderer.GroundPointAtCenter();
+        var menu = new ContextMenu();
+
+        if (aContext.Entity is { } entity && Session.World.Contains(entity))
+        {
+            menu.Items.Add(new MenuItem { Header = StudioSession.NameOf(entity), IsEnabled = false });
+            if (entity is ActiveEntity { Brain: not null } creature)
+                menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
+            if (entity is CarCreature car)
+            {
+                var count = WorldObjectCatalog.WhiskerCountOf(car);
+                menu.Items.Add(WhiskerMenu($"Wąsy: {count}", Icons.Whiskers, count, aCount => SetWhiskers(car, aCount)));
+            }
+            if (entity is TargetBall ball)
+                menu.Items.Add(Item("Wszystkie oczy na tę kulkę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
+            menu.Items.Add(Item("Usuń", Icons.Trash, () => RemoveEntity(entity), Key.Delete));
+            menu.Items.Add(new Separator());
+        }
+
+        menu.Items.Add(new MenuItem { Header = "Wstaw tutaj", IsEnabled = false });
+        menu.Items.Add(WhiskerMenu("Autko — sterownik", Icons.Brain, 0,
+            aCount => SelectNew(Session.AddCreature(CreatureKind.ControllerCar, at, aCount))));
+        menu.Items.Add(WhiskerMenu("Autko — sieć neuronowa", Icons.Neural, 0,
+            aCount => SelectNew(Session.AddCreature(CreatureKind.NeuralCar, at, aCount))));
+        menu.Items.Add(Item("Walec — sterownik", Icons.Brain, () => SelectNew(Session.AddCreature(CreatureKind.ControllerCylinder, at))));
+        menu.Items.Add(Item("Walec — sieć neuronowa", Icons.Neural, () => SelectNew(Session.AddCreature(CreatureKind.NeuralCylinder, at))));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Kulka (cel)", Icons.Target, () => SelectNew(Session.AddTarget(at)), Key.Insert));
+        menu.Items.Add(Item("Słupek", Icons.Pillar, () => SelectNew(Session.AddObstacle(at)), Key.O));
+
+        menu.Open(_renderer.View);
+    }
+
+    private static MenuItem Item(string aHeader, string aIcon, Action aClick, Key? aKey = null)
+    {
+        var item = new MenuItem { Header = aHeader, Icon = Ui.Icon(aIcon, 14) };
+        if (aKey is { } key)
+            item.InputGesture = new KeyGesture(key);
+        item.Click += (_, _) => aClick();
+        return item;
+    }
+
+    /// <summary>Podmenu liczby wąsów (1, 3, …, 25); <paramref name="aCurrent"/> dostaje znacznik (0 — żadna).</summary>
+    private static MenuItem WhiskerMenu(string aHeader, string aIcon, int aCurrent, Action<int> aChoose)
+    {
+        var parent = new MenuItem { Header = aHeader, Icon = Ui.Icon(aIcon, 14) };
+        foreach (var count in WorldObjectCatalog.WhiskerCounts)
+        {
+            var chosen = count;
+            var item = new MenuItem
+            {
+                Header = StudioSession.Whiskers(count) + (count == WorldObjectCatalog.DefaultWhiskers ? " (domyślnie)" : string.Empty),
+                Icon = count == aCurrent ? Ui.Icon(Icons.Check, 14, "Studio.Accent") : null
+            };
+            item.Click += (_, _) => aChoose(chosen);
+            parent.Items.Add(item);
+        }
+        return parent;
+    }
+
+    /// <summary>Lista liczby wąsów we właściwościach autka; zmiana przebudowuje autko (nowy mózg).</summary>
+    private Control WhiskerPicker(CarCreature aCar)
+    {
+        var picker = new ComboBox
+        {
+            ItemsSource = WorldObjectCatalog.WhiskerCounts,
+            SelectedItem = WorldObjectCatalog.WhiskerCountOf(aCar),
+            MinWidth = 110
+        };
+        ToolTip.SetTip(picker, "Zmiana przebudowuje autko: ten sam rodzaj mózgu, ale od nowa (sieć uczy się od zera).");
+        picker.SelectionChanged += (_, _) =>
+        {
+            if (picker.SelectedItem is int count && count != WorldObjectCatalog.WhiskerCountOf(aCar))
+                // Po zakończeniu obsługi zdarzenia: przebudowa odświeża panel właściwości razem z tą listą.
+                Dispatcher.UIThread.Post(() => SetWhiskers(aCar, count));
+        };
+        return picker;
+    }
+
+    private void SetWhiskers(CarCreature aCar, int aCount)
+    {
+        if (!Session.World.Contains(aCar))
+            return;
+        if (Session.SetWhiskers(aCar, aCount) is { } rebuilt)
+            SelectNew(rebuilt);
+    }
+
+    private void SelectNew(Entity aEntity)
+    {
+        _renderer.Sync(Session.World);
+        _renderer.Select(aEntity);
+        _propertiesBuilt = false;
+    }
+
+    private void RemoveEntity(Entity aEntity)
+    {
+        Session.Remove(aEntity);
+        _renderer.Select(null);
+        _renderer.Sync(Session.World);
+    }
 
     public void Dispose()
     {

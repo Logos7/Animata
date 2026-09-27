@@ -1,10 +1,22 @@
+using System.Numerics;
 using Animata.Core.Brains;
+using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
+using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
 
 namespace Animata.Studio.Session;
+
+/// <summary>Stwory, które da się wstawić do sceny.</summary>
+public enum CreatureKind
+{
+    ControllerCar,
+    NeuralCar,
+    ControllerCylinder,
+    NeuralCylinder
+}
 
 /// <summary>
 /// Stan aplikacji niezależny od paneli: świat, symulacja (pauza, prędkość, błąd mózgu), nauka i snapshoty.
@@ -208,6 +220,135 @@ public sealed class StudioSession : IDisposable
     }
 
     // ---------- świat ----------
+
+    public static bool IsCar(CreatureKind aKind) => aKind is CreatureKind.ControllerCar or CreatureKind.NeuralCar;
+
+    public static string KindName(CreatureKind aKind) => aKind switch
+    {
+        CreatureKind.ControllerCar => "Autko sterownik",
+        CreatureKind.NeuralCar => "Autko NN",
+        CreatureKind.ControllerCylinder => "Walec sterownik",
+        _ => "Walec NN"
+    };
+
+    /// <summary>„1 wąs”, „3 wąsy”, „5 wąsów”, „23 wąsy”.</summary>
+    public static string Whiskers(int aCount)
+    {
+        var word = aCount == 1 ? "wąs"
+            : aCount % 10 is >= 2 and <= 4 && aCount % 100 is not (>= 12 and <= 14) ? "wąsy"
+            : "wąsów";
+        return $"{aCount} {word}";
+    }
+
+    /// <summary>
+    /// Wstawia stwora w punkcie podłoża: patrzy na najbliższą kulkę i na nią poluje. Stwór z siecią od razu się uczy
+    /// (jak fioletowe w demo). Autko dostaje <paramref name="aWhiskers"/> wąsów (nieparzyście, 1…25).
+    /// </summary>
+    public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition, int aWhiskers = WorldObjectCatalog.DefaultWhiskers)
+    {
+        var position = aPosition with { Z = 0 };
+        var target = NearestTarget(position);
+        var yaw = target is null ? 0 : MathF.Atan2(target.Body.Position.Y - position.Y, target.Body.Position.X - position.X);
+        ActiveEntity creature = aKind switch
+        {
+            CreatureKind.ControllerCar => WorldObjectCatalog.CreateControllerCar(position, yaw, target?.Id, aWhiskers),
+            CreatureKind.NeuralCar => WorldObjectCatalog.CreateNeuralCar(position, yaw, target?.Id, aWhiskers),
+            CreatureKind.ControllerCylinder => WorldObjectCatalog.CreateControllerSeeker(position, target?.Id),
+            _ => WorldObjectCatalog.CreateLearningSeeker(position, target?.Id)
+        };
+        creature.Body.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw);
+        var name = KindName(aKind);
+        if (IsCar(aKind) && aWhiskers != WorldObjectCatalog.DefaultWhiskers)
+            name += $" ×{aWhiskers}";
+        creature.Name = UniqueName(name);
+        World.Add(creature);
+        if (TrainingController.FindNetwork(creature) is not null)
+            Training.Start(creature);
+        Status = target is null ? $"dodano: {creature.Name} (brak kulki — dodaj cel)" : $"dodano: {creature.Name}";
+        return creature;
+    }
+
+    /// <summary>Nowa kulka; oczy, które nie mają celu (albo ich cel zniknął), patrzą na nią.</summary>
+    public TargetBall AddTarget(Vector3 aPosition)
+    {
+        var target = WorldObjectCatalog.CreateTargetBall(aPosition with { Z = 0 });
+        target.Name = UniqueName("Kulka");
+        World.Add(target);
+        foreach (var eye in Creatures.SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>()))
+            if (eye.TargetId is not { } id || World.Find(id) is null)
+                eye.TargetId = target.Id;
+        Status = $"dodano: {target.Name}";
+        return target;
+    }
+
+    public Obstacle AddObstacle(Vector3 aPosition)
+    {
+        var obstacle = WorldObjectCatalog.CreateObstacle(aPosition with { Z = 0 });
+        World.Add(obstacle);
+        Status = "dodano słupek";
+        return obstacle;
+    }
+
+    /// <summary>Wszystkie oczy patrzą na podaną kulkę.</summary>
+    public void AimAllEyes(TargetBall aTarget)
+    {
+        foreach (var eye in Creatures.SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>()))
+            eye.TargetId = aTarget.Id;
+        Status = $"wszystkie oczy patrzą na: {NameOf(aTarget)}";
+    }
+
+    /// <summary>
+    /// Przebudowuje autko z inną liczbą wąsów: nowe ciało i nowy mózg tego samego rodzaju (sterownik albo sieć),
+    /// w tym samym miejscu, z tą samą nazwą, kolorem i celem. Liczba wejść sieci się zmienia, więc wagi, snapshoty
+    /// i edycje grafu przepadają. Zwraca nowe autko albo null, gdy mózgu nie da się odtworzyć (ani sieci, ani AvoidAndSeek).
+    /// </summary>
+    public CarCreature? SetWhiskers(CarCreature aCar, int aWhiskers)
+    {
+        if (!WorldObjectCatalog.IsValidWhiskerCount(aWhiskers))
+        {
+            Status = $"autko ma nieparzystą liczbę wąsów od 1 do {WorldObjectCatalog.MaxWhiskers}";
+            return null;
+        }
+        if (WorldObjectCatalog.WhiskerCountOf(aCar) == aWhiskers)
+            return aCar;
+
+        var neural = TrainingController.FindNetwork(aCar) is not null;
+        if (!neural && aCar.Brain?.Graph.Descendants().OfType<AvoidAndSeekModule>().Any() != true)
+        {
+            Status = "tego mózgu nie umiem przebudować (brak sieci i AvoidAndSeek)";
+            return null;
+        }
+
+        var heading = Vector3.Transform(Vector3.UnitX, aCar.Body.Rotation);
+        var yaw = MathF.Atan2(heading.Y, heading.X);
+        var targetId = aCar.Body.Sensors.OfType<TargetSensor>().FirstOrDefault()?.TargetId;
+        var car = neural
+            ? WorldObjectCatalog.CreateNeuralCar(aCar.Body.Position, yaw, targetId, aWhiskers)
+            : WorldObjectCatalog.CreateControllerCar(aCar.Body.Position, yaw, targetId, aWhiskers);
+        car.Name = aCar.Name;
+        car.Color = aCar.Color;
+
+        Remove(aCar);
+        World.Add(car);
+        if (neural)
+            Training.Start(car);
+        Status = $"{NameOf(car)}: {Whiskers(aWhiskers)}" + (neural ? " — nowa sieć, nauka od zera" : string.Empty);
+        return car;
+    }
+
+    private TargetBall? NearestTarget(Vector3 aPosition) => World.Entities.OfType<TargetBall>()
+        .MinBy(aTarget => Vector3.DistanceSquared(aTarget.Body.Position, aPosition));
+
+    private string UniqueName(string aName)
+    {
+        var taken = World.Entities.Select(aEntity => aEntity.Name).ToHashSet();
+        if (!taken.Contains(aName))
+            return aName;
+        var number = 2;
+        while (taken.Contains($"{aName} {number}"))
+            number++;
+        return $"{aName} {number}";
+    }
 
     public void Remove(Entity aEntity)
     {
