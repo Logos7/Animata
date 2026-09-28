@@ -44,5 +44,7 @@ jobs:
                 Write-Output ("::error::" + ($block -join ' | '))
               }
             }
+            $tail = (Get-Content test.log -Tail 40 | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ' | '
+            Write-Output "::error::tail: $tail"
             exit 1
           }
