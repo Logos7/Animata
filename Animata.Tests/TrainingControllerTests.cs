@@ -98,7 +98,7 @@ public class TrainingControllerTests : IDisposable
         training.Stop(brain);
 
         Assert.NotEqual(original, network.Network.GetParameters());
-        Assert.True(brain.Snapshots.Any(aSnapshot => Parameters(aSnapshot).SequenceEqual(original)));
+        Assert.Contains(brain.Snapshots, aSnapshot => Parameters(aSnapshot).SequenceEqual(original));
         AssertNoConsecutiveDuplicates(brain);
     }
 

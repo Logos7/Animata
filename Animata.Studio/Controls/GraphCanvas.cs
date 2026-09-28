@@ -326,8 +326,8 @@ public sealed class GraphCanvas : ThemedControl
         // Nagłówek.
         aContext.DrawLine(Draw.Pen(P.Stroke), new Point(rect.X, rect.Y + HeaderHeight), new Point(rect.Right, rect.Y + HeaderHeight));
         DrawIcon(aContext, IconOf(aModule), new Point(rect.X + 10, rect.Y + 9), color);
-        Draw.Text(aContext, Clip(TitleOf(aModule), 17), new Point(rect.X + 30, rect.Y + HeaderHeight / 2), 12, P.Text, aBold: true);
-        Draw.Text(aContext, Clip(SubtitleOf(aModule), 10), new Point(rect.Right - 10, rect.Y + HeaderHeight / 2), 10, P.Text3, TextAnchor.Right);
+        Draw.Text(aContext, Shorten(TitleOf(aModule), 17), new Point(rect.X + 30, rect.Y + HeaderHeight / 2), 12, P.Text, aBold: true);
+        Draw.Text(aContext, Shorten(SubtitleOf(aModule), 10), new Point(rect.Right - 10, rect.Y + HeaderHeight / 2), 10, P.Text3, TextAnchor.Right);
 
         // Porty.
         var inputs = aModule.InputPorts;
@@ -342,7 +342,7 @@ public sealed class GraphCanvas : ThemedControl
                 var connected = Graph.Connections.Any(aLink => aLink.TargetId == aModule.Id && aLink.TargetPort == port);
                 DrawPin(aContext, new Point(rect.X, y), connected, aModule is ActuatorModule or SubgraphOutputModule ? P.WireCommand : P.Accent,
                     new PinRef(aModule, port, false));
-                Draw.Text(aContext, Clip(port, oneSided ? 14 : 11), new Point(rect.X + 12, y), 11.5, P.Text2);
+                Draw.Text(aContext, Shorten(port, oneSided ? 14 : 11), new Point(rect.X + 12, y), 11.5, P.Text2);
                 if (oneSided && InputValue(aModule, port) is { } value)
                     Draw.Text(aContext, Ui.F(value), new Point(rect.Right - 12, y), 11, P.Text, TextAnchor.Right, aMono: true);
             }
@@ -353,12 +353,12 @@ public sealed class GraphCanvas : ThemedControl
                 DrawPin(aContext, new Point(rect.Right, y), connected, IsData(aModule) ? P.Accent : P.WireCommand, new PinRef(aModule, port, true));
                 if (oneSided)
                 {
-                    Draw.Text(aContext, Clip(port, 14), new Point(rect.X + 12, y), 11.5, P.Text2);
+                    Draw.Text(aContext, Shorten(port, 14), new Point(rect.X + 12, y), 11.5, P.Text2);
                     if (OutputValue(aModule, port) is { } value)
                         Draw.Text(aContext, Ui.F(value), new Point(rect.Right - 12, y), 11, P.Text, TextAnchor.Right, aMono: true);
                 }
                 else
-                    Draw.Text(aContext, Clip(port, 11), new Point(rect.Right - 12, y), 11.5, P.Text, TextAnchor.Right);
+                    Draw.Text(aContext, Shorten(port, 11), new Point(rect.Right - 12, y), 11.5, P.Text, TextAnchor.Right);
             }
         }
     }
@@ -392,7 +392,7 @@ public sealed class GraphCanvas : ThemedControl
             aContext.DrawGeometry(null, Draw.Pen(aColor, 1.6), geometry);
     }
 
-    private static string Clip(string aText, int aMax) => aText.Length <= aMax ? aText : aText[..(aMax - 1)] + "…";
+    private static string Shorten(string aText, int aMax) => aText.Length <= aMax ? aText : aText[..(aMax - 1)] + "…";
 
     // ---------- trafianie ----------
 
