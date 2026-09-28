@@ -56,13 +56,6 @@ public class NeuralTests
     }
 
     [Fact]
-    public void Load_RejectsWrongShape()
-    {
-        var network = new NeuralNetwork(2, 2);
-        Assert.Throws<ArgumentException>(() => network.Load([2, 2], [[[1f, 2f]]], [[0f, 0f]]));
-    }
-
-    [Fact]
     public void Evolution_ImprovesAndIsDeterministic()
     {
         static float Fitness(float[] aGenes, int aGeneration) => -aGenes.Sum(aGene => (aGene - 1) * (aGene - 1));

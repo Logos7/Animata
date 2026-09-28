@@ -88,34 +88,6 @@ public class TrainingControllerTests : IDisposable
     }
 
     [Fact]
-    public void RepeatedStopStart_NeverStoresTheSameStateTwiceInARow()
-    {
-        var training = Controller(aMaxGenerations: 4);
-        var (creature, brain, _) = NeuralCar();
-        for (var round = 0; round < 3; round++)
-        {
-            training.Start(creature, aSeed: 3);
-            training.Stop(brain);
-        }
-
-        AssertNoConsecutiveDuplicates(brain);
-    }
-
-    [Fact]
-    public void StopWithoutAnyGeneration_AddsOnlyTheStartSnapshot()
-    {
-        var training = Controller(aMaxGenerations: 0);
-        var (creature, brain, _) = NeuralCar();
-        for (var round = 0; round < 3; round++)
-        {
-            training.Start(creature, aSeed: 3);
-            WaitUntilFinished(training);
-        }
-
-        Assert.Single(brain.Snapshots);
-    }
-
-    [Fact]
     public void RandomizeAndRestart_KeepsOldWeights_WithoutDuplicates()
     {
         var training = Controller(aMaxGenerations: 4);

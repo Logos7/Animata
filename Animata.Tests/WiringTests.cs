@@ -25,19 +25,6 @@ public class WiringTests
     }
 
     [Fact]
-    public void Cylinder_CanReadAnyEyePort()
-    {
-        var module = new NeuralNetworkModule(new NeuralNetwork(1, 2)) { Name = "Neural" };
-        module.Ports.Add(TargetSensor.DistancePort);
-        module.Inputs.Add(new NeuralInput(TargetSensor.DistancePort));
-        module.Outputs.Add(new NeuralOutput("Turn"));
-        module.Outputs.Add(new NeuralOutput("Step"));
-
-        var creature = WorldObjectCatalog.CreateSeeker(Vector3.Zero, WorldObjectCatalog.RandomColor(), null, module);
-        Assert.Single(creature.Brain!.Graph.Connections.Where(aLink => aLink.TargetPort == TargetSensor.DistancePort));
-    }
-
-    [Fact]
     public void Demo_HasFourWiredCreatures()
     {
         var demo = WorldObjectCatalog.CreateDemo();

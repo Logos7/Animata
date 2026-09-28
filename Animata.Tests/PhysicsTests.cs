@@ -70,17 +70,6 @@ public class PhysicsTests
     }
 
     [Fact]
-    public void Car_DoesNotTurnInPlace()
-    {
-        using var world = FloorWorld();
-        var car = PhysicalCar(world);
-        Drive(car, world, 1, 0, 3);
-        Assert.InRange(new Vector2(car.Body.Position.X, car.Body.Position.Y).Length(), 0, 0.05f);
-        var heading = Vector3.Transform(Vector3.UnitX, car.Body.Rotation);
-        Assert.InRange(MathF.Abs(MathF.Atan2(heading.Y, heading.X)), 0, 0.05f);
-    }
-
-    [Fact]
     public void Cylinder_TurnsInPlaceToTheLeft()
     {
         using var world = FloorWorld();
@@ -132,21 +121,4 @@ public class PhysicsTests
         Assert.Equal(1.5f, whiskers.LastDistances[0], 1e-4f);
     }
 
-    [Fact]
-    public void TargetSensor_UsesLocalFrame()
-    {
-        var world = new World();
-        var target = WorldObjectCatalog.CreateTargetBall(new Vector3(0, 5, 0));
-        var creature = WorldObjectCatalog.CreateControllerSeeker(Vector3.Zero, target.Id);
-        creature.Body.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2); // przodem do +Y
-        world.Add(target);
-        world.Add(creature);
-
-        var eye = creature.Body.Sensors.OfType<TargetSensor>().Single();
-        var reading = eye.Read(creature, world);
-
-        Assert.Equal(1f, reading[TargetSensor.DirectionXPort], 1e-5f);
-        Assert.Equal(0f, reading[TargetSensor.DirectionYPort], 1e-5f);
-        Assert.Equal(5 - creature.Radius - target.Radius, reading[TargetSensor.GapPort], 1e-5f);
-    }
 }

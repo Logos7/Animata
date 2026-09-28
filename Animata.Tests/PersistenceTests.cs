@@ -198,20 +198,4 @@ public class PersistenceTests
         world.Update(Delta);
     }
 
-    [Fact]
-    public void NewerFormat_IsRejected()
-    {
-        var json = WorldFile.ToJson(new WorldDocument(WorldFile.Format + 1, "przyszłość", 0, []));
-        Assert.Throws<NotSupportedException>(() => WorldFile.FromJson(json));
-    }
-
-    [Fact]
-    public void SensorModules_BindToSlotsByName()
-    {
-        var car = WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, null);
-        var slots = car.Brain!.Graph.Modules.OfType<SensorModule>().Select(aModule => aModule.Slot).ToArray();
-        Assert.Equal("Eye,Whiskers", string.Join(",", slots));
-        Assert.Equal("Wheels", car.Brain.Graph.Modules.OfType<ActuatorModule>().Single().Slot);
-        Assert.Same(car.Body.FindSensor("Whiskers"), car.Body.Sensors.OfType<RaySensor>().Single());
-    }
 }

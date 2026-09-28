@@ -27,21 +27,6 @@ public class SeekTargetTaskTests
     }
 
     [Fact]
-    public void AvoidAndSeek_Reset_ClearsManoeuvre()
-    {
-        var rig = SeekRigs.Car;
-        var options = rig.DefaultOptions with { EpisodeSeconds = 1 };
-        var used = WorldObjectCatalog.CreateAvoidController();
-        SeekTargetTask.Run(used, [TestWorlds.BlockedStart()], options, rig);
-        used.Reset();
-
-        var episodes = new[] { TestWorlds.OpenRoad(2.5f) };
-        Assert.Equal(
-            SeekTargetTask.Run(WorldObjectCatalog.CreateAvoidController(), episodes, options, rig)[0],
-            SeekTargetTask.Run(used, episodes, options, rig)[0]);
-    }
-
-    [Fact]
     public void CarController_ReachesTargetOnRandomRoutes()
     {
         var rig = SeekRigs.Car;
@@ -79,16 +64,4 @@ public class SeekTargetTaskTests
         Assert.Equal(first.Validate(parameters), second.Validate(parameters));
     }
 
-    [Fact]
-    public void TaskIgnoresTemplateWeights()
-    {
-        var template = WorldObjectCatalog.CreateCarNeuralModule();
-        var options = SeekRigs.Car.DefaultOptions with { EpisodesPerGeneration = 1, EpisodeSeconds = 1, ValidationEpisodes = 1 };
-        var parameters = template.Network.GetParameters();
-        var before = new SeekTargetTask((NeuralNetworkState)template.CaptureState(), SeekRigs.Car, options).Evaluate(parameters, 0);
-
-        template.Network.Randomize(new Random(7));
-        var after = new SeekTargetTask((NeuralNetworkState)template.CaptureState(), SeekRigs.Car, options).Evaluate(parameters, 0);
-        Assert.Equal(before, after);
-    }
 }

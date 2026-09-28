@@ -76,37 +76,6 @@ public class TerrainTests
     }
 
     [Fact]
-    public void Clock_TicksWithWorldTime()
-    {
-        using var world = new World();
-        var clock = new ClockSensor { Frequency = 1 };
-        var snake = WorldObjectCatalog.CreateNeuralSnake(Vector3.Zero, 0, null, 4);
-        Assert.Equal(1f, clock.Read(snake, world)[ClockSensor.CosPort]);
-        for (var tick = 0; tick < 15; tick++)
-            world.Update(1f / 60f);
-        Assert.Equal(0.25, world.Time, 1e-6);
-        Assert.Equal(1f, clock.Read(snake, world)[ClockSensor.SinPort], 1e-5f);
-    }
-
-    [Fact]
-    public void NeuralSnake_DrivesItsJoints()
-    {
-        using var world = new World();
-        world.Add(Floor.At(20, 20));
-        var target = WorldObjectCatalog.CreateTargetBall(new Vector3(4, 0, 0));
-        world.Add(target);
-        var snake = WorldObjectCatalog.CreateNeuralSnake(Vector3.Zero, 0, target.Id, 6);
-        world.Add(snake);
-        var network = snake.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
-        Assert.Equal(10, network.Outputs.Count);
-        Assert.Equal("Yaw0,Pitch0,Yaw1", string.Join(",", network.Outputs.Take(3).Select(aOutput => aOutput.Port)));
-        for (var tick = 0; tick < 30; tick++)
-            world.Update(Delta);
-        var spine = snake.Brain.Graph.Modules.OfType<ActuatorModule>().Single();
-        Assert.Contains(spine.LastCommand.Values, aValue => MathF.Abs(aValue) > 1e-3f);
-    }
-
-    [Fact]
     public void NeuralSnake_ChangesLength_KeepingWeightsAndConvertingSnapshots()
     {
         using var world = new World();

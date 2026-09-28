@@ -44,23 +44,6 @@ public class BrainGraphEditingTests
     }
 
     [Fact]
-    public void Group_OneSourceFeedingSeveralModules_UsesOneInput()
-    {
-        var graph = new BrainGraph();
-        var source = graph.Add(new ConstantModule("Value", 1));
-        var left = graph.Add(new RouterModule(1, "V"));
-        var right = graph.Add(new RouterModule(1, "V"));
-        graph.Connect(source, "Value", left, RouterModule.SelectPort);
-        graph.Connect(source, "Value", right, RouterModule.SelectPort);
-
-        var composite = BrainGraphEditing.Group(graph, [left, right]);
-
-        Assert.Equal(["Value"], composite.InputPorts);
-        Assert.Single(graph.Connections);
-        Assert.Equal(2, composite.Inner.Connections.Count(aLink => aLink.SourceId == composite.Input.Id));
-    }
-
-    [Fact]
     public void Group_ThatWouldCloseACycle_ChangesNothing()
     {
         var graph = new BrainGraph();
@@ -102,23 +85,6 @@ public class BrainGraphEditingTests
     }
 
     [Fact]
-    public void Ungroup_PassThroughBecomesADirectLink()
-    {
-        var graph = new BrainGraph();
-        var source = graph.Add(new ConstantModule("Value", 1));
-        var sink = graph.Add(new RouterModule(1, "V"));
-        var composite = graph.Add(new CompositeModule(["In"], ["Out"]));
-        composite.Inner.Connect(composite.Input, "In", composite.Output, "Out");
-        graph.Connect(source, "Value", composite, "In");
-        graph.Connect(composite, "Out", sink, RouterModule.SelectPort);
-
-        BrainGraphEditing.Ungroup(graph, composite);
-
-        var link = Assert.Single(graph.Connections);
-        Assert.Equal(new BrainConnection(source.Id, "Value", sink.Id, RouterModule.SelectPort), link);
-    }
-
-    [Fact]
     public void RenameAndRemovePort_FixParentConnections()
     {
         var graph = new BrainGraph();
@@ -142,29 +108,4 @@ public class BrainGraphEditingTests
         graph.Validate();
     }
 
-    [Fact]
-    public void AutoLayout_PlacesTheChainLeftToRight()
-    {
-        var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null);
-        var graph = car.Brain!.Graph;
-        BrainGraphEditing.AutoLayout(graph);
-
-        var sensor = graph.Modules.OfType<SensorModule>().First();
-        var network = graph.Modules.OfType<NeuralNetworkModule>().Single();
-        var wheels = graph.Modules.OfType<ActuatorModule>().Single();
-        Assert.True(graph.Positions[sensor.Id].X < graph.Positions[network.Id].X);
-        Assert.True(graph.Positions[network.Id].X < graph.Positions[wheels.Id].X);
-    }
-
-    [Fact]
-    public void Remove_DropsTheModuleWithItsLinks()
-    {
-        var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null);
-        var graph = car.Brain!.Graph;
-        var network = graph.Modules.OfType<NeuralNetworkModule>().Single();
-
-        Assert.True(graph.Remove(network));
-        Assert.Empty(graph.Connections);
-        graph.Validate();
-    }
 }

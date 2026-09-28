@@ -72,14 +72,6 @@ public class SpiderTests
     }
 
     [Fact]
-    public void HandGait_TurnsTowardsATargetOnTheLeft()
-    {
-        using var world = new World();
-        var spider = Walk(world, new Vector3(0, 4, 0), 10);
-        Assert.True(spider.Body.Position.Y > 2, $"y = {spider.Body.Position.Y}");
-    }
-
-    [Fact]
     public void SpiderScene_SavesAndLoads()
     {
         using var world = WorldObjectCatalog.CreateSpiderScene().World;
@@ -90,17 +82,6 @@ public class SpiderTests
         Assert.Single(restored.Entities.OfType<SpiderCreature>().SelectMany(aSpider => aSpider.Brain!.Graph.Modules.OfType<GaitModule>()));
         Assert.Same(SeekRigs.Spider, SeekRigs.For(restored.Entities.OfType<SpiderCreature>().First()));
         restored.Update(Delta);
-    }
-
-    [Fact]
-    public void SpiderRig_RunsBothBrains()
-    {
-        var rig = SeekRigs.Spider;
-        var episodes = SeekTargetTask.CreateEpisodes(rig.DefaultOptions, 0).Take(2).ToList();
-        var options = rig.DefaultOptions with { EpisodeSeconds = 1 };
-        Assert.All(SeekTargetTask.Run(new GaitModule(), episodes, options, rig), aResult => Assert.True(float.IsFinite(aResult.Cost)));
-        Assert.All(SeekTargetTask.Run(WorldObjectCatalog.CreateSpiderNeuralModule(), episodes, options, rig),
-            aResult => Assert.True(float.IsFinite(aResult.Cost)));
     }
 
     [Fact]

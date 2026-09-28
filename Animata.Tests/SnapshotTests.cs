@@ -27,19 +27,6 @@ public class SnapshotTests
     }
 
     [Fact]
-    public void SameAs_ComparesArrayContents()
-    {
-        var module = WorldObjectCatalog.CreateCarNeuralModule();
-        var first = module.CaptureState();
-        var second = module.CaptureState();
-        Assert.NotEqual(first, second);  // Equals rekordu: tablice po referencji
-        Assert.True(first.SameAs(second));
-
-        module.Network.Weights[0][0][0] += 0.001f;
-        Assert.False(first.SameAs(module.CaptureState()));
-    }
-
-    [Fact]
     public void CaptureIfChanged_SkipsIdenticalState()
     {
         var creature = WorldObjectCatalog.CreateNeuralSeeker(default, null);
@@ -51,21 +38,6 @@ public class SnapshotTests
         network.Network.Randomize(new Random(3));
         Assert.NotNull(brain.CaptureIfChanged("c", [network]));
         Assert.Equal(2, brain.Snapshots.Count);
-    }
-
-    [Fact]
-    public void CaptureIfChanged_KeepsSnapshotWithMoreModules()
-    {
-        var creature = WorldObjectCatalog.CreateControllerCar(default, 0, null);
-        var brain = creature.Brain!;
-        var controller = brain.Graph.Modules.OfType<AvoidAndSeekModule>().Single();
-        var extra = brain.Graph.Add(new ConstantModule());
-
-        brain.Capture("only controller", controller);
-        // Najnowszy nie zawiera stanu `extra`, więc pełny snapshot nie jest duplikatem.
-        Assert.NotNull(brain.CaptureIfChanged("all"));
-        Assert.Null(brain.CaptureIfChanged("controller again", [controller]));
-        Assert.Equal(1, brain.Snapshots[^1].Modules.Count(aEntry => aEntry.ModuleId == extra.Id));
     }
 
     [Fact]

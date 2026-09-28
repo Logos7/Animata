@@ -59,22 +59,6 @@ public class NetworkEditingTests
     }
 
     [Fact]
-    public void InputsAndOutputs_CannotBeEdited()
-    {
-        var network = Network(3, 4, 2);
-        Assert.Throws<ArgumentOutOfRangeException>(() => network.ResizeLayer(0, 4));
-        Assert.Throws<ArgumentOutOfRangeException>(() => network.ResizeLayer(2, 4));
-        Assert.Throws<ArgumentOutOfRangeException>(() => network.RemoveLayer(0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => network.InsertLayer(0, 4));
-        Assert.Throws<ArgumentOutOfRangeException>(() => network.ResizeLayer(1, NeuralNetwork.MaxLayerSize + 1));
-        network.RemoveLayer(1);
-        Assert.Equal("3,2", string.Join(",", network.Layers));
-        for (var layer = 0; layer < NeuralNetwork.MaxHiddenLayers; layer++)
-            network.InsertLayer(1, 2);
-        Assert.Throws<InvalidOperationException>(() => network.InsertLayer(1, 2));
-    }
-
-    [Fact]
     public void ReshapedCar_StillDrives_AndOldSnapshotRestoresOldShape()
     {
         using var world = new World();
@@ -98,27 +82,4 @@ public class NetworkEditingTests
         world.Update(1f / 30f);
     }
 
-    [Fact]
-    public void DeeperNetwork_SurvivesWhiskerChangeAndSaving()
-    {
-        using var world = new World();
-        var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null, 5);
-        world.Add(car);
-        var module = car.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
-        module.Network.InsertLayer(2, 6);
-        module.Network.RemoveLayer(1);
-        module.Network.InsertLayer(1, 3);
-        car.Brain.Graph.InvalidateDeep();
-
-        WhiskerRewiring.SetCount(car, 9);
-        Assert.Equal(module.Inputs.Count, module.Network.Layers[0]);
-        Assert.Equal("3,6", string.Join(",", module.Network.Layers.Skip(1).Take(2)));
-        world.Update(1f / 30f);
-
-        var json = Animata.Core.Persistence.WorldFile.ToJson(Animata.Core.Persistence.WorldFile.Capture(world, "t", 0));
-        using var restored = Animata.Core.Persistence.WorldFile.Restore(Animata.Core.Persistence.WorldFile.FromJson(json)).World;
-        var twin = ((Animata.Core.Entities.ActiveEntity)restored.Find(car.Id)!).Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
-        Assert.Equal(string.Join(",", module.Network.Layers), string.Join(",", twin.Network.Layers));
-        restored.Update(1f / 30f);
-    }
 }

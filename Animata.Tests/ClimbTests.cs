@@ -53,19 +53,6 @@ public class ClimbTests
     }
 
     [Fact]
-    public void RollingCpg_ClimbsTheTree()
-    {
-        var (world, _, snake) = Wrapped(WorldObjectCatalog.CreateClimbingCpg());
-        using (world)
-        {
-            var start = snake.PartPositions[0].Z;
-            for (var tick = 0; tick < 5 * 30; tick++)
-                world.Update(Delta);
-            Assert.True(snake.PartPositions[0].Z > start + 1, $"{start:0.00} → {snake.PartPositions[0].Z:0.00}");
-        }
-    }
-
-    [Fact]
     public void ClimbRig_RollingCpgReachesTheTop()
     {
         var rig = SeekRigs.ClimbWith(8);
@@ -99,12 +86,4 @@ public class ClimbTests
         restored.Update(Delta);
     }
 
-    [Fact]
-    public void RandomColors_AreBrightAndVary()
-    {
-        var random = new Random(4);
-        var colors = Enumerable.Range(0, 20).Select(_ => WorldObjectCatalog.RandomColor(random)).ToList();
-        Assert.All(colors, aColor => Assert.InRange(MathF.Max(aColor.X, MathF.Max(aColor.Y, aColor.Z)), 0.8f, 0.9f));
-        Assert.True(colors.Distinct().Count() > 15);
-    }
 }

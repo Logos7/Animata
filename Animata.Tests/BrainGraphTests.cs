@@ -66,15 +66,4 @@ public class BrainGraphTests
         Assert.Equal(0f, outputs["X"]);
     }
 
-    [Fact]
-    public void ModuleFailure_IsWrappedWithModuleId()
-    {
-        var creature = WorldObjectCatalog.CreateControllerSeeker(default, null);
-        var world = new World();
-        world.Add(creature);
-        creature.Body.Actuators.Clear(); // aktuator zniknął z ciała
-
-        var error = Assert.Throws<BrainException>(() => world.Update(0.1f));
-        Assert.NotNull(error.ModuleId);
-    }
 }

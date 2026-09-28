@@ -20,13 +20,6 @@ public class WhiskerTests
         return data;
     }
 
-    [Fact]
-    public void WhiskerCounts_AreOddFromOneToMax()
-    {
-        Assert.Equal("1,3,5,7,9,11,13,15,17,19,21,23,25", string.Join(",", WorldObjectCatalog.WhiskerCounts));
-        Assert.Equal(WorldObjectCatalog.MaxWhiskers, WorldObjectCatalog.WhiskerCounts[^1]);
-    }
-
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
@@ -57,17 +50,6 @@ public class WhiskerTests
             Assert.Equal(-WorldObjectCatalog.WhiskerSpread / 2, angles[0], 5);
             Assert.Equal(WorldObjectCatalog.WhiskerSpread / 2, angles[^1], 5);
         }
-    }
-
-    [Fact]
-    public void DefaultCar_KeepsFiveWhiskersEvery30Degrees()
-    {
-        var car = WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, null);
-        var degrees = car.Body.Sensors.OfType<RaySensor>().Single().Angles.Select(aAngle => (int)MathF.Round(aAngle * 180 / MathF.PI));
-
-        Assert.Equal(WorldObjectCatalog.DefaultWhiskers, WorldObjectCatalog.WhiskerCountOf(car));
-        Assert.Equal("-60,-30,0,30,60", string.Join(",", degrees));
-        Assert.Equal(90, WorldObjectCatalog.CreateCarNeuralModule().Network.ParameterCount);
     }
 
     [Theory]

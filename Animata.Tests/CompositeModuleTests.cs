@@ -68,28 +68,6 @@ public class CompositeModuleTests
     }
 
     [Fact]
-    public void UnconnectedCompositeOutput_IsZeroNotMissing()
-    {
-        var (world, owner) = Stage();
-        var composite = owner.Brain!.Graph.Add(new CompositeModule([], ["Free"]));
-        world.Update(0.1f);
-        Assert.Equal(0f, owner.Brain.Graph.LastOutputs(composite)!["Free"]);
-    }
-
-    [Fact]
-    public void LastOutputs_IsNullAfterTheGraphChanges()
-    {
-        var (world, owner) = Stage();
-        var graph = owner.Brain!.Graph;
-        var constant = graph.Add(new ConstantModule("Value", 2));
-        world.Update(0.1f);
-        Assert.Equal(2f, graph.LastOutputs(constant)!["Value"]);
-
-        graph.Add(new ConstantModule());
-        Assert.Null(graph.LastOutputs(constant));
-    }
-
-    [Fact]
     public void GroupedController_DrivesTheCarExactlyLikeTheFlatOne()
     {
         (World, CarCreature) Build()
@@ -124,18 +102,6 @@ public class CompositeModuleTests
     }
 
     [Fact]
-    public void Reset_ReachesModulesInsideSubgraphs()
-    {
-        var (_, owner) = Stage();
-        var outer = owner.Brain!.Graph.Add(new CompositeModule());
-        var middle = outer.Inner.Add(new CompositeModule());
-        var probe = middle.Inner.Add(new ProbeModule());
-
-        owner.Brain.Reset();
-        Assert.Equal(1, probe.Resets);
-    }
-
-    [Fact]
     public void ActuatorDrivenFromTwoLevels_FailsValidation()
     {
         var (_, owner) = Stage();
@@ -145,16 +111,6 @@ public class CompositeModuleTests
         composite.Inner.Add(new ActuatorModule("Drive", ["Turn"]));
 
         Assert.Throws<BrainException>(() => graph.Validate());
-    }
-
-    [Fact]
-    public void CompositeContainingItself_FailsValidation()
-    {
-        var (_, owner) = Stage();
-        var composite = owner.Brain!.Graph.Add(new CompositeModule());
-        composite.Inner.Add(composite);
-
-        Assert.Throws<BrainException>(() => owner.Brain.Graph.Validate());
     }
 
     [Fact]

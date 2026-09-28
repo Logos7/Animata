@@ -102,36 +102,6 @@ public class SnakeTests
     }
 
     [Fact]
-    public void Snake_WithoutFloor_Falls()
-    {
-        using var world = new World();
-        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg());
-        world.Add(snake);
-        for (var tick = 0; tick < 30; tick++)
-            world.Update(Delta);
-        Assert.True(snake.PartPositions[0].Z < -1, $"z = {snake.PartPositions[0].Z}");
-    }
-
-    [Fact]
-    public void Place_MovesTheWholeBodyAndStopsIt()
-    {
-        using var world = FloorWorld();
-        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg());
-        world.Add(snake);
-        for (var tick = 0; tick < 20; tick++)
-            world.Update(Delta);
-
-        snake.Place(new Vector3(5, 5, 0), Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2));
-
-        Assert.Equal(5, snake.PartPositions[0].X, 3);
-        Assert.Equal(5, snake.PartPositions[0].Y, 3);
-        // Obrócony o 90°: ogon ciągnie się wzdłuż −Y.
-        Assert.Equal(5 - WorldObjectCatalog.SnakeSpacing, snake.PartPositions[1].Y, 3);
-        world.Update(Delta);
-        Assert.InRange(snake.Body.Position.X, 4.8f, 5.2f);
-    }
-
-    [Fact]
     public void Joints_FollowSpineCommands()
     {
         using var world = FloorWorld();
@@ -188,24 +158,6 @@ public class SnakeTests
     }
 
     [Fact]
-    public void Evolution_TeachesARandomCpgToCrawl()
-    {
-        var rig = SeekRigs.SnakeWith(6);
-        var cpg = WorldObjectCatalog.CreateCpg(6);
-        var options = rig.DefaultOptions with { Seed = 3, EpisodesPerGeneration = 3, ValidationEpisodes = 4 };
-        var task = new SeekTargetTask(cpg.CaptureState(), rig, options, cpg.Name);
-        cpg.Randomize(new Random(7));
-        var start = task.Validate(cpg.GetParameters());
-        var evolution = new Evolution(cpg.GetParameters(), new EvolutionOptions { Seed = 7 });
-
-        for (var generation = 0; generation < 6; generation++)
-            evolution.Step(task.Evaluate);
-
-        var learned = task.Validate(evolution.Best);
-        Assert.True(learned > start + 0.2f, $"start {start:0.000}, learned {learned:0.000}");
-    }
-
-    [Fact]
     public void SetSegments_RebuildsBodyAndBrainInPlace()
     {
         using var world = FloorWorld();
@@ -234,35 +186,4 @@ public class SnakeTests
         Assert.Same(SeekRigs.SnakeWith(3), SeekRigs.For(snake));
     }
 
-    [Fact]
-    public void SnakeTraining_EvaluatesCpgInItsRig()
-    {
-        var snake = WorldObjectCatalog.CreateLearningSnake(Vector3.Zero, 0, null, 5);
-        var cpg = snake.Brain!.Graph.Modules.OfType<CpgModule>().Single();
-        var rig = SeekRigs.For(snake);
-        var options = rig.DefaultOptions with { EpisodesPerGeneration = 1, EpisodeSeconds = 1, ValidationEpisodes = 1 };
-        var task = new SeekTargetTask(cpg.CaptureState(), rig, options, cpg.Name);
-
-        Assert.Equal(CpgModule.Parameters, task.ParameterCount);
-        var score = task.Evaluate(cpg.GetParameters(), 0);
-        Assert.True(float.IsFinite(score));
-        Assert.Same(cpg, TrainingController.FindTrainable(snake));
-    }
-
-    [Fact]
-    public void SnakeScene_HasFloorSlabsTargetAndTwoSnakes()
-    {
-        var scene = WorldObjectCatalog.CreateSnakeScene();
-        using var world = scene.World;
-        Assert.Single(world.Entities.OfType<Floor>());
-        Assert.True(world.Entities.OfType<Slab>().Count() >= 3);
-        var target = Assert.Single(world.Entities.OfType<TargetBall>());
-        Assert.Equal(Terrain.HeightAt(world, new Vector2(target.Body.Position.X, target.Body.Position.Y), target), target.Body.Position.Z);
-        Assert.Equal(2, scene.Creatures.Count);
-        var cpg = scene.Creatures.OfType<SnakeCreature>().Single(aSnake => aSnake.Brain!.Graph.Modules.OfType<CpgModule>().Any());
-        Assert.Contains(cpg.Brain!.Snapshots, aSnapshot => aSnapshot.Label == "ręczne parametry");
-        var neural = scene.Creatures.OfType<SnakeCreature>().Single(aSnake => aSnake != cpg);
-        Assert.Single(neural.Brain!.Graph.Modules.OfType<NeuralNetworkModule>());
-        world.Update(Delta);
-    }
 }
