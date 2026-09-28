@@ -122,7 +122,7 @@ Roughly in this direction, one experiment at a time:
 
 | Project | What it is |
 | --- | --- |
-| `Animata.Core` | Model, bodies (incl. bodies from blocks), sensors, actuators, brains, collisions, physics (BepuPhysics 2), training, snapshots, graph editing, saving. No UI. |
+| `Animata.Core` | Model, bodies (incl. bodies from blocks), sensors, actuators, brains, physics (BepuPhysics 2), training, snapshots, graph editing, saving. No UI. |
 | `Animata.Rendering.HelixToolkit` | 3D scene: meshes, picking, dragging, whisker rays, fly camera. |
 | `Animata.Studio` | Desktop app: zoomable panels, scene, creature view, brain graph editor, themes. |
 | `Animata.Tests` | xUnit tests for the core. |
