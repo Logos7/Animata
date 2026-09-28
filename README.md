@@ -138,11 +138,17 @@ Roughly in this direction, one experiment at a time:
 
 Requirements: **.NET 10 SDK**. The Studio uses HelixToolkit's SharpDX renderer, so it runs on **Windows**.
 
+BepuPhysics is built from source as a git submodule (`external/bepuphysics2`), because the NuGet
+2.5.0-beta.29 still has an old friction bug the creatures' gaits would feel. Clone with submodules:
+
 ```powershell
+git clone --recursive https://github.com/Logos7/Animata.git   # or, in an existing clone: git submodule update --init
 dotnet build
 dotnet test Animata.Tests
 dotnet run --project Animata.Studio
 ```
+
+CI (GitHub Actions, `.github/workflows/build.yml`) builds the whole solution and runs the tests on Windows and Linux for every push.
 
 ### Studio controls
 

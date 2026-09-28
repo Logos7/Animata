@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="BepuPhysics" Version="2.5.0-beta.29" />
+    <!-- Bepu ze źródeł (submoduł): NuGet 2.5.0-beta.29 ma stary błąd tarcia w rozmaitościach wypukłych,
+         a ruch węża i pająka jest dostrojony do poprawionej fizyki. -->
+    <ProjectReference Include="..\external\bepuphysics2\BepuPhysics\BepuPhysics.csproj" />
+    <ProjectReference Include="..\external\bepuphysics2\BepuUtilities\BepuUtilities.csproj" />
   </ItemGroup>
 </Project>
