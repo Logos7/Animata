@@ -7,10 +7,8 @@ namespace Animata.Core.Worlds;
 /// Świat. Tick przebiega w fazach, żeby kolejność encji na liście nie miała znaczenia:
 /// 1. Think — wszystkie mózgi czytają sensory i liczą komendy (świat jest jeszcze niezmieniony),
 /// 2. Act — wszystkie mózgi wysyłają komendy do aktuatorów,
-/// 3. Physics — krok Bepu (tylko gdy świat ma fizykę, patrz <see cref="Physics"/>),
-/// 4. Collisions — rozsunięcie nakładających się encji bez fizyki (okręgi w XY),
-/// 5. Update — procesy ciał,
-/// 6. dodania i usunięcia zlecone w trakcie ticku są stosowane na końcu.
+/// 3. Physics — krok Bepu (tylko gdy świat ma fizykę, patrz <see cref="Physics"/>): ruch, kontakty, zderzenia,
+/// 4. dodania i usunięcia zlecone w trakcie ticku są stosowane na końcu.
 /// Świat z fizyką trzyma pamięć natywną — trzeba go zwolnić (<see cref="Dispose"/>).
 /// </summary>
 public sealed class World : IDisposable
@@ -23,8 +21,6 @@ public sealed class World : IDisposable
     private bool _updating;
 
     public IReadOnlyList<Entity> Entities => _entities;
-
-    public CollisionSystem Collisions { get; } = new();
 
     /// <summary>
     /// Fizyka brył (Bepu) albo null. Powstaje przy dodaniu pierwszej encji dynamicznej (<see cref="IPhysicalEntity.IsDynamic"/>);
@@ -95,11 +91,6 @@ public sealed class World : IDisposable
                     entity.AfterPhysicsStep(physics);
             }
 
-            Collisions.Resolve(_entities);
-
-            foreach (var entity in _entities)
-                if (entity is ActiveEntity active)
-                    active.Update(aDelta);
             Time += aDelta;
         }
         finally

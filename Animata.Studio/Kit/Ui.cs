@@ -46,10 +46,8 @@ public static class Icons
     public const string Fit = "M2 6V2H6M10 2H14V6M14 10V14H10M6 14H2V10";
     public const string Group = "M2 2H14V14H2ZM5 5H8V8H5ZM9 8H11V11H9Z";
     public const string Ungroup = "M2 2H7V7H2ZM9 9H14V14H9Z";
-    public const string Search = "M7 12A5 5 0 1 1 7 2A5 5 0 1 1 7 12M11 11L14 14";
     public const string Target = "M13 8A5 5 0 1 1 3 8A5 5 0 1 1 13 8M10 8A2 2 0 1 1 6 8A2 2 0 1 1 10 8";
     public const string Pillar = "M4 4A4 1.5 0 1 1 12 4A4 1.5 0 1 1 4 4M4 4V12A4 1.5 0 0 0 12 12V4";
-    public const string Home = "M2.5 7.5L8 3L13.5 7.5M4 6.5V13H12V6.5";
     public const string Save = "M3 2.5H11L13.5 5V13.5H2.5V2.5ZM5 2.5V6H10V2.5M5 13.5V9.5H11V13.5";
     public const string Open = "M2 4.5V13H13L14.5 7H4.5L2 13M2 4.5H6L7.5 6H12.5V7";
     public const string Snake = "M2 11C4 11 4 7 6 7S8 11 10 11S12 7 14 7M14 7L14.8 6.2";
@@ -269,7 +267,6 @@ public static class Ui
     public static Border Separator() => new Border { Width = 1, Height = 24, Margin = new Thickness(6, 0) }
         .Res(Border.BackgroundProperty, "Studio.Stroke2");
 
-    public static Border HLine() => new Border { Height = 1 }.Res(Border.BackgroundProperty, "Studio.Stroke");
 
     public static StackPanel HStack(double aSpacing, params Control[] aChildren)
     {

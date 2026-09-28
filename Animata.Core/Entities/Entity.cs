@@ -29,9 +29,6 @@ public abstract class Entity
     /// <summary>Promień obrysu w płaszczyźnie ruchu, już przemnożony przez skalę ciała.</summary>
     public virtual float BoundingRadius => 0;
 
-    /// <summary>Czy kolizje mogą przesuwać tę encję.</summary>
-    public virtual bool IsMovable => true;
-
     /// <summary>Kategoria widziana przez zmysły (np. wąsy filtrują po niej).</summary>
     public virtual EntityCategory Category => EntityCategory.None;
 
@@ -40,9 +37,6 @@ public abstract class Entity
     /// UI jej nie przesuwa i nie usuwa, picking w 3D jej nie łapie.
     /// </summary>
     public virtual bool IsFixed => false;
-
-    /// <summary>Ruch encji liczy silnik fizyki (Bepu), więc prosty system kolizji okręgów ją pomija.</summary>
-    public virtual bool UsesPhysics => false;
 
     /// <summary>
     /// Stawia encję w nowym miejscu (np. przeciągnięcie myszą, początek próby w nauce). Ciało złożone z części

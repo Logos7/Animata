@@ -110,7 +110,6 @@ public sealed class PanelNavigator : Panel
 
     public IReadOnlyList<StudioPanel> Stack => _stack;
     public StudioPanel? Active => _stack.Count > 0 ? _stack[^1] : null;
-    public bool IsAnimating => _transition is not null;
 
     /// <summary>Zmieniła się ścieżka (wejście albo powrót).</summary>
     public event Action? Navigated;

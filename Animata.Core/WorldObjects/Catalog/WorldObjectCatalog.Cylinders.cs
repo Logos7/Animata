@@ -18,7 +18,7 @@ public static partial class WorldObjectCatalog
     /// Turn ≈ tanh(2·tanh(3·DirectionY)), Step ≈ tanh(2·tanh(2·Gap) + 2·tanh(3·DirectionX) − 2).
     /// Step spada do zera przy styku z celem i gdy cel jest z boku lub z tyłu.
     /// </summary>
-    public static NeuralNetworkModule CreateNeuralModule()
+    public static NeuralNetworkModule CreateCylinderNeuralModule()
     {
         var module = new NeuralNetworkModule(new NeuralNetwork(3, 6, 2)) { Name = "Neural" };
         module.Ports.AddRange(TargetPorts);
@@ -65,7 +65,7 @@ public static partial class WorldObjectCatalog
         CreateSeeker(aPosition, ControllerColor, aTargetId, new ApproachTargetModule { Name = "Approach" });
 
     public static CylinderCreature CreateNeuralSeeker(Vector3 aPosition, Guid? aTargetId) =>
-        CreateSeeker(aPosition, NeuralColor, aTargetId, CreateNeuralModule());
+        CreateSeeker(aPosition, NeuralColor, aTargetId, CreateCylinderNeuralModule());
 
     /// <summary>
     /// Walec z siecią gotową do nauki: ręczne wagi zapisane w mózgu jako snapshot „ręczne wagi”, sieć wylosowana.

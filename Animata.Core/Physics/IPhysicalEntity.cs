@@ -3,7 +3,7 @@ namespace Animata.Core.Physics;
 /// <summary>
 /// Encja, która ma postać w <see cref="PhysicsWorld"/> (Bepu). Świat podpina ją, gdy fizyka istnieje,
 /// a fizykę tworzy przy pierwszej encji dynamicznej. Kolejność w ticku: Think → Act → <see cref="BeforePhysicsStep"/>
-/// → krok fizyki → <see cref="AfterPhysicsStep"/> → kolizje okręgów (dla encji bez fizyki) → Update.
+/// → krok fizyki → <see cref="AfterPhysicsStep"/>.
 /// </summary>
 public interface IPhysicalEntity
 {

@@ -70,8 +70,6 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         StudioTheme.Changed += UpdateListSelection;
     }
 
-    public SceneRenderer Renderer => _renderer;
-
     public override bool KeepAlive => true;
 
     protected override Control Build()
@@ -467,8 +465,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         else
         {
             var category = Ui.VStack(2, Ui.Header("Szczegóły"),
-                Ui.Row("Kategoria", entity.Category.ToString()),
-                Ui.Row("Ruchoma", entity.IsMovable ? "tak" : "nie (kolizje jej nie przesuwają)"));
+                Ui.Row("Kategoria", entity.Category.ToString()));
             _properties.Children.Add(category);
         }
     }

@@ -14,6 +14,9 @@ namespace Animata.Rendering.HelixToolkit;
 /// </summary>
 internal static class ScenePicker
 {
+    /// <summary>Nadwozie autka wisi na kołach: dół na wysokości promienia koła (hitbox autka to walec od ziemi).</summary>
+    private const float CarClearance = 0.13f;
+
     /// <summary>
     /// Promień przez punkt ekranu. Układ prawoskrętny (LookAtRH): prawo = przód × góra, jak w FlyCameraController —
     /// odwrotna kolejność (góra × przód) daje lustro w poziomie i przeciąganie po skosie „obraca się” o 90°.
@@ -90,7 +93,7 @@ internal static class ScenePicker
                 TargetBall target => HitBall(target, aOrigin, aDirection),
                 CylinderCreature cylinder => HitCylinder(cylinder.Body, cylinder.Radius, cylinder.Height, aOrigin, aDirection),
                 CarCreature car => HitCylinder(car.Body, 0.5f * MathF.Max(car.Length, car.Width),
-                    SceneMeshes.CarClearance + car.Height, aOrigin, aDirection),
+                    CarClearance + car.Height, aOrigin, aDirection),
                 Obstacle obstacle => HitCylinder(obstacle.Body, obstacle.Radius, obstacle.Height, aOrigin, aDirection),
                 Slab slab => HitSlab(slab, aOrigin, aDirection),
                 ArticulatedCreature body => HitParts(body, aOrigin, aDirection),

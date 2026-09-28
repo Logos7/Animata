@@ -33,7 +33,7 @@ public static class WhiskerRewiring
             return;
 
         var brain = aCreature.Brain;
-        var graphs = brain is null ? new List<BrainGraph>() : GraphsOf(brain.Graph).ToList();
+        var graphs = brain is null ? new List<BrainGraph>() : PortRewiring.GraphsOf(brain.Graph).ToList();
 
         // 1. Wszystko, co może rzucić, zanim cokolwiek się zmieni.
         var networks = graphs.SelectMany(aGraph => aGraph.Modules.OfType<NeuralNetworkModule>())
@@ -60,7 +60,7 @@ public static class WhiskerRewiring
 
         // 3. Połączenia, snapshoty, kompilacja.
         foreach (var (graph, pairs) in fed)
-            Rewire(graph, pairs);
+            PortRewiring.Rewire(graph, pairs);
         if (brain is null)
             return;
         foreach (var (old, converted) in snapshots)
@@ -71,15 +71,6 @@ public static class WhiskerRewiring
         brain.Graph.InvalidateDeep();
         brain.Graph.Validate();
         brain.Reset();
-    }
-
-    /// <summary>Graf i wszystkie podgrafy (rekurencyjnie).</summary>
-    private static IEnumerable<BrainGraph> GraphsOf(BrainGraph aGraph)
-    {
-        yield return aGraph;
-        foreach (var composite in aGraph.Modules.OfType<CompositeModule>())
-            foreach (var inner in GraphsOf(composite.Inner))
-                yield return inner;
     }
 
     /// <summary>Pary (węzeł sensora, moduł) połączone wąsem „port do portu tej samej nazwy” (Ray3 → Ray3).</summary>
@@ -95,20 +86,6 @@ public static class WhiskerRewiring
                 pairs.Add((source, target));
         }
         return pairs;
-    }
-
-    private static void Rewire(BrainGraph aGraph, List<(BrainModule Source, BrainModule Target)> aPairs)
-    {
-        aGraph.Connections.RemoveAll(aLink =>
-            aGraph.Find(aLink.SourceId) is { } source && aGraph.Find(aLink.TargetId) is { } target &&
-            (!source.OutputPorts.Contains(aLink.SourcePort) || !target.InputPorts.Contains(aLink.TargetPort)));
-
-        foreach (var (source, target) in aPairs)
-            foreach (var port in source.OutputPorts)
-                if (target.InputPorts.Contains(port) &&
-                    !aGraph.Connections.Any(aLink => aLink.TargetId == target.Id && aLink.TargetPort == port))
-                    aGraph.Connect(source, port, target, port);
-        aGraph.Invalidate();
     }
 
     // ---------- sieć ----------

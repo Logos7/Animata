@@ -67,8 +67,6 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
 
     public override float BoundingRadius => Plan.Root.Radius;
 
-    public override bool UsesPhysics => true;
-
     public override EntityCategory Category => EntityCategory.Creature;
 
     public int JointCount => Plan.Joints.Count;
@@ -101,9 +99,6 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         _wheelSpeed[aJoint] = joint.Driven && float.IsFinite(aSpeed) ? aSpeed : 0;
         _wheelTorque[aJoint] = joint.Driven && float.IsFinite(aTorque) ? MathF.Max(0, aTorque) : 0;
     }
-
-    /// <summary>Bieżący kąt skrętu koła (rad) — do rysowania.</summary>
-    public float WheelSteer(int aJoint) => _wheelSteer[aJoint];
 
     /// <summary>Zadaje staw kulowy: ułamki [-1, 1] zakresu (MaxYaw, MaxPitch z planu). Działa od następnego kroku fizyki.</summary>
     public void SetJointTarget(int aJoint, float aYaw, float aPitch)

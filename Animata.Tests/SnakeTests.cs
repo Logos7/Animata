@@ -25,7 +25,7 @@ public class SnakeTests
     // ---------- podłoga ----------
 
     [Fact]
-    public void Floor_IsFixed_InvisibleToWhiskers_AndIgnoredByCircleCollisions()
+    public void Floor_IsFixed_AndInvisibleToWhiskers()
     {
         using var world = new World();
         var floor = Floor.At(10, 10);

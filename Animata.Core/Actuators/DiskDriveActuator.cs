@@ -1,10 +1,9 @@
-using System.Numerics;
 using Animata.Core.Entities;
 
 namespace Animata.Core.Actuators;
 
 /// <summary>
-/// Napęd różnicowy na płaszczyźnie XY.
+/// Napęd różnicowy stwora z części: koła po lewej i prawej dostają różne prędkości (skręt w miejscu).
 /// Turn ∈ [-1, 1] — ułamek maksymalnej prędkości obrotu (dodatni = w lewo, CCW).
 /// Step ∈ [0, 1] — ułamek maksymalnej prędkości jazdy do przodu.
 /// </summary>
@@ -42,21 +41,11 @@ public sealed class DiskDriveActuator : Actuator
             throw new ArgumentOutOfRangeException(nameof(aCommands), "Drive commands must be finite.");
 
         // Ciało z części: napęd różnicowy — koło po lewej (Y > 0) wolniej przy skręcie w lewo, po prawej szybciej.
-        if (aOwner is ArticulatedCreature body)
-        {
-            var forward = Math.Clamp(step, 0, 1) * MathF.Max(0, MaxSpeed);
-            var rate = Math.Clamp(turn, -1, 1) * MathF.Max(0, MaxTurnSpeed);
-            for (var joint = 0; joint < body.JointCount; joint++)
-                body.SetWheelTarget(joint, 0, forward - rate * body.Plan.Joints[joint].Anchor.Y, DriveTorque);
+        if (aOwner is not ArticulatedCreature body)
             return;
-        }
-
-        var angle = Math.Clamp(turn, -1, 1) * MathF.Max(0, MaxTurnSpeed) * aDelta;
-        var distance = Math.Clamp(step, 0, 1) * MathF.Max(0, MaxSpeed) * aDelta;
-
-        var heading = Vector3.Transform(Vector3.UnitX, aOwner.Body.Rotation);
-        var yaw = MathF.Atan2(heading.Y, heading.X) + angle;
-        aOwner.Body.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw);
-        aOwner.Body.Position += new Vector3(MathF.Cos(yaw), MathF.Sin(yaw), 0) * distance;
+        var forward = Math.Clamp(step, 0, 1) * MathF.Max(0, MaxSpeed);
+        var rate = Math.Clamp(turn, -1, 1) * MathF.Max(0, MaxTurnSpeed);
+        for (var joint = 0; joint < body.JointCount; joint++)
+            body.SetWheelTarget(joint, 0, forward - rate * body.Plan.Joints[joint].Anchor.Y, DriveTorque);
     }
 }

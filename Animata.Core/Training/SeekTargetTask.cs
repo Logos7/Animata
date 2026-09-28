@@ -95,6 +95,17 @@ public sealed record SeekRig(
 
 public static class SeekRigs
 {
+    /// <summary>Wysiłek stwora ze stawami: średnia wielkość komend (każda przycięta do 1).</summary>
+    private static float AverageCommand(IReadOnlyDictionary<string, float> aCommand)
+    {
+        if (aCommand.Count == 0)
+            return 0;
+        var total = 0f;
+        foreach (var value in aCommand.Values)
+            total += MathF.Min(MathF.Abs(value), 1);
+        return total / aCommand.Count;
+    }
+
     /// <summary>Podłoga prób: wszystkie stwory są bryłami w fizyce, więc muszą na czymś stać.</summary>
     private static void AddFloor(World aWorld) => aWorld.Add(Floor.At(60, 60));
 
@@ -160,15 +171,7 @@ public static class SeekRigs
         $"wąż ×{aSegments}",
         (aTargetId, aController) =>
             WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, aTargetId, aController, aSegments),
-        aCommand =>
-        {
-            if (aCommand.Count == 0)
-                return 0;
-            var total = 0f;
-            foreach (var value in aCommand.Values)
-                total += MathF.Min(MathF.Abs(value), 1);
-            return total / aCommand.Count;
-        },
+        AverageCommand,
         new SeekTargetOptions
         {
             EpisodesPerGeneration = 6,
@@ -189,15 +192,7 @@ public static class SeekRigs
         "pająk",
         (aTargetId, aController) =>
             WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, WorldObjectCatalog.SpiderColor, aTargetId, aController),
-        aCommand =>
-        {
-            if (aCommand.Count == 0)
-                return 0;
-            var total = 0f;
-            foreach (var value in aCommand.Values)
-                total += MathF.Min(MathF.Abs(value), 1);
-            return total / aCommand.Count;
-        },
+        AverageCommand,
         new SeekTargetOptions
         {
             EpisodesPerGeneration = 6,
@@ -276,7 +271,7 @@ public static class SeekRigs
 
     private static bool SameSettings(SteeringDriveActuator aA, SteeringDriveActuator aB) =>
         aA.MaxSpeed == aB.MaxSpeed && aA.MaxReverseSpeed == aB.MaxReverseSpeed && aA.MaxSteerAngle == aB.MaxSteerAngle &&
-        aA.WheelBase == aB.WheelBase && aA.DriveTorque == aB.DriveTorque;
+        aA.DriveTorque == aB.DriveTorque;
 
     private static bool SameSettings(DiskDriveActuator aA, DiskDriveActuator aB) =>
         aA.MaxSpeed == aB.MaxSpeed && aA.MaxTurnSpeed == aB.MaxTurnSpeed && aA.DriveTorque == aB.DriveTorque;

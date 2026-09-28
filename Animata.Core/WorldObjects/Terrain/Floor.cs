@@ -9,9 +9,8 @@ namespace Animata.Core.WorldObjects;
 
 /// <summary>
 /// Podłoga: prostopadłościan wyrównany do osi (AABB), środek w <see cref="Body"/>.Position, wymiary <see cref="Size"/>.
-/// Całkowicie nieruszalna (<see cref="Entity.IsFixed"/>): nie przesuwa jej mysz, panel, kolizje ani fizyka.
-/// W fizyce (Bepu) jest statycznym pudłem, po którym chodzą ciała; prosty system kolizji okręgów jej nie widzi
-/// (promień 0), wąsy też nie (kategoria <see cref="EntityCategory.Ground"/>).
+/// Całkowicie nieruszalna (<see cref="Entity.IsFixed"/>): nie przesuwa jej mysz, panel ani fizyka.
+/// W fizyce (Bepu) jest statycznym pudłem, po którym chodzą ciała; wąsy jej nie widzą (kategoria <see cref="EntityCategory.Ground"/>).
 /// </summary>
 public sealed class Floor : StaticEntity, IPhysicalEntity
 {

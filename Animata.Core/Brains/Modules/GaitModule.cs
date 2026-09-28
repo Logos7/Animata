@@ -46,8 +46,6 @@ public sealed class GaitModule : BrainModule, ITrainableModule
     public float Frequency { get; set; } = 2.5f;
     public float TurnGain { get; set; } = 1.5f;
 
-    public float Phase => _phase;
-
     public override IReadOnlyList<string> InputPorts => Inputs;
     public override IReadOnlyList<string> OutputPorts => Outputs;
 

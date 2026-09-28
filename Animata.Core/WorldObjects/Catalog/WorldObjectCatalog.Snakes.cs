@@ -109,7 +109,7 @@ public static partial class WorldObjectCatalog
             "Found * DirectionY", "Found * DirectionX", "Found * DirectionZ", "Found * Gap / 4",
             FeelSensor.AheadPort, FeelSensor.HeadPitchPort
         ];
-        var outputs = SnakeNetworkOutputs(aSegments - 1);
+        var outputs = JointNetworkOutputs(aSegments - 1);
         var hidden = aHidden.Length > 0 ? aHidden : SnakeHiddenLayers;
         var module = new NeuralNetworkModule(new NeuralNetwork([inputs.Length, .. hidden, outputs.Length])) { Name = "Neural" };
         module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetPorts, TargetSensor.DirectionZPort,
@@ -126,10 +126,6 @@ public static partial class WorldObjectCatalog
 
     /// <summary>Domyślne warstwy ukryte sieci węża.</summary>
     public static readonly int[] SnakeHiddenLayers = [8];
-
-    /// <summary>Wyjścia sieci węża: Yaw0, Pitch0, Yaw1, Pitch1, …</summary>
-    public static string[] SnakeNetworkOutputs(int aJoints) =>
-        [.. Enumerable.Range(0, aJoints).SelectMany(aJoint => new[] { SpineActuator.YawPort(aJoint), SpineActuator.PitchPort(aJoint) })];
 
     /// <summary>Wąż z własną siecią neuronową (losowe wagi) — uczy się pełzać bez gotowego CPG, z zegarem rytmu.</summary>
     public static SnakeCreature CreateNeuralSnake(Vector3 aPosition, float aYaw, Guid? aTargetId, int aSegments = DefaultSnakeSegments) =>

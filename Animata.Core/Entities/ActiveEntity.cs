@@ -3,10 +3,7 @@ using Animata.Core.Brains;
 
 namespace Animata.Core.Entities;
 
-/// <summary>
-/// Encja z mózgiem. Mózg steruje ciałem przez aktuatory;
-/// <see cref="Update"/> to miejsce na procesy samego ciała (fizyka, metabolizm), niezależne od mózgu.
-/// </summary>
+/// <summary>Encja z mózgiem. Mózg steruje ciałem przez aktuatory.</summary>
 public abstract class ActiveEntity : Entity
 {
     protected ActiveEntity(Body aBody, Brain? aBrain = null) : base(aBody)
@@ -15,8 +12,4 @@ public abstract class ActiveEntity : Entity
     }
 
     public Brain? Brain { get; }
-
-    public virtual void Update(float aDelta)
-    {
-    }
 }

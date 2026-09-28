@@ -41,9 +41,6 @@ public sealed class CpgModule : BrainModule, ITrainableModule
     public float PitchAmplitude { get; set; }
     public float PitchPhase { get; set; } = MathF.PI / 2;
 
-    /// <summary>Bieżąca faza fali (rad) — do podglądu.</summary>
-    public float Phase => _phase;
-
     public override IReadOnlyList<string> InputPorts => Inputs;
     public override IReadOnlyList<string> OutputPorts => _ports;
 

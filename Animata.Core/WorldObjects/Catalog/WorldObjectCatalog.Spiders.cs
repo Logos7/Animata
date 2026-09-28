@@ -61,7 +61,7 @@ public static partial class WorldObjectCatalog
         string[] basic = [ClockSensor.SinPort, ClockSensor.CosPort, "Found * DirectionY", "Found * DirectionX", "Found * Gap / 4"];
         string[] senses = aSenses ? [.. SpiderTouchPorts, FeelSensor.HeadPitchPort, FeelSensor.HeadRollPort] : [];
         string[] inputs = [.. basic, .. senses];
-        var outputs = SnakeNetworkOutputs(GaitModule.Joints);
+        var outputs = JointNetworkOutputs(GaitModule.Joints);
         var module = new NeuralNetworkModule(new NeuralNetwork(inputs.Length, 10, outputs.Length)) { Name = "Neural" };
         module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetPorts, .. senses]);
         module.Inputs.AddRange(inputs.Select(aExpression => new NeuralInput(aExpression)));

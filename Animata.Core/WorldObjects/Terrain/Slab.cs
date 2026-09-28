@@ -11,7 +11,7 @@ namespace Animata.Core.WorldObjects;
 /// Płyta — płaska przeszkoda terenu: prostopadłościan leżący na Body.Position (środek spodu), wymiary <see cref="Size"/>
 /// (szerokość X × głębokość Y × wysokość Z w układzie płyty), obrót wokół pionu z Body.Rotation.
 /// Stwory w fizyce wchodzą na nią, obchodzą ją albo się o nią zatrzymują. Wąsy jej nie widzą (kategoria
-/// <see cref="EntityCategory.Ground"/> — to teren, nie słupek), kolizje okręgów też nie (promień 0).
+/// <see cref="EntityCategory.Ground"/> — to teren, nie słupek).
 /// Da się ją przesuwać i zmieniać; w fizyce odtwarza się przed następnym krokiem.
 /// </summary>
 public sealed class Slab : StaticEntity, IPhysicalEntity

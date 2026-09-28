@@ -24,9 +24,6 @@ public sealed class TouchSensor : Sensor
 
     public override IReadOnlyList<string> OutputPorts => _ports;
 
-    /// <summary>Nazwa części czującej dany port.</summary>
-    public string PartOf(string aPort) => _parts[Array.IndexOf(_ports, aPort)];
-
     public override IReadOnlyDictionary<string, float> Read(Entity aOwner, World aWorld)
     {
         if (aOwner is not ArticulatedCreature creature)
