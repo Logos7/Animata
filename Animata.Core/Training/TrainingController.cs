@@ -41,6 +41,20 @@ public sealed class TrainingController : IDisposable
 
     public int Count => _sessions.Count;
 
+    /// <summary>Wstrzymuje (true) albo wznawia wszystkie nauki tego kontrolera — także te uruchomione później.</summary>
+    public bool Paused
+    {
+        get => _paused;
+        set
+        {
+            _paused = value;
+            foreach (var session in _sessions)
+                session.Trainer.Paused = value;
+        }
+    }
+
+    private bool _paused;
+
     public bool IsTraining(Brain aBrain) => SessionOf(aBrain) is not null;
 
     /// <summary>Pierwszy uczony moduł (sieć albo CPG) na najwyższym poziomie mózgu stwora albo null.</summary>
@@ -67,6 +81,7 @@ public sealed class TrainingController : IDisposable
 
         var trainer = new BackgroundTrainer(evolution, task.Evaluate, _maxGenerations, task.Validate);
         _sessions.Add(new Session(brain, module, trainer, rig.Name));
+        trainer.Paused = _paused;
         trainer.Start();
         return true;
     }

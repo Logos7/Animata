@@ -44,7 +44,7 @@ public sealed class StudioSession : IDisposable
         Name = aName;
         _factory = aFactory;
         Demo = aFactory();
-        Training = new TrainingController(History);
+        Training = new TrainingController(History) { Paused = true };
     }
 
     public string Name { get; }
@@ -60,6 +60,22 @@ public sealed class StudioSession : IDisposable
 
     /// <summary>Ustawiane przez UI, np. w trakcie przeciągania encji — symulacja wtedy stoi.</summary>
     public bool Hold { get; set; }
+
+    /// <summary>
+    /// Czy scena jest otwarta (jej panel jest na stosie nawigacji). Zamknięta scena stoi: nie tyka symulacja
+    /// (<see cref="Tick"/> woła tylko okno dla otwartych scen), a trwająca nauka czeka między pokoleniami.
+    /// </summary>
+    public bool Visible
+    {
+        get => _visible;
+        set
+        {
+            _visible = value;
+            Training.Paused = !value;
+        }
+    }
+
+    private bool _visible;
 
     /// <summary>Błąd mózgu, który zatrzymał symulację, i moduł, który go rzucił.</summary>
     public string? Error { get; private set; }
@@ -639,7 +655,7 @@ public sealed class StudioSession : IDisposable
         var old = Demo.World;
         History = new SnapshotHistory();
         Demo = aScene;
-        Training = new TrainingController(History);
+        Training = new TrainingController(History) { Paused = !_visible };
         old.Dispose();
         SimTime = aTime;
         Paused = false;

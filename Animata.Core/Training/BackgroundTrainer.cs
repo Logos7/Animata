@@ -19,6 +19,7 @@ public sealed class BackgroundTrainer : IDisposable
     private readonly Func<float[], int, float> _fitness;
     private readonly Func<float[], float>? _validate;
     private readonly object _gate = new();
+    private readonly ManualResetEventSlim _running = new(true);
     private CancellationTokenSource? _cancellation;
     private Task? _task;
     private TrainingProgress? _progress;
@@ -38,6 +39,22 @@ public sealed class BackgroundTrainer : IDisposable
 
     public int MaxGenerations { get; }
     public bool IsRunning => _task is { IsCompleted: false };
+
+    /// <summary>
+    /// Wstrzymanie: bieżące pokolenie się dokańcza, następne czeka, aż pauza zniknie (np. scena, której nie widać,
+    /// nie ewoluuje w tle). Nie zmienia postępu ani mistrza.
+    /// </summary>
+    public bool Paused
+    {
+        get => !_running.IsSet;
+        set
+        {
+            if (value)
+                _running.Reset();
+            else
+                _running.Set();
+        }
+    }
 
     /// <summary>Wyjątek, który przerwał naukę (np. błąd mózgu w próbie), albo null.</summary>
     public Exception? Error { get; private set; }
@@ -59,6 +76,7 @@ public sealed class BackgroundTrainer : IDisposable
                 var championGeneration = 0;
                 while (!token.IsCancellationRequested && _evolution.Generation < MaxGenerations)
                 {
+                    _running.Wait(token);
                     _evolution.Step(_fitness);
                     var best = _evolution.Best;
                     var score = _validate?.Invoke(best) ?? _evolution.BestFitness;
@@ -77,6 +95,9 @@ public sealed class BackgroundTrainer : IDisposable
                         _version++;
                     }
                 }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
             }
             catch (Exception exception)
             {
@@ -114,5 +135,6 @@ public sealed class BackgroundTrainer : IDisposable
     {
         Stop();
         _cancellation?.Dispose();
+        _running.Dispose();
     }
 }

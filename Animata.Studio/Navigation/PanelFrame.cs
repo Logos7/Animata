@@ -29,7 +29,8 @@ public static class PanelFrame
         left.Children.Add(back);
 
         // Panel buduje się, zanim trafi na stos: poziomy niżej bierzemy ze stosu, ostatni to on sam.
-        for (var index = 0; index <= aPanel.Depth; index++)
+        // Menu (poziom 0) nie ma okruszka — prowadzi do niego logo.
+        for (var index = 1; index <= aPanel.Depth; index++)
         {
             var panel = index < aPanel.Depth && index < navigator.Stack.Count ? navigator.Stack[index] : aPanel;
             if (index < aPanel.Depth)

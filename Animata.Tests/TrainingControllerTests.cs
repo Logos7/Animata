@@ -19,6 +19,33 @@ public class TrainingControllerTests : IDisposable
     }
 
     [Fact]
+    public void PausedTrainer_WaitsBetweenGenerations_AndResumes()
+    {
+        var evolution = new Evolution([0f, 0f], new EvolutionOptions { PopulationSize = 8, EliteCount = 2, Seed = 1 });
+        using var trainer = new BackgroundTrainer(evolution, (aGenes, _) => -(aGenes[0] * aGenes[0] + aGenes[1] * aGenes[1]), 1000)
+        {
+            Paused = true
+        };
+        trainer.Start();
+        Thread.Sleep(150);
+        Assert.Equal(0, evolution.Generation);
+
+        trainer.Paused = false;
+        var clock = Stopwatch.StartNew();
+        while (evolution.Generation < 5 && clock.ElapsedMilliseconds < 5000)
+            Thread.Sleep(5);
+        Assert.True(evolution.Generation >= 5);
+
+        trainer.Paused = true;
+        Thread.Sleep(50);
+        var stopped = evolution.Generation;
+        Thread.Sleep(150);
+        Assert.InRange(evolution.Generation, stopped, stopped + 1);
+        trainer.Stop();   // zatrzymanie w pauzie nie wisi
+        Assert.False(trainer.IsRunning);
+    }
+
+    [Fact]
     public void FinishedTraining_KeepsStartAndChampion()
     {
         var training = Controller(aMaxGenerations: 4);

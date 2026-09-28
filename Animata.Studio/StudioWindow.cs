@@ -11,7 +11,7 @@ namespace Animata.Studio;
 
 /// <summary>
 /// Okno Studia: jeden <see cref="PanelNavigator"/> na całą powierzchnię i kilka scen (demo, wąż), każda z własną
-/// sesją i własnym panelem. Zegar (~30 Hz) przesuwa wszystkie sesje (symulację i naukę) i odświeża aktywny panel.
+/// sesją i własnym panelem. Zegar (~30 Hz) przesuwa tylko otwarte sceny (symulację i naukę) i odświeża aktywny panel.
 /// Klawisze idą najpierw do aktywnego panelu; nieobsłużone Esc i Alt+← (poza polami tekstowymi) cofają o poziom.
 /// </summary>
 public sealed class StudioWindow : Window
@@ -77,13 +77,22 @@ public sealed class StudioWindow : Window
     {
         var delta = (float)_clock.Elapsed.TotalSeconds;
         _clock.Restart();
+        // Tylko otwarte sceny żyją: w menu (i w innej scenie) świat stoi, a nauka czeka między pokoleniami.
         foreach (var (session, _) in _scenes)
-            session.Tick();
+        {
+            var open = _panels.TryGetValue(session, out var panel) && _navigator.Stack.Contains(panel);
+            if (session.Visible != open)
+                session.Visible = open;
+            if (open)
+                session.Tick();
+        }
         _navigator.Active?.Refresh(delta);
     }
 
     private void UpdateTitle() =>
-        Title = "Animata Studio — " + string.Join(" › ", _navigator.Stack.Select(aPanel => aPanel.Title));
+        Title = _navigator.Stack.Count > 1
+            ? "Animata Studio — " + string.Join(" › ", _navigator.Stack.Skip(1).Select(aPanel => aPanel.Title))
+            : "Animata Studio";
 
     private void OnKeyDown(object? aSender, KeyEventArgs aEvent)
     {
