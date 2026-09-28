@@ -33,8 +33,7 @@ public class SeekTargetTaskTests
         var episodes = SeekTargetTask.CreateEpisodes(rig.DefaultOptions with { Seed = 11, EpisodesPerGeneration = 32 }, 0);
         var results = SeekTargetTask.Run(WorldObjectCatalog.CreateAvoidController(), episodes, rig.DefaultOptions, rig);
 
-        // Fizyka różni się minimalnie między platformami (SIMD), więc próg z zapasem.
-        Assert.InRange(results.Count(aResult => aResult.Reached), 24, 32);
+        Assert.Equal(32, results.Count(aResult => aResult.Reached));
         Assert.InRange(results.Average(aResult => aResult.Cost), 0.1f, 0.35f);
     }
 
@@ -45,8 +44,7 @@ public class SeekTargetTaskTests
         var episodes = SeekTargetTask.CreateEpisodes(rig.DefaultOptions with { EpisodesPerGeneration = 32 }, 0);
         var results = SeekTargetTask.Run(new ApproachTargetModule(), episodes, rig.DefaultOptions, rig);
 
-        // Fizyka różni się minimalnie między platformami (SIMD), więc próg z zapasem.
-        Assert.InRange(results.Count(aResult => aResult.Reached), 24, 32);
+        Assert.Equal(32, results.Count(aResult => aResult.Reached));
     }
 
     [Fact]

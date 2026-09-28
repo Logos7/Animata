@@ -114,10 +114,7 @@ public class SpiderTests
         var rig = SeekRigs.Spider;
         var results = SeekTargetTask.Run(new GaitModule(), SeekTargetTask.CreateValidationEpisodes(rig.DefaultOptions).Take(3).ToList(),
             rig.DefaultOptions, rig);
-        var seconds = rig.DefaultOptions.EpisodeSeconds;
-        Assert.True(results.Average(aResult => aResult.PostureTime) < 0.1f * seconds,
-            string.Join(", ", results.Select(aResult => $"{aResult.PostureTime} s")));
-        Assert.All(results, aResult => Assert.True(aResult.PostureTime < 0.25f * seconds, $"{aResult.PostureTime} s"));
+        Assert.All(results, aResult => Assert.True(aResult.PostureTime < 0.1f * rig.DefaultOptions.EpisodeSeconds, $"{aResult.PostureTime} s"));
     }
 
     [Fact]

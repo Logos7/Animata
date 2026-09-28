@@ -51,7 +51,7 @@ public class PhysicsTests
         var car = PhysicalCar(world);
         Drive(car, world, 0, 1, 4);
         var speed = car.Body.Actuators.OfType<SteeringDriveActuator>().Single().MaxSpeed;
-        Assert.InRange(car.Body.Position.X, speed * 4 * 0.7f, speed * 4);
+        Assert.InRange(car.Body.Position.X, speed * 4 * 0.8f, speed * 4);
         Assert.InRange(MathF.Abs(car.Body.Position.Y), 0, 0.1f);
     }
 
@@ -83,7 +83,7 @@ public class PhysicsTests
             world.Update(Delta);
         }
         var heading = Vector3.Transform(Vector3.UnitX, cylinder.Body.Rotation);
-        Assert.InRange(MathF.Atan2(heading.Y, heading.X), 0.1f, 1.5f);
+        Assert.InRange(MathF.Atan2(heading.Y, heading.X), 0.2f, 1.5f);
         Assert.InRange(new Vector2(cylinder.Body.Position.X, cylinder.Body.Position.Y).Length(), 0, 0.1f);
     }
 
