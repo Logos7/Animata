@@ -87,7 +87,7 @@ public class SnakeTests
     public void Snake_CreatesPhysics_AndLiesOnTheFloor()
     {
         using var world = FloorWorld();
-        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, null, WorldObjectCatalog.CreateCpg());
+        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg());
         world.Add(snake);
         Assert.NotNull(world.Physics);
 
@@ -105,7 +105,7 @@ public class SnakeTests
     public void Snake_WithoutFloor_Falls()
     {
         using var world = new World();
-        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, null, WorldObjectCatalog.CreateCpg());
+        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg());
         world.Add(snake);
         for (var tick = 0; tick < 30; tick++)
             world.Update(Delta);
@@ -116,7 +116,7 @@ public class SnakeTests
     public void Place_MovesTheWholeBodyAndStopsIt()
     {
         using var world = FloorWorld();
-        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, null, WorldObjectCatalog.CreateCpg());
+        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg());
         world.Add(snake);
         for (var tick = 0; tick < 20; tick++)
             world.Update(Delta);
@@ -135,7 +135,7 @@ public class SnakeTests
     public void Joints_FollowSpineCommands()
     {
         using var world = FloorWorld();
-        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, null, WorldObjectCatalog.CreateCpg(4), 4);
+        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg(4), 4);
         world.Add(snake);
         // Bez węzła kręgosłupa mózg nie nadpisuje komend — stawy zadaje test.
         snake.Brain!.Graph.Remove(snake.Brain.Graph.Modules.OfType<ActuatorModule>().Single());
@@ -160,7 +160,7 @@ public class SnakeTests
         using var world = FloorWorld();
         var target = WorldObjectCatalog.CreateTargetBall(new Vector3(6, 0, 0));
         world.Add(target);
-        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.ControllerColor, target.Id, WorldObjectCatalog.CreateCpg());
+        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), target.Id, WorldObjectCatalog.CreateCpg());
         world.Add(snake);
         var start = Vector3.Distance(snake.PartPositions[0], target.Body.Position);
 
@@ -177,7 +177,7 @@ public class SnakeTests
         using var world = FloorWorld();
         var target = WorldObjectCatalog.CreateTargetBall(new Vector3(0, 5, 0));
         world.Add(target);
-        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.ControllerColor, target.Id, WorldObjectCatalog.CreateCpg());
+        var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), target.Id, WorldObjectCatalog.CreateCpg());
         world.Add(snake);
 
         for (var tick = 0; tick < 12 * 30; tick++)

@@ -83,4 +83,5 @@ public sealed record CpgState(
     float PhaseLag,
     float TurnGain,
     float PitchAmplitude,
-    float PitchPhase) : ModuleState;
+    float PitchPhase,
+    bool Grip = false) : ModuleState;

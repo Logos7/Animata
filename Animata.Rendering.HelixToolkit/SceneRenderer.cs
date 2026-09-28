@@ -442,12 +442,20 @@ public sealed class SceneRenderer : IDisposable
     private void SyncParts(ArticulatedCreature aCreature)
     {
         aCreature.ApplyExternalMove();
+        if (_parts.TryGetValue(aCreature.Id, out var painted) && painted.Color != aCreature.Color)
+        {
+            // Kolor zmieniony we właściwościach: nowe materiały części.
+            painted.Color = aCreature.Color;
+            var repaint = SceneMeshes.MaterialFor(aCreature, _selection.Contains(aCreature));
+            foreach (var model in painted.Models)
+                model.Material = repaint;
+        }
         if (!_parts.TryGetValue(aCreature.Id, out var parts) || !ReferenceEquals(parts.Plan, aCreature.Plan))
         {
             if (parts is not null)
                 foreach (var old in parts.Models)
                     _viewport.Items.Remove(old);
-            parts = new PartModels(aCreature.Plan);
+            parts = new PartModels(aCreature.Plan) { Color = aCreature.Color };
             var material = SceneMeshes.MaterialFor(aCreature, _selection.Contains(aCreature));
             for (var index = 0; index < aCreature.Plan.Parts.Count; index++)
             {
@@ -471,6 +479,7 @@ public sealed class SceneRenderer : IDisposable
     private sealed class PartModels(BodyPlan aPlan)
     {
         public BodyPlan Plan { get; } = aPlan;
+        public Vector3 Color { get; set; }
         public List<MeshGeometryModel3D> Models { get; } = [];
     }
 

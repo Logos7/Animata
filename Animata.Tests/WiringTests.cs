@@ -16,7 +16,7 @@ public class WiringTests
         module.Ports.Add("Directionx");      // literówka
 
         var typo = Assert.Throws<ArgumentException>(() =>
-            WorldObjectCatalog.CreateCar(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, null, module));
+            WorldObjectCatalog.CreateCar(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, module));
         Assert.Contains("Ray5", typo.Message);
         Assert.Contains("Directionx", typo.Message);
 
@@ -33,7 +33,7 @@ public class WiringTests
         module.Outputs.Add(new NeuralOutput("Turn"));
         module.Outputs.Add(new NeuralOutput("Step"));
 
-        var creature = WorldObjectCatalog.CreateSeeker(Vector3.Zero, WorldObjectCatalog.NeuralColor, null, module);
+        var creature = WorldObjectCatalog.CreateSeeker(Vector3.Zero, WorldObjectCatalog.RandomColor(), null, module);
         Assert.Single(creature.Brain!.Graph.Connections.Where(aLink => aLink.TargetPort == TargetSensor.DistancePort));
     }
 

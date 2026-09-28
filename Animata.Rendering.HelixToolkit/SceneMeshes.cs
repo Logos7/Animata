@@ -13,7 +13,7 @@ namespace Animata.Rendering.HelixToolkit;
 internal static class SceneMeshes
 {
     /// <summary>Encje z jedną siatką. Stwory z części (<see cref="ArticulatedCreature"/>) mają siatkę na część — <see cref="CreatePartGeometry"/>.</summary>
-    public static bool CanDraw(Entity aEntity) => aEntity is TargetBall or Obstacle or Floor or Slab;
+    public static bool CanDraw(Entity aEntity) => aEntity is TargetBall or Obstacle or Floor or Slab or Tree;
 
     public static global::HelixToolkit.SharpDX.MeshGeometry3D CreateGeometry(Entity aEntity)
     {
@@ -32,6 +32,9 @@ internal static class SceneMeshes
             case Slab slab:
                 mesh.AddBox(new Vector3(0, 0, slab.Size.Z / 2), slab.Size.X, slab.Size.Y, slab.Size.Z);
                 break;
+            case Tree tree:
+                mesh.AddCylinder(Vector3.Zero, new Vector3(0, 0, tree.Height), tree.Radius, 32, true, true);
+                break;
         }
 
         return mesh.ToMeshGeometry3D();
@@ -44,6 +47,7 @@ internal static class SceneMeshes
         Obstacle obstacle => new Vector3(obstacle.Radius, obstacle.Height, 0),
         Floor floor => floor.Size,
         Slab slab => slab.Size,
+        Tree tree => new Vector3(tree.Radius, tree.Height, 0),
         _ => Vector3.Zero
     };
 
@@ -53,6 +57,7 @@ internal static class SceneMeshes
         TargetBall => aSelected ? Material(1f, 1f, 0.4f) : Material(1f, 0.67f, 0.2f),
         ArticulatedCreature body => BodyMaterial(body.Color, aSelected),
         Floor => Material(0.20f, 0.27f, 0.33f),
+        Tree => aSelected ? Material(0.65f, 0.5f, 0.35f) : Material(0.45f, 0.32f, 0.2f),
         Slab => aSelected ? Material(0.62f, 0.70f, 0.78f) : Material(0.38f, 0.45f, 0.52f),
         _ => Material(0.5f, 0.5f, 0.5f)
     };

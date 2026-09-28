@@ -13,6 +13,14 @@ namespace Animata.Core.WorldObjects;
 // Węże: plan ciała, CPG, sieć z zegarem i czuciem terenu.
 public static partial class WorldObjectCatalog
 {
+    /// <summary>
+    /// Zakres skrętu i pochylenia stawu węża (rad) i moment serwa (N·m). ±1.2 rad w obu osiach — tyle trzeba, żeby
+    /// owinąć się ciasno wokół pnia r 0.25 m (odstęp segmentów 0.36 m); 8 N·m — żeby zwój ścisnął pień i utrzymał ciężar.
+    /// </summary>
+    public const float SnakeMaxYaw = 1.2f;
+    public const float SnakeMaxPitch = 1.2f;
+    public const float SnakeJointStrength = 8;
+
     public const int MinSnakeSegments = 2;
     public const int MaxSnakeSegments = 24;
     public const int DefaultSnakeSegments = 8;
@@ -33,7 +41,7 @@ public static partial class WorldObjectCatalog
 
     /// <summary>
     /// Plan węża: Seg0 (głowa, korzeń) … Seg{n−1} wzdłuż −X, leżące na ziemi; staw J{k} między Seg{k} a Seg{k+1}
-    /// w połowie odstępu. Stawy kulowe: skręt ±52°, pochylenie ±34°, moment 4 N·m. Każdy segment ma łuski
+    /// w połowie odstępu. Stawy kulowe: skręt i pochylenie ±69°, moment 8 N·m. Każdy segment ma łuski
     /// (tarcie w bok 0.8 na krok 1/30 s, do przodu 0.02, do tyłu 0.3).
     /// </summary>
     public static BodyPlan SnakePlan(int aSegments)
@@ -48,8 +56,30 @@ public static partial class WorldObjectCatalog
                 new Vector3(-segment * SnakeSpacing, 0, height), Quaternion.Identity, SnakeFriction, SnakeLateralFriction, SnakeBackwardFriction));
         for (var joint = 0; joint < aSegments - 1; joint++)
             builder.Joint($"J{joint}", $"Seg{joint}", $"Seg{joint + 1}", new Vector3(-(joint + 0.5f) * SnakeSpacing, 0, height),
-                aMaxYaw: 0.9f, aMaxPitch: 0.6f, aStrength: 4);
+                aMaxYaw: SnakeMaxYaw, aMaxPitch: SnakeMaxPitch, aStrength: SnakeJointStrength);
         return builder.Build();
+    }
+
+    /// <summary>
+    /// CPG wspinacza: toczenie zwoju — skręt i pochylenie każdego stawu to ten sam wektor zgięcia obracający się w czasie
+    /// (Yaw = A sin φ, Pitch = A sin(φ + π/2)), o długości zgięcia helisy owiniętej wokół pnia r 0.25 m. Zwój toczy się po korze
+    /// i wkręca w górę (~0.35 m/s przy 1.2 Hz; na pniu 2–3.5 m dochodzi do kulki na szczycie w 5 z 6 prób). Bez skrętu do celu — na pniu cel jest „nad głową”.
+    /// </summary>
+    public static CpgModule CreateClimbingCpg(int aSegments = DefaultSnakeSegments)
+    {
+        var (yaw, pitch) = SnakeWrap.BendFor(Training.SeekRigs.ClimbTrunkRadius + SnakeRadius - SnakeWrap.Squeeze);
+        var bend = MathF.Sqrt(yaw * yaw + pitch * pitch) / SnakeMaxYaw;
+        return new CpgModule(aSegments - 1)
+        {
+            Name = "CPG",
+            Amplitude = bend,
+            PitchAmplitude = bend,
+            PitchPhase = MathF.PI / 2,
+            PhaseLag = 0,
+            Frequency = 1.2f,
+            TurnGain = 0,
+            Grip = true
+        };
     }
 
     /// <summary>CPG węża o ręcznie dobranych parametrach (fala od głowy do ogona, skręt do celu).</summary>
@@ -87,7 +117,7 @@ public static partial class WorldObjectCatalog
     public static SnakeCreature CreateLearningSnake(Vector3 aPosition, float aYaw, Guid? aTargetId, int aSegments = DefaultSnakeSegments)
     {
         var cpg = CreateCpg(aSegments);
-        var snake = CreateSnake(aPosition, aYaw, NeuralColor, aTargetId, cpg, aSegments);
+        var snake = CreateSnake(aPosition, aYaw, RandomColor(), aTargetId, cpg, aSegments);
         snake.Brain!.Capture("ręczne parametry", cpg);
         cpg.Randomize();
         return snake;
@@ -125,12 +155,10 @@ public static partial class WorldObjectCatalog
     }
 
     /// <summary>Domyślne warstwy ukryte sieci węża.</summary>
-    public static readonly int[] SnakeHiddenLayers = [8];
+    public static readonly int[] SnakeHiddenLayers = [12, 12];
 
     /// <summary>Wąż z własną siecią neuronową (losowe wagi) — uczy się pełzać bez gotowego CPG, z zegarem rytmu.</summary>
     public static SnakeCreature CreateNeuralSnake(Vector3 aPosition, float aYaw, Guid? aTargetId, int aSegments = DefaultSnakeSegments) =>
-        CreateSnake(aPosition, aYaw, NeuralSnakeColor, aTargetId, CreateSnakeNeuralModule(aSegments), aSegments);
+        CreateSnake(aPosition, aYaw, RandomColor(), aTargetId, CreateSnakeNeuralModule(aSegments), aSegments);
 
-    /// <summary>Kolor węża z siecią (odróżnia go od węża z CPG).</summary>
-    public static readonly Vector3 NeuralSnakeColor = new(0.35f, 0.75f, 0.45f);
 }

@@ -495,6 +495,8 @@ public sealed class ModuleInspector
         yield return ("Logika", "ApproachTarget", Icons.Brain, () => new ApproachTargetModule { Name = "Approach" }, null);
         if (aCreature is SnakeCreature && aCreature.Body.Actuators.OfType<SpineActuator>().FirstOrDefault() is { } spine)
             yield return ("Logika", "CPG · fala stawów", Icons.Snake, () => new CpgModule(spine.Joints) { Name = "CPG" }, null);
+        if (aCreature is SnakeCreature climber)
+            yield return ("Logika", "CPG · toczenie (wspinaczka)", Icons.Tree, () => WorldObjectCatalog.CreateClimbingCpg(climber.Segments), null);
         if (aCreature is SpiderCreature)
             yield return ("Logika", "Chód · kłus", Icons.Spider, () => new GaitModule { Name = "Chód" }, null);
 

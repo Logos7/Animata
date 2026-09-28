@@ -56,6 +56,13 @@ and let it run on.
 - **Bodies that don't pass through themselves.** Parts of one creature collide with each other unless they are
   neighbours in the joint tree (one or two joints apart), so a coiled snake stays coiled and legs don't cross.
   Joint angles are measured around the child part's own axes, so a leg pointing sideways bends like one pointing forward.
+- **Climbing.** Trees are vertical trunks with grippy bark. A snake can be wrapped around a trunk (context menu
+  "Owiń wokół drzewa"): its joints get the constant bend of a helix slightly tighter than the trunk, so the coil
+  squeezes and friction holds it. Rolling the coil — every joint's bend vector turning in time — screws it up the
+  trunk: the hand-tuned rolling CPG climbs about 0.35 m/s and reaches the ball on top of a 2–3.5 m trunk in 5 of 6
+  trials. A snake marked as a climber trains on climbing (wrapped at the base, target on top). A neural snake does
+  not learn to climb from random weights yet (150 generations: no trial reached the top). Snake joints bend ±69° in
+  both axes with 8 N·m servos.
 - **Terrain.** Flat slabs (a few centimetres high, any size and rotation) lie on the floor; snakes climb over them in
   physics, and training episodes for snakes scatter 0–3 slabs on the way, sometimes with the target on top of one.
   Targets, posts and slabs snap to the height of the ground under them (a toggle in the scene).
@@ -79,7 +86,7 @@ and let it run on.
 - **Saving worlds.** A whole world goes to JSON and back: entities, bodies, target links and complete brains
   (modules, wiring, subgraphs, node positions, parameters and snapshots). Brains connect to bodies by slot name
   (`Eye`, `Whiskers`, `Spine`), not by id.
-- **Studio.** A desktop app with three scenes (demo; snakes on terrain; spiders on terrain) that run side by side, which you *zoom into*: double-click a creature and the window turns into its panel (senses, body,
+- **Studio.** A desktop app with four scenes (demo; snakes on terrain; spiders on terrain; climbing) which you *zoom into*: double-click a creature and the window turns into its panel (senses, body,
   actuators, brain). Click the brain and you are in a live graph editor; double-click a subgraph and you go one level
   deeper; double-click a neural network and you see its layers — neurons lit by their live activations, weights as
   coloured lines — and can change the number of neurons in each hidden layer and add or remove hidden layers (kept
@@ -147,9 +154,9 @@ dotnet run --project Animata.Studio
 | Scene | LMB drag | Move entities (dragging one of several selected moves them all) |
 | Scene | LMB drag from empty space · Ctrl+click · Shift+click · Ctrl+A | Box-select · toggle · add to selection · select all |
 | Scene | Del · Ctrl+C · Ctrl+X · Ctrl+V | Delete the whole selection · copy · cut · paste under the mouse (brains, snapshots and settings included; works across scenes) |
-| Scene | RMB click | Context menu: insert a car, cylinder, CPG snake, neural snake, spider or neural spider (random parameters, not learning until you start it), a slab, a target or a post where you clicked; on an entity: enter, aim eyes, delete |
+| Scene | RMB click | Context menu: insert a car, cylinder, snake or spider (each with a two-hidden-layer neural network with random weights and a random colour; swap the brain module in the graph), a target, post, slab or tree where you clicked; on an entity: enter, aim eyes, copy, cut, delete, and on a snake: wrap it around the nearest tree |
 | Scene | RMB drag · WSADQE · wheel | Look around · fly · fly forward/back (the wheel works like W/S) |
-| Scene | Ins · O · P · T · Del | Add target · add post · add slab · aim all eyes at the selected target · delete |
+| Scene | Ins · O · P · R · T · Del | Add target · post · slab · tree · aim all eyes at the selected target · delete |
 | Scene | G · magnet button | Snap to ground on/off: targets, posts and dragged entities stand on the floor or slab below |
 | Scene | L · K | Start/stop training · random weights and retrain |
 | Scene, creature | Ctrl+S · Z | Snapshot the brain · step back through snapshots |

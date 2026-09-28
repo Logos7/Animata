@@ -17,9 +17,7 @@ public enum CreatureKind
     Car,
     Cylinder,
     Snake,
-    NeuralSnake,
-    Spider,
-    NeuralSpider
+    Spider
 }
 
 /// <summary>
@@ -93,6 +91,7 @@ public sealed class StudioSession : IDisposable
     public static string NameOf(Entity aEntity) => !string.IsNullOrWhiteSpace(aEntity.Name) ? aEntity.Name : aEntity switch
     {
         SnakeCreature => "Wąż",
+        Tree => "Drzewo",
         SpiderCreature => "Pająk",
         Floor floor => $"Podłoga {floor.Size.X:0.#} × {floor.Size.Y:0.#} m",
         CarCreature => "Autko",
@@ -251,10 +250,8 @@ public sealed class StudioSession : IDisposable
     {
         CreatureKind.Car => "Autko",
         CreatureKind.Cylinder => "Walec",
-        CreatureKind.NeuralSnake => "Wąż NN",
-        CreatureKind.Spider => "Pająk",
-        CreatureKind.NeuralSpider => "Pająk NN",
-        _ => "Wąż CPG"
+        CreatureKind.Snake => "Wąż",
+        _ => "Pająk"
     };
 
     /// <summary>
@@ -281,7 +278,7 @@ public sealed class StudioSession : IDisposable
         if (!SnapToGround)
             return;
         foreach (var entity in World.Entities)
-            if (entity is Slab or TargetBall or Obstacle)
+            if (entity is Slab or TargetBall or Obstacle or Tree)
                 Terrain.Snap(World, entity);
     }
 
@@ -312,14 +309,19 @@ public sealed class StudioSession : IDisposable
         var position = aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 };
         var target = NearestTarget(position);
         var yaw = target is null ? 0 : MathF.Atan2(target.Body.Position.Y - position.Y, target.Body.Position.X - position.X);
+        // Każde zwierzątko dostaje sieć z dwiema warstwami ukrytymi i losowymi wagami (inny mózg — w grafie, z palety)
+        // oraz losowy kolor (zmienia się go we właściwościach).
+        var color = WorldObjectCatalog.RandomColor();
         ActiveEntity creature = aKind switch
         {
-            CreatureKind.Car => WorldObjectCatalog.CreateNeuralCar(position, yaw, target?.Id),
-            CreatureKind.Cylinder => WorldObjectCatalog.CreateLearningSeeker(position, target?.Id),
-            CreatureKind.NeuralSnake => WorldObjectCatalog.CreateNeuralSnake(position, yaw, target?.Id),
-            CreatureKind.Spider => WorldObjectCatalog.CreateLearningSpider(position, yaw, target?.Id),
-            CreatureKind.NeuralSpider => WorldObjectCatalog.CreateNeuralSpider(position, yaw, target?.Id),
-            _ => WorldObjectCatalog.CreateLearningSnake(position, yaw, target?.Id)
+            CreatureKind.Car => WorldObjectCatalog.CreateCar(position, yaw, color, target?.Id,
+                WorldObjectCatalog.CreateCarNeuralModule(WorldObjectCatalog.DefaultWhiskers, WorldObjectCatalog.DefaultCarHidden)),
+            CreatureKind.Cylinder => WorldObjectCatalog.CreateSeeker(position, color, target?.Id,
+                WorldObjectCatalog.CreateCylinderNeuralModule(WorldObjectCatalog.DefaultCylinderHidden)),
+            CreatureKind.Snake => WorldObjectCatalog.CreateSnake(position, yaw, color, target?.Id,
+                WorldObjectCatalog.CreateSnakeNeuralModule(WorldObjectCatalog.DefaultSnakeSegments, WorldObjectCatalog.SnakeHiddenLayers)),
+            _ => WorldObjectCatalog.CreateSpider(position, yaw, color, target?.Id,
+                WorldObjectCatalog.CreateSpiderNeuralModule(false, WorldObjectCatalog.DefaultSpiderHidden))
         };
         creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));
         creature.Name = UniqueName(KindName(aKind));
@@ -347,6 +349,41 @@ public sealed class StudioSession : IDisposable
         World.Add(obstacle);
         Status = "dodano słupek";
         return obstacle;
+    }
+
+    /// <summary>Drzewo (pień r 0.25 m, 3 m) na terenie.</summary>
+    public Tree AddTree(Vector3 aPosition)
+    {
+        var tree = new Tree { Radius = SeekRigs.ClimbTrunkRadius, Height = 3, Body = { Position = aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 } } };
+        tree.Name = UniqueName("Drzewo");
+        World.Add(tree);
+        Status = $"dodano: {tree.Name}";
+        return tree;
+    }
+
+    /// <summary>
+    /// Owija węża wokół najbliższego drzewa (jego podstawy) i robi z niego wspinacza — nauka będzie go uczyć wchodzenia
+    /// na drzewo. Zwraca false, gdy w scenie nie ma drzewa.
+    /// </summary>
+    public bool WrapAroundNearestTree(SnakeCreature aSnake)
+    {
+        var tree = World.Entities.OfType<Tree>()
+            .MinBy(aTree => Vector2.Distance(new Vector2(aTree.Body.Position.X, aTree.Body.Position.Y), new Vector2(aSnake.Body.Position.X, aSnake.Body.Position.Y)));
+        if (tree is null)
+        {
+            Status = "w scenie nie ma drzewa";
+            return false;
+        }
+        var brain = aSnake.Brain;
+        var training = brain is not null && Training.IsTraining(brain);
+        if (training)
+            Training.Stop(brain!);
+        aSnake.WrapAround(tree);
+        brain?.Reset();
+        if (training)
+            Training.Start(aSnake);
+        Status = $"{NameOf(aSnake)} owinięty wokół: {NameOf(tree)} — uczy się wspinać";
+        return true;
     }
 
     /// <summary>Płaska płyta terenu 1.5 × 1 × 0.06 m na podłodze.</summary>

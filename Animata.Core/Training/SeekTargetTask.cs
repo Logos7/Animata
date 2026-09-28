@@ -84,6 +84,8 @@ public readonly record struct EpisodeResult(float Cost, float FinalGap, float Co
 /// „Ciało do treningu”: jak zbudować stwora z danym sterownikiem i jak liczyć wysiłek z jego komend.
 /// <see cref="PrepareWorld"/> dokłada do świata próby to, czego ciało potrzebuje (np. podłogę dla stwora w fizyce).
 /// <see cref="Posture"/> — zła postawa w danej chwili (0 = dobra, 1 = zła), karana z wagą <see cref="SeekTargetOptions.PostureWeight"/>.
+/// <see cref="Setup"/> — własne ustawienie próby (np. drzewo, cel na jego szczycie, wąż owinięty wokół pnia) zamiast
+/// zwykłego: stwór w (0, 0) obrócony o Yaw próby.
 /// </summary>
 public sealed record SeekRig(
     string Name,
@@ -91,7 +93,8 @@ public sealed record SeekRig(
     Func<IReadOnlyDictionary<string, float>, float> Effort,
     SeekTargetOptions DefaultOptions,
     Action<World>? PrepareWorld = null,
-    Func<ActiveEntity, float>? Posture = null);
+    Func<ActiveEntity, float>? Posture = null,
+    Action<World, TargetBall, ActiveEntity, SeekEpisode>? Setup = null);
 
 public static class SeekRigs
 {
@@ -113,7 +116,7 @@ public static class SeekRigs
     public static readonly SeekRig Disk = new(
         "walec",
         (aTargetId, aController) =>
-            WorldObjectCatalog.CreateSeeker(Vector3.Zero, WorldObjectCatalog.NeuralColor, aTargetId, aController),
+            WorldObjectCatalog.CreateSeeker(Vector3.Zero, Vector3.One, aTargetId, aController),
         aCommand => Math.Clamp(aCommand.GetValueOrDefault(DiskDriveActuator.StepPort), 0, 1)
             + 0.25f * MathF.Min(MathF.Abs(aCommand.GetValueOrDefault(DiskDriveActuator.TurnPort)), 1),
         new SeekTargetOptions(),
@@ -139,7 +142,7 @@ public static class SeekRigs
     private static SeekRig CreateCarRig(int aWhiskers) => new(
         aWhiskers == WorldObjectCatalog.DefaultWhiskers ? "autko" : $"autko ×{aWhiskers}",
         (aTargetId, aController) =>
-            WorldObjectCatalog.CreateCar(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, aTargetId, aController, aWhiskers),
+            WorldObjectCatalog.CreateCar(Vector3.Zero, 0, Vector3.One, aTargetId, aController, aWhiskers),
         aCommand => MathF.Min(MathF.Abs(aCommand.GetValueOrDefault(SteeringDriveActuator.ThrottlePort)), 1)
             + 0.25f * MathF.Min(MathF.Abs(aCommand.GetValueOrDefault(SteeringDriveActuator.SteerPort)), 1),
         new SeekTargetOptions
@@ -170,7 +173,7 @@ public static class SeekRigs
     private static SeekRig CreateSnakeRig(int aSegments) => new(
         $"wąż ×{aSegments}",
         (aTargetId, aController) =>
-            WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.NeuralColor, aTargetId, aController, aSegments),
+            WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, aTargetId, aController, aSegments),
         AverageCommand,
         new SeekTargetOptions
         {
@@ -184,6 +187,51 @@ public static class SeekRigs
         },
         AddFloor);
 
+    private static readonly ConcurrentDictionary<int, SeekRig> ClimbRigs = new();
+
+    /// <summary>Promień pnia w próbach wspinania.</summary>
+    public const float ClimbTrunkRadius = 0.25f;
+
+    /// <summary>Kulka na szczycie pnia — mała, żeby głowa owinięta tuż pod szczytem była „przy niej”.</summary>
+    public const float ClimbTargetRadius = 0.2f;
+
+    /// <summary>
+    /// Wspinaczka węża z <paramref name="aSegments"/> segmentami: pień r 0.25 m o wysokości 2–3.5 m (długość
+    /// odcinka próby), cel na szczycie, wąż na starcie owinięty wokół podstawy (zwój obrócony o Yaw próby), 12 s.
+    /// </summary>
+    public static SeekRig ClimbWith(int aSegments)
+    {
+        if (!WorldObjectCatalog.IsValidSnakeLength(aSegments))
+            throw new ArgumentOutOfRangeException(nameof(aSegments), aSegments,
+                $"Wąż ma od {WorldObjectCatalog.MinSnakeSegments} do {WorldObjectCatalog.MaxSnakeSegments} segmentów.");
+        return ClimbRigs.GetOrAdd(aSegments, aCount => new SeekRig(
+            $"wspinaczka ×{aCount}",
+            (aTargetId, aController) => WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, aTargetId, aController, aCount),
+            AverageCommand,
+            new SeekTargetOptions
+            {
+                EpisodesPerGeneration = 4,
+                EpisodeSeconds = 12,
+                MinDistance = 2,
+                MaxDistance = 3.5f,
+                ValidationEpisodes = 6
+            },
+            AddFloor,
+            null,
+            ClimbSetup));
+    }
+
+    /// <summary>Drzewo w (0, 0) o wysokości = odległość celu w próbie, cel na szczycie, wąż owinięty u podstawy.</summary>
+    private static void ClimbSetup(World aWorld, TargetBall aTarget, ActiveEntity aCreature, SeekEpisode aEpisode)
+    {
+        var tree = new Tree { Radius = ClimbTrunkRadius, Height = aEpisode.TargetOffset.Length() };
+        aWorld.Add(tree);
+        aTarget.Radius = ClimbTargetRadius;
+        aTarget.Body.Position = new Vector3(0, 0, tree.Height);
+        if (aCreature is SnakeCreature snake)
+            snake.WrapAround(tree, aEpisode.Yaw);
+    }
+
     /// <summary>
     /// Pająk (czworonóg) w fizyce: podłoga 60 × 60 m, 0–2 niskie płyty (2–6 cm) na drodze, cel 2–5 m, 12 s.
     /// Wysiłek = średnia wielkość komend stawów.
@@ -191,7 +239,7 @@ public static class SeekRigs
     public static readonly SeekRig Spider = new(
         "pająk",
         (aTargetId, aController) =>
-            WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, WorldObjectCatalog.SpiderColor, aTargetId, aController),
+            WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, Vector3.One, aTargetId, aController),
         AverageCommand,
         new SeekTargetOptions
         {
@@ -231,6 +279,7 @@ public static class SeekRigs
     {
         var rig = aCreature switch
         {
+            SnakeCreature { Climber: true } climber => ClimbWith(climber.Segments),
             SnakeCreature snake => SnakeWith(snake.Segments),
             SpiderCreature => Spider,
             CarCreature car when WorldObjectCatalog.IsValidWhiskerCount(WorldObjectCatalog.WhiskerCountOf(car)) =>
@@ -457,7 +506,10 @@ public sealed class SeekTargetTask
             }
 
             var creature = aRig.CreateCreature(target.Id, aController);
-            creature.Place(Vector3.Zero, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, episode.Yaw));
+            if (aRig.Setup is { } setup)
+                setup(world, target, creature, episode);
+            else
+                creature.Place(Vector3.Zero, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, episode.Yaw));
             world.Add(creature);
             var brain = creature.Brain!;
             var wheels = brain.Graph.Modules.OfType<ActuatorModule>().Single();

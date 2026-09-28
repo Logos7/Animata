@@ -1,0 +1,110 @@
+using System.Numerics;
+using Animata.Core.Brains.Modules;
+using Animata.Core.Persistence;
+using Animata.Core.Training;
+using Animata.Core.WorldObjects;
+using Animata.Core.Worlds;
+
+namespace Animata.Tests;
+
+/// <summary>Drzewa i wspinanie węża (owinięcie wokół pnia, toczenie zwoju), kolory stworów.</summary>
+public class ClimbTests
+{
+    private const float Delta = 1f / 30f;
+
+    private static (World World, Tree Tree, SnakeCreature Snake) Wrapped(CpgModule? aBrain = null)
+    {
+        var world = new World();
+        world.Add(Floor.At(20, 20));
+        var tree = new Tree { Radius = SeekRigs.ClimbTrunkRadius, Height = 4 };
+        world.Add(tree);
+        var snake = aBrain is null ? new SnakeCreature(8) : WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, null, aBrain);
+        snake.WrapAround(tree, 0.7f);
+        world.Add(snake);
+        return (world, tree, snake);
+    }
+
+    [Fact]
+    public void Wrap_PutsEverySegmentAgainstTheTrunk_HeadUp()
+    {
+        var (world, tree, snake) = Wrapped();
+        using (world)
+        {
+            Assert.True(snake.Climber);
+            var contact = tree.Radius + WorldObjectCatalog.SnakeRadius;
+            foreach (var part in snake.PartPositions)
+                Assert.InRange(new Vector2(part.X, part.Y).Length(), contact - 0.06f, contact + 0.02f);
+            Assert.True(snake.PartPositions[0].Z > snake.PartPositions[^1].Z);
+            Assert.True(snake.PartPositions.Min(aPart => aPart.Z) > 0.1f);
+        }
+    }
+
+    [Fact]
+    public void WrappedSnake_WithoutMoving_HoldsOnToTheBark()
+    {
+        var (world, _, snake) = Wrapped();
+        using (world)
+        {
+            var start = snake.PartPositions.Average(aPart => aPart.Z);
+            for (var tick = 0; tick < 90; tick++)
+                world.Update(Delta);
+            Assert.True(snake.PartPositions.Average(aPart => aPart.Z) > start - 0.15f);
+        }
+    }
+
+    [Fact]
+    public void RollingCpg_ClimbsTheTree()
+    {
+        var (world, _, snake) = Wrapped(WorldObjectCatalog.CreateClimbingCpg());
+        using (world)
+        {
+            var start = snake.PartPositions[0].Z;
+            for (var tick = 0; tick < 5 * 30; tick++)
+                world.Update(Delta);
+            Assert.True(snake.PartPositions[0].Z > start + 1, $"{start:0.00} → {snake.PartPositions[0].Z:0.00}");
+        }
+    }
+
+    [Fact]
+    public void ClimbRig_RollingCpgReachesTheTop()
+    {
+        var rig = SeekRigs.ClimbWith(8);
+        var episodes = SeekTargetTask.CreateValidationEpisodes(rig.DefaultOptions).Take(3).ToList();
+        var results = SeekTargetTask.Run(WorldObjectCatalog.CreateClimbingCpg(), episodes, rig.DefaultOptions, rig);
+        Assert.True(results.Count(aResult => aResult.Reached) >= 2, string.Join(", ", results.Select(aResult => aResult.FinalGap.ToString("0.00"))));
+    }
+
+    [Fact]
+    public void Climber_ChoosesTheClimbRig_AndSurvivesSaving()
+    {
+        using var world = WorldObjectCatalog.CreateClimbScene().World;
+        var snakes = world.Entities.OfType<SnakeCreature>().ToList();
+        Assert.All(snakes, aSnake => Assert.Same(SeekRigs.ClimbWith(aSnake.Segments), SeekRigs.For(aSnake)));
+        for (var tick = 0; tick < 15; tick++)
+            world.Update(Delta);
+
+        var json = WorldFile.ToJson(WorldFile.Capture(world, "t", 0));
+        using var restored = WorldFile.Restore(WorldFile.FromJson(json)).World;
+        Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "t", 0)));
+        Assert.Equal(2, restored.Entities.OfType<Tree>().Count());
+        foreach (var snake in snakes)
+        {
+            var twin = (SnakeCreature)restored.Find(snake.Id)!;
+            Assert.True(twin.Climber);
+            // Poza z zapisanych kątów stawów — bez ugięć więzów, więc z dokładnością do kilku cm.
+            var errors = snake.PartPositions.Select((aPart, aIndex) => Vector3.Distance(aPart, twin.PartPositions[aIndex])).ToList();
+            Assert.True(errors.Max() < 0.12f && errors.Average() < 0.06f, string.Join(" ", errors.Select(aError => aError.ToString("0.00"))));
+            Assert.Equal(snake.Color, twin.Color);
+        }
+        restored.Update(Delta);
+    }
+
+    [Fact]
+    public void RandomColors_AreBrightAndVary()
+    {
+        var random = new Random(4);
+        var colors = Enumerable.Range(0, 20).Select(_ => WorldObjectCatalog.RandomColor(random)).ToList();
+        Assert.All(colors, aColor => Assert.InRange(MathF.Max(aColor.X, MathF.Max(aColor.Y, aColor.Z)), 0.8f, 0.9f));
+        Assert.True(colors.Distinct().Count() > 15);
+    }
+}

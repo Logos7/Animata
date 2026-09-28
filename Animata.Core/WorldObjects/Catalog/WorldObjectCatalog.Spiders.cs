@@ -13,8 +13,6 @@ namespace Animata.Core.WorldObjects;
 // Pająki: czworonóg z chodem (kłus) albo z siecią.
 public static partial class WorldObjectCatalog
 {
-    public static readonly Vector3 SpiderColor = new(0.55f, 0.35f, 0.25f);
-    public static readonly Vector3 NeuralSpiderColor = new(0.72f, 0.45f, 0.85f);
 
     /// <summary>
     /// Pająk: oko „Eye” (tułów), czucie stawów „Joints”, zegar „Clock”, czucie terenu „Feel”, nogi „Legs” (8 stawów:
@@ -45,7 +43,7 @@ public static partial class WorldObjectCatalog
     public static SpiderCreature CreateLearningSpider(Vector3 aPosition, float aYaw, Guid? aTargetId)
     {
         var gait = new GaitModule { Name = "Chód" };
-        var spider = CreateSpider(aPosition, aYaw, SpiderColor, aTargetId, gait);
+        var spider = CreateSpider(aPosition, aYaw, RandomColor(), aTargetId, gait);
         spider.Brain!.Capture("ręczne parametry", gait);
         gait.Randomize();
         return spider;
@@ -56,13 +54,14 @@ public static partial class WorldObjectCatalog
     /// dotyk czterech stóp i brzucha oraz pochylenie i przechył tułowia (równowaga); warstwa ukryta 10; wyjścia
     /// Yaw/Pitch 0–7 (skręt kolan jest ignorowany przez ciało). Wagi losowe.
     /// </summary>
-    public static NeuralNetworkModule CreateSpiderNeuralModule(bool aSenses = false)
+    public static NeuralNetworkModule CreateSpiderNeuralModule(bool aSenses = false, params int[] aHidden)
     {
         string[] basic = [ClockSensor.SinPort, ClockSensor.CosPort, "Found * DirectionY", "Found * DirectionX", "Found * Gap / 4"];
         string[] senses = aSenses ? [.. SpiderTouchPorts, FeelSensor.HeadPitchPort, FeelSensor.HeadRollPort] : [];
         string[] inputs = [.. basic, .. senses];
         var outputs = JointNetworkOutputs(GaitModule.Joints);
-        var module = new NeuralNetworkModule(new NeuralNetwork(inputs.Length, 10, outputs.Length)) { Name = "Neural" };
+        int[] hidden = aHidden.Length > 0 ? aHidden : [10];
+        var module = new NeuralNetworkModule(new NeuralNetwork([inputs.Length, .. hidden, outputs.Length])) { Name = "Neural" };
         module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetPorts, .. senses]);
         module.Inputs.AddRange(inputs.Select(aExpression => new NeuralInput(aExpression)));
         module.Outputs.AddRange(outputs.Select(aPort => new NeuralOutput(aPort)));
@@ -78,5 +77,5 @@ public static partial class WorldObjectCatalog
         [.. SpiderCreature.LegNames.Select(aLeg => ("Foot" + aLeg, "Goleń" + aLeg)), ("Belly", "Tułów")]) { Slot = "Touch" };
 
     public static SpiderCreature CreateNeuralSpider(Vector3 aPosition, float aYaw, Guid? aTargetId) =>
-        CreateSpider(aPosition, aYaw, NeuralSpiderColor, aTargetId, CreateSpiderNeuralModule());
+        CreateSpider(aPosition, aYaw, RandomColor(), aTargetId, CreateSpiderNeuralModule());
 }

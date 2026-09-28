@@ -27,6 +27,7 @@ public sealed record WorldDocument(int Format, string Name, double Time, IReadOn
 [JsonDerivedType(typeof(TargetDocument), "target")]
 [JsonDerivedType(typeof(ObstacleDocument), "obstacle")]
 [JsonDerivedType(typeof(SlabDocument), "slab")]
+[JsonDerivedType(typeof(TreeDocument), "tree")]
 [JsonDerivedType(typeof(CarDocument), "car")]
 [JsonDerivedType(typeof(CylinderDocument), "cylinder")]
 [JsonDerivedType(typeof(SnakeDocument), "snake")]
@@ -55,8 +56,16 @@ public sealed record CylinderDocument(Guid Id, string Name, float[] Position, fl
 /// <summary>Ustawienia napędu (autko: prędkości, skręt, moment; walec: prędkość, obrót, moment). Brak = domyślne.</summary>
 public sealed record DriveDocument(float MaxSpeed, float MaxReverseSpeed, float MaxSteerAngle, float MaxTurnSpeed, float DriveTorque);
 
+/// <summary>
+/// Wąż; Parts — pozy części (x, y, z, qx, qy, qz, qw na część), gdy wąż nie leży prosto (np. owinięty wokół pnia),
+/// żeby wczytał się w tej samej pozie.
+/// </summary>
 public sealed record SnakeDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Segments,
-    Guid? Target, BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
+    Guid? Target, BrainDocument Brain, bool Climber = false, float[]? Parts = null) : EntityDocument(Id, Name, Position, Rotation);
+
+/// <summary>Drzewo (pień do wspinania).</summary>
+public sealed record TreeDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius, float Height, float Bark)
+    : EntityDocument(Id, Name, Position, Rotation);
 
 public sealed record SpiderDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color,
     Guid? Target, BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
@@ -180,11 +189,30 @@ public static class WorldFile
             CylinderCreature cylinder => new CylinderDocument(cylinder.Id, cylinder.Name, position, rotation, Vector(cylinder.Color),
                 TargetOf(cylinder), CaptureBrain(cylinder.Brain!), DriveOf(cylinder)),
             SnakeCreature snake => new SnakeDocument(snake.Id, snake.Name, position, rotation, Vector(snake.Color), snake.Segments,
-                TargetOf(snake), CaptureBrain(snake.Brain!)),
+                TargetOf(snake), CaptureBrain(snake.Brain!), snake.Climber, PartsOf(snake)),
+            Tree tree => new TreeDocument(tree.Id, tree.Name, position, rotation, tree.Radius, tree.Height, tree.Bark),
             SpiderCreature spider => new SpiderDocument(spider.Id, spider.Name, position, rotation, Vector(spider.Color),
                 TargetOf(spider), CaptureBrain(spider.Brain!)),
             _ => throw new NotSupportedException($"Zapis nie zna encji {aEntity.GetType().Name}.")
         };
+    }
+
+    /// <summary>Pozy części węża albo null, gdy leży prosto (wystarczy poza korzenia).</summary>
+    private static float[]? PartsOf(SnakeCreature aSnake)
+    {
+        var straight = true;
+        for (var joint = 0; joint < aSnake.JointCount && straight; joint++)
+            straight = MathF.Abs(aSnake.JointYaw(joint)) < 1e-3f && MathF.Abs(aSnake.JointPitch(joint)) < 1e-3f;
+        if (straight)
+            return null;
+        var parts = new float[7 * aSnake.PartPositions.Count];
+        for (var part = 0; part < aSnake.PartPositions.Count; part++)
+        {
+            var position = aSnake.PartPositions[part];
+            var orientation = aSnake.PartOrientations[part];
+            new[] { position.X, position.Y, position.Z, orientation.X, orientation.Y, orientation.Z, orientation.W }.CopyTo(parts, 7 * part);
+        }
+        return parts;
     }
 
     private static DriveDocument? DriveOf(Entity aCreature) => aCreature.Body.Actuators.FirstOrDefault() switch
@@ -283,6 +311,9 @@ public static class WorldFile
             case ObstacleDocument obstacle:
                 entity = new Obstacle { Id = obstacle.Id, Radius = obstacle.Radius, Height = obstacle.Height, Body = { Position = position, Rotation = rotation } };
                 break;
+            case TreeDocument tree:
+                entity = new Tree { Id = tree.Id, Radius = tree.Radius, Height = tree.Height, Bark = tree.Bark, Body = { Position = position, Rotation = rotation } };
+                break;
             case SlabDocument slab:
                 entity = new Slab { Id = slab.Id, Size = ToVector(slab.Size), Body = { Position = position, Rotation = rotation } };
                 break;
@@ -310,6 +341,7 @@ public static class WorldFile
                 var creature = WorldObjectCatalog.CreateSnake(position, 0, ToVector(snake.Color), snake.Target,
                     WorldObjectCatalog.CreateCpg(snake.Segments), snake.Segments);
                 RestoreBrain(creature.Brain!, snake.Brain);
+                creature.Climber = snake.Climber;
                 entity = creature;
                 break;
             }
@@ -326,7 +358,14 @@ public static class WorldFile
 
         entity.AssignId(aDocument.Id);
         entity.Name = aDocument.Name;
-        if (!entity.IsFixed)
+        if (aDocument is SnakeDocument { Parts: { } parts } && entity is SnakeCreature bent && parts.Length == 7 * bent.PartPositions.Count)
+        {
+            var count = bent.PartPositions.Count;
+            bent.PlaceParts(
+                [.. Enumerable.Range(0, count).Select(aPart => new Vector3(parts[7 * aPart], parts[7 * aPart + 1], parts[7 * aPart + 2]))],
+                [.. Enumerable.Range(0, count).Select(aPart => new Quaternion(parts[7 * aPart + 3], parts[7 * aPart + 4], parts[7 * aPart + 5], parts[7 * aPart + 6]))]);
+        }
+        else if (!entity.IsFixed)
             entity.Place(position, rotation);
         return entity;
     }

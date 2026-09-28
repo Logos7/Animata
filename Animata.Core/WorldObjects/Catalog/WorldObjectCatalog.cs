@@ -26,8 +26,6 @@ public static partial class WorldObjectCatalog
         Body = { Position = aPosition }
     };
 
-    public static readonly Vector3 ControllerColor = new(0.24f, 0.68f, 0.9f);
-    public static readonly Vector3 NeuralColor = new(0.72f, 0.36f, 0.9f);
 
     /// <summary>
     /// Mózg: sensory → controller → napęd. Każde wejście controllera musi pochodzić z któregoś sensora
@@ -74,4 +72,34 @@ public static partial class WorldObjectCatalog
     /// <summary>Wyjścia sieci sterującej stawami (wąż, pająk): Yaw0, Pitch0, Yaw1, Pitch1, … — nowy staw dopisuje się na końcu.</summary>
     public static string[] JointNetworkOutputs(int aJoints) =>
         [.. Enumerable.Range(0, aJoints).SelectMany(aJoint => new[] { SpineActuator.YawPort(aJoint), SpineActuator.PitchPort(aJoint) })];
+
+    /// <summary>
+    /// Losowy kolor stwora (odcień dowolny, nasycenie i jasność umiarkowane). Kolor nic nie znaczy — ustawia go użytkownik,
+    /// na początku jest losowy.
+    /// </summary>
+    public static Vector3 RandomColor(Random? aRandom = null)
+    {
+        var random = aRandom ?? Random.Shared;
+        var hue = random.NextSingle() * 6;
+        const float saturation = 0.55f;
+        const float value = 0.85f;
+        var chroma = value * saturation;
+        var x = chroma * (1 - MathF.Abs(hue % 2 - 1));
+        var (r, g, b) = (int)hue switch
+        {
+            0 => (chroma, x, 0f),
+            1 => (x, chroma, 0f),
+            2 => (0f, chroma, x),
+            3 => (0f, x, chroma),
+            4 => (x, 0f, chroma),
+            _ => (chroma, 0f, x)
+        };
+        var m = value - chroma;
+        return new Vector3(r + m, g + m, b + m);
+    }
+
+    /// <summary>Warstwy ukryte domyślnych sieci stworów wstawianych do sceny (dwie warstwy).</summary>
+    public static readonly int[] DefaultCarHidden = [12, 8];
+    public static readonly int[] DefaultCylinderHidden = [8, 8];
+    public static readonly int[] DefaultSpiderHidden = [16, 12];
 }

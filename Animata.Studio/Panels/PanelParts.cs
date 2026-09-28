@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Animata.Core.Actuators;
 using Animata.Core.Entities;
@@ -57,6 +58,44 @@ public static class PanelParts
     /// Lista liczby segmentów węża (2…24). Zmiana w miejscu (<see cref="StudioSession.SetSegments"/>): ten sam wąż i mózg,
     /// parametry CPG zostają. Po niej — już po obsłudze zdarzenia listy — woła <paramref name="aChanged"/>.
     /// </summary>
+    private static readonly System.Numerics.Vector3[] Swatches =
+    [
+        new(0.90f, 0.36f, 0.33f), new(0.95f, 0.62f, 0.25f), new(0.93f, 0.82f, 0.30f), new(0.45f, 0.78f, 0.36f),
+        new(0.28f, 0.72f, 0.68f), new(0.33f, 0.60f, 0.92f), new(0.60f, 0.45f, 0.90f), new(0.88f, 0.45f, 0.72f)
+    ];
+
+    /// <summary>Kolor stwora: kilka gotowych i „losuj”. Kolor nic nie znaczy — to tylko wygląd.</summary>
+    public static Control ColorPicker(ActiveEntity aCreature, Action? aChanged = null)
+    {
+        if (aCreature is not ArticulatedCreature body)
+            return Ui.Text("—", 13);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        void Set(System.Numerics.Vector3 aColor)
+        {
+            body.Color = aColor;
+            aChanged?.Invoke();
+        }
+        foreach (var swatch in Swatches)
+        {
+            var color = swatch;
+            var button = new Button
+            {
+                Width = 20,
+                Height = 20,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(Color.FromRgb((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255))),
+                BorderThickness = new Thickness(body.Color == color ? 2 : 0),
+                BorderBrush = Brushes.White,
+                Focusable = false
+            };
+            button.Click += (_, _) => Set(color);
+            row.Children.Add(button);
+        }
+        row.Children.Add(Ui.IconButton(Icons.Shuffle, "Losowy kolor", () => Set(WorldObjectCatalog.RandomColor())));
+        return row;
+    }
+
     public static Control SegmentPicker(StudioSession aSession, SnakeCreature aSnake, Action? aChanged = null)
     {
         var picker = new ComboBox

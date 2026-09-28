@@ -68,11 +68,16 @@ public sealed class PhysicsWorld : IDisposable
             Simulation.Shapes.Remove(shape);
     }
 
-    public StaticHandle AddStatic<TShape>(TShape aShape, RigidPose aPose) where TShape : unmanaged, IShape
+    /// <param name="aGrip">
+    /// Tarcie „chwytne” (np. kora drzewa): kontakt z tym statykiem ma dokładnie takie tarcie, niezależnie od tarcia ciała —
+    /// wąż, który po ziemi sunie na małym tarciu, na korze trzyma się, gdy się ściśnie. Null — zwykła reguła (min).
+    /// </param>
+    public StaticHandle AddStatic<TShape>(TShape aShape, RigidPose aPose, float? aGrip = null) where TShape : unmanaged, IShape
     {
         var shape = Simulation.Shapes.Add(aShape);
         var handle = Simulation.Statics.Add(new StaticDescription(aPose, shape));
         _staticShapes[handle] = shape;
+        _tags.SetGrip(handle.Value, aGrip);
         return handle;
     }
 
@@ -80,6 +85,7 @@ public sealed class PhysicsWorld : IDisposable
     {
         if (!_staticShapes.Remove(aHandle, out var shape))
             return;
+        _tags.SetGrip(aHandle.Value, null);
         Simulation.Statics.Remove(aHandle);
         Simulation.Shapes.Remove(shape);
     }
@@ -138,6 +144,26 @@ public sealed class PhysicsWorld : IDisposable
             _index[aBody] = aIndex;
             _touching[aBody] = 0;
             _friction[aBody] = aFriction;
+        }
+
+        private readonly Dictionary<int, float> _grip = [];
+
+        public void SetGrip(int aStatic, float? aGrip)
+        {
+            if (aGrip is { } grip)
+                _grip[aStatic] = grip;
+            else
+                _grip.Remove(aStatic);
+        }
+
+        /// <summary>Tarcie pary: statyk z chwytem narzuca swoje, inaczej mniejsze z obu.</summary>
+        public float PairFriction(CollidableReference aA, CollidableReference aB)
+        {
+            if (aA.Mobility == CollidableMobility.Static && _grip.TryGetValue(aA.StaticHandle.Value, out var gripA))
+                return gripA;
+            if (aB.Mobility == CollidableMobility.Static && _grip.TryGetValue(aB.StaticHandle.Value, out var gripB))
+                return gripB;
+            return MathF.Min(FrictionOf(aA), FrictionOf(aB));
         }
 
         public float FrictionOf(CollidableReference aCollidable) =>
@@ -227,7 +253,7 @@ public sealed class PhysicsWorld : IDisposable
         public bool ConfigureContactManifold<TManifold>(int aWorkerIndex, CollidablePair aPair, ref TManifold aManifold,
             out PairMaterialProperties aPairMaterial) where TManifold : unmanaged, IContactManifold<TManifold>
         {
-            aPairMaterial.FrictionCoefficient = MathF.Min(_tags.FrictionOf(aPair.A), _tags.FrictionOf(aPair.B));
+            aPairMaterial.FrictionCoefficient = _tags.PairFriction(aPair.A, aPair.B);
             aPairMaterial.MaximumRecoveryVelocity = 2f;
             aPairMaterial.SpringSettings = new SpringSettings(30, 1);
             for (var contact = 0; contact < aManifold.Count; contact++)

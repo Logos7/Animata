@@ -38,6 +38,7 @@ public static class Icons
     public const string Warning = "M8 2L14.5 13.5H1.5ZM8 6.5V9.5M8 11.5V11.6";
     public const string Plus = "M8 3V13M3 8H13";
     public const string Minus = "M3 8H13";
+    public const string Tree = "M8 14.5V9M5.5 14.5H10.5M8 1.5C5.5 1.5 4 3.5 4 5.5C4 7.5 5.8 9 8 9C10.2 9 12 7.5 12 5.5C12 3.5 10.5 1.5 8 1.5Z";
     public const string Spider = "M8 6.5A1.8 1.5 0 1 1 8 9.5A1.8 1.5 0 1 1 8 6.5M6.5 7L4 5L2 7M9.5 7L12 5L14 7M6.5 9L4 11L2 9.5M9.5 9L12 11L14 9.5";
     public const string Slab = "M1.5 10L5 7H14.5L11 10ZM1.5 10V12H11V10M11 12L14.5 9V7";
     public const string Magnet = "M4 2.5V8A4 4 0 0 0 12 8V2.5M4 2.5H6.5V8A1.5 1.5 0 0 0 9.5 8V2.5H12M4 5H6.5M9.5 5H12M8 14V12.5M3 13.5L4.5 12.3M13 13.5L11.5 12.3";
@@ -342,6 +343,7 @@ public static class Ui
         Core.WorldObjects.TargetBall => StudioPalette.Target,
         Core.WorldObjects.Obstacle => StudioPalette.Obstacle,
         Core.WorldObjects.Slab => Color.FromRgb(104, 122, 138),
+        Core.WorldObjects.Tree => Color.FromRgb(120, 86, 56),
         _ => StudioTheme.Palette.Text3
     };
 }

@@ -96,6 +96,7 @@ internal static class ScenePicker
                     CarClearance + car.Height, aOrigin, aDirection),
                 Obstacle obstacle => HitCylinder(obstacle.Body, obstacle.Radius, obstacle.Height, aOrigin, aDirection),
                 Slab slab => HitSlab(slab, aOrigin, aDirection),
+                Tree tree => HitCylinder(tree.Body, tree.Radius, tree.Height, aOrigin, aDirection),
                 ArticulatedCreature body => HitParts(body, aOrigin, aDirection),
                 // Podłoga (i każda encja IsFixed) nie jest łapana — kliknięcie w nią nic nie zaznacza ani nie przesuwa.
                 _ => null

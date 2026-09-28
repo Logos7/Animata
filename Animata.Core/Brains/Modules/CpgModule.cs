@@ -34,12 +34,18 @@ public sealed class CpgModule : BrainModule, ITrainableModule
 
     public int Joints { get; private set; }
 
-    public float Amplitude { get; set; } = 0.7f;
+    public float Amplitude { get; set; } = 0.35f;
     public float Frequency { get; set; } = 1.2f;
     public float PhaseLag { get; set; } = 0.9f;
-    public float TurnGain { get; set; } = 1.5f;
+    public float TurnGain { get; set; } = 0.5f;
     public float PitchAmplitude { get; set; }
     public float PitchPhase { get; set; } = MathF.PI / 2;
+
+    /// <summary>
+    /// Chwyt (wspinacz): przy celu fala zwalnia do zera, ale zgięcie zostaje — zwój dalej ściska pień. Bez chwytu
+    /// (pełzanie) przy celu maleje amplituda i wąż się prostuje. Ustawienie, nie uczony parametr.
+    /// </summary>
+    public bool Grip { get; set; }
 
     public override IReadOnlyList<string> InputPorts => Inputs;
     public override IReadOnlyList<string> OutputPorts => _ports;
@@ -59,16 +65,16 @@ public sealed class CpgModule : BrainModule, ITrainableModule
     public override IReadOnlyDictionary<string, float> Evaluate(
         IReadOnlyDictionary<string, float> aInputs, BrainContext aContext)
     {
-        _phase = (_phase + MathF.Tau * Math.Clamp(Frequency, 0, 3) * aContext.Delta) % MathF.Tau;
-
         var found = aInputs.GetValueOrDefault(TargetSensor.FoundPort) > 0;
         var bearing = found
             ? MathF.Atan2(aInputs.GetValueOrDefault(TargetSensor.DirectionYPort), aInputs.GetValueOrDefault(TargetSensor.DirectionXPort)) / MathF.PI
             : 0;
         var drive = found ? Math.Clamp(aInputs.GetValueOrDefault(TargetSensor.GapPort) / ArrivalGap, 0, 1) : 1;
+        _phase = (_phase + MathF.Tau * Math.Clamp(Frequency, 0, 3) * (Grip ? drive : 1) * aContext.Delta) % MathF.Tau;
+        var shape = Grip ? 1 : drive;
         var turn = Math.Clamp(-TurnGain * bearing, -1, 1) * drive;
-        var amplitude = Math.Clamp(Amplitude, 0, 1) * drive;
-        var pitch = Math.Clamp(PitchAmplitude, 0, 1) * drive;
+        var amplitude = Math.Clamp(Amplitude, 0, 1) * shape;
+        var pitch = Math.Clamp(PitchAmplitude, 0, 1) * shape;
 
         for (var joint = 0; joint < Joints; joint++)
         {
@@ -105,7 +111,7 @@ public sealed class CpgModule : BrainModule, ITrainableModule
     }
 
     public override ModuleState CaptureState() =>
-        new CpgState(Joints, Amplitude, Frequency, PhaseLag, TurnGain, PitchAmplitude, PitchPhase);
+        new CpgState(Joints, Amplitude, Frequency, PhaseLag, TurnGain, PitchAmplitude, PitchPhase, Grip);
 
     /// <summary>Przywraca parametry. Liczba stawów należy do ciała, więc stan z inną liczbą stawów też pasuje.</summary>
     public override void RestoreState(ModuleState aState)
@@ -113,11 +119,12 @@ public sealed class CpgModule : BrainModule, ITrainableModule
         if (aState is not CpgState state)
             throw new ArgumentException($"Expected {nameof(CpgState)}, got {aState.GetType().Name}.", nameof(aState));
         SetParameters([state.Amplitude, state.Frequency, state.PhaseLag, state.TurnGain, state.PitchAmplitude, state.PitchPhase]);
+        Grip = state.Grip;
     }
 
     public static CpgModule Create(CpgState aShape, ReadOnlySpan<float> aParameters, string aName = "CPG")
     {
-        var module = new CpgModule(aShape.Joints) { Name = aName };
+        var module = new CpgModule(aShape.Joints) { Name = aName, Grip = aShape.Grip };
         module.SetParameters(aParameters);
         return module;
     }

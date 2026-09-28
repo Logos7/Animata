@@ -18,6 +18,19 @@ public static partial class WorldObjectCatalog
     /// Turn ≈ tanh(2·tanh(3·DirectionY)), Step ≈ tanh(2·tanh(2·Gap) + 2·tanh(3·DirectionX) − 2).
     /// Step spada do zera przy styku z celem i gdy cel jest z boku lub z tyłu.
     /// </summary>
+    /// <summary>Sieć walca z losowymi wagami: te same wejścia i wyjścia co <see cref="CreateCylinderNeuralModule()"/>, podane warstwy ukryte.</summary>
+    public static NeuralNetworkModule CreateCylinderNeuralModule(params int[] aHidden)
+    {
+        var module = new NeuralNetworkModule(new NeuralNetwork([3, .. aHidden, 2])) { Name = "Neural" };
+        module.Ports.AddRange(TargetPorts);
+        module.Inputs.Add(new NeuralInput("Found * DirectionY"));
+        module.Inputs.Add(new NeuralInput("Found * Gap"));
+        module.Inputs.Add(new NeuralInput("Found * DirectionX"));
+        module.Outputs.Add(new NeuralOutput(DiskDriveActuator.TurnPort));
+        module.Outputs.Add(new NeuralOutput(DiskDriveActuator.StepPort));
+        return module;
+    }
+
     public static NeuralNetworkModule CreateCylinderNeuralModule()
     {
         var module = new NeuralNetworkModule(new NeuralNetwork(3, 6, 2)) { Name = "Neural" };
@@ -62,10 +75,10 @@ public static partial class WorldObjectCatalog
     }
 
     public static CylinderCreature CreateControllerSeeker(Vector3 aPosition, Guid? aTargetId) =>
-        CreateSeeker(aPosition, ControllerColor, aTargetId, new ApproachTargetModule { Name = "Approach" });
+        CreateSeeker(aPosition, RandomColor(), aTargetId, new ApproachTargetModule { Name = "Approach" });
 
     public static CylinderCreature CreateNeuralSeeker(Vector3 aPosition, Guid? aTargetId) =>
-        CreateSeeker(aPosition, NeuralColor, aTargetId, CreateCylinderNeuralModule());
+        CreateSeeker(aPosition, RandomColor(), aTargetId, CreateCylinderNeuralModule());
 
     /// <summary>
     /// Walec z siecią gotową do nauki: ręczne wagi zapisane w mózgu jako snapshot „ręczne wagi”, sieć wylosowana.

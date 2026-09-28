@@ -72,10 +72,11 @@ public static partial class WorldObjectCatalog
     /// Sieć autka (3 + wąsy)-8-2 z losowymi wagami: wejścia to kierunek do celu (bok, przód), szczelina/4
     /// i po jednym wejściu na wąs; wyjścia Steer, Throttle (tanh, więc także cofanie). Dla 5 wąsów: 8-8-2, 90 parametrów.
     /// </summary>
-    public static NeuralNetworkModule CreateCarNeuralModule(int aWhiskers = DefaultWhiskers)
+    public static NeuralNetworkModule CreateCarNeuralModule(int aWhiskers = DefaultWhiskers, params int[] aHidden)
     {
         var rays = Enumerable.Range(0, WhiskerAnglesFor(aWhiskers).Length).Select(RaySensor.PortName).ToArray();
-        var module = new NeuralNetworkModule(new NeuralNetwork(3 + rays.Length, 8, 2)) { Name = "Neural" };
+        int[] hidden = aHidden.Length > 0 ? aHidden : [8];
+        var module = new NeuralNetworkModule(new NeuralNetwork([3 + rays.Length, .. hidden, 2])) { Name = "Neural" };
         module.Ports.AddRange(TargetPorts);
         module.Ports.AddRange(rays);
         module.Inputs.Add(new NeuralInput("Found * DirectionY"));
@@ -89,8 +90,8 @@ public static partial class WorldObjectCatalog
     }
 
     public static CarCreature CreateControllerCar(Vector3 aPosition, float aYaw, Guid? aTargetId, int aWhiskers = DefaultWhiskers) =>
-        CreateCar(aPosition, aYaw, ControllerColor, aTargetId, CreateAvoidController(aWhiskers), aWhiskers);
+        CreateCar(aPosition, aYaw, RandomColor(), aTargetId, CreateAvoidController(aWhiskers), aWhiskers);
 
     public static CarCreature CreateNeuralCar(Vector3 aPosition, float aYaw, Guid? aTargetId, int aWhiskers = DefaultWhiskers) =>
-        CreateCar(aPosition, aYaw, NeuralColor, aTargetId, CreateCarNeuralModule(aWhiskers), aWhiskers);
+        CreateCar(aPosition, aYaw, RandomColor(), aTargetId, CreateCarNeuralModule(aWhiskers), aWhiskers);
 }

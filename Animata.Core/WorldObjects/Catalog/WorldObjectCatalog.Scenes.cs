@@ -113,4 +113,32 @@ public static partial class WorldObjectCatalog
             world.Add(creature);
         return new DemoScene(world, creatures);
     }
+
+    /// <summary>
+    /// Wspinaczka: dwa drzewa (pień r 0.25 m, 3 m) z kulkami na szczytach i dwa węże owinięte u podstaw —
+    /// „Wąż” z siecią (losowe wagi, uczy się wspinać po L) i „Wąż (toczenie)” z ręcznym CPG, który od razu wkręca się w górę.
+    /// </summary>
+    public static DemoScene CreateClimbScene()
+    {
+        var world = new World();
+        world.Add(Floor.At(20, 20));
+        var creatures = new List<ActiveEntity>();
+        foreach (var (x, name, neural) in new[] { (-2f, "Wąż", true), (2f, "Wąż (toczenie)", false) })
+        {
+            var tree = new Tree { Radius = Training.SeekRigs.ClimbTrunkRadius, Height = 3, Body = { Position = new Vector3(x, 0, 0) } };
+            tree.Name = $"Drzewo {creatures.Count + 1}";
+            world.Add(tree);
+            var target = CreateTargetBall(new Vector3(x, 0, tree.Height));
+            target.Radius = Training.SeekRigs.ClimbTargetRadius;
+            target.Name = $"Kulka {creatures.Count + 1}";
+            world.Add(target);
+            BrainModule brain = neural ? CreateSnakeNeuralModule(DefaultSnakeSegments, SnakeHiddenLayers) : CreateClimbingCpg();
+            var snake = CreateSnake(Vector3.Zero, 0, RandomColor(), target.Id, brain);
+            snake.Name = name;
+            snake.WrapAround(tree, creatures.Count * 1.3f);
+            world.Add(snake);
+            creatures.Add(snake);
+        }
+        return new DemoScene(world, creatures);
+    }
 }

@@ -133,6 +133,95 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     }
 
     /// <summary>
+    /// Stawia ciało wygięte: korzeń w pozie (<paramref name="aPosition"/>, <paramref name="aRotation"/>), a każdy staw kulowy
+    /// zgięty o (skręt, pochylenie) w radianach — części liczone od korzenia (kinematyka prosta, ta sama konwencja osi co
+    /// serwa). Cele serw dostają te same kąty, więc ciało zostaje w tej pozie, dopóki mózg go nie zmieni (np. wąż owinięty
+    /// wokół pnia na starcie próby wspinania). Prędkości zerowane.
+    /// </summary>
+    public void PlaceBent(Vector3 aPosition, Quaternion aRotation, Func<int, (float Yaw, float Pitch)> aBend)
+    {
+        Place(aPosition, aRotation);
+        var done = new bool[Plan.Parts.Count];
+        done[0] = true;
+        var remaining = Plan.Joints.Count;
+        while (remaining > 0)
+        {
+            var progress = false;
+            for (var joint = 0; joint < Plan.Joints.Count; joint++)
+            {
+                var parent = _parents[joint];
+                var child = _children[joint];
+                if (done[child] || !done[parent])
+                    continue;
+                var plan = Plan.Joints[joint];
+                var (yaw, pitch) = plan.Kind == JointKind.Ball ? aBend(joint) : (0f, 0f);
+                yaw = Math.Clamp(yaw, -plan.MaxYaw, plan.MaxYaw);
+                pitch = Math.Clamp(pitch, -plan.MaxPitch, plan.MaxPitch);
+                var parentPart = Plan.Parts[parent];
+                var childPart = Plan.Parts[child];
+                var toAnchor = Vector3.Transform(plan.Anchor - parentPart.Position, Quaternion.Inverse(parentPart.Orientation));
+                var fromAnchor = Vector3.Transform(childPart.Position - plan.Anchor, Quaternion.Inverse(childPart.Orientation));
+                var bend = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitY, pitch);
+                var orientation = Quaternion.Normalize(_orientations[parent] * _restRelative[joint] * bend);
+                var anchor = _positions[parent] + Vector3.Transform(toAnchor, _orientations[parent]);
+                _positions[child] = anchor + Vector3.Transform(fromAnchor, orientation);
+                _orientations[child] = orientation;
+                if (plan.Kind == JointKind.Ball)
+                {
+                    _targetYaw[joint] = yaw;
+                    _targetPitch[joint] = pitch;
+                    _yaw[joint] = yaw;
+                    _pitch[joint] = pitch;
+                }
+                done[child] = true;
+                remaining--;
+                progress = true;
+            }
+            if (!progress)
+                break;
+        }
+        if (_physics is { } physics)
+            for (var part = 0; part < Plan.Parts.Count; part++)
+            {
+                var body = physics.Body(_bodies[part]);
+                body.Pose = new RigidPose(_positions[part], _orientations[part] * FixOf(Plan.Parts[part]));
+                body.Velocity = default;
+            }
+    }
+
+    /// <summary>
+    /// Stawia części dokładnie w podanych pozach świata (np. wczytany wąż owinięty wokół pnia). Układ stwora wynika
+    /// z korzenia, cele serw — ze zmierzonych kątów stawów (ciało zostaje w tej pozie). Prędkości zerowane.
+    /// </summary>
+    public void PlaceParts(IReadOnlyList<Vector3> aPositions, IReadOnlyList<Quaternion> aOrientations)
+    {
+        if (aPositions.Count != Plan.Parts.Count || aOrientations.Count != Plan.Parts.Count)
+            throw new ArgumentException("One pose per part is required.");
+        for (var part = 0; part < Plan.Parts.Count; part++)
+        {
+            _positions[part] = aPositions[part];
+            _orientations[part] = MathF.Abs(aOrientations[part].LengthSquared() - 1) > 1e-4f ? Quaternion.Normalize(aOrientations[part]) : aOrientations[part];
+            if (_physics is { } physics)
+            {
+                var body = physics.Body(_bodies[part]);
+                body.Pose = new RigidPose(_positions[part], _orientations[part] * FixOf(Plan.Parts[part]));
+                body.Velocity = default;
+            }
+        }
+        MeasureJoints();
+        for (var joint = 0; joint < Plan.Joints.Count; joint++)
+        {
+            _targetYaw[joint] = _yaw[joint];
+            _targetPitch[joint] = _pitch[joint];
+        }
+        var root = Plan.Root;
+        Body.Rotation = Quaternion.Normalize(_orientations[0] * Quaternion.Inverse(root.Orientation));
+        Body.Position = _positions[0] - Vector3.Transform(root.Position, Body.Rotation);
+        _publishedPosition = Body.Position;
+        _publishedRotation = Body.Rotation;
+    }
+
+    /// <summary>
     /// Nowy plan ciała (np. inna liczba segmentów). Ciało staje w pozie spoczynkowej tam, gdzie jest stwór,
     /// cele stawów się zerują. Aktuatory, sensory i mózg dopasowuje wołający.
     /// </summary>
@@ -158,7 +247,9 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         for (var index = 0; index < Plan.Parts.Count; index++)
         {
             var part = Plan.Parts[index];
-            var (position, orientation) = RestPose(index);
+            // Bieżąca poza części: spoczynkowa (Place) albo wygięta (PlaceBent) przed dodaniem do świata.
+            var position = _positions[index];
+            var orientation = _orientations[index];
             var pose = new RigidPose(position, orientation * FixOf(part));
             _bodies[index] = part.Shape switch
             {
@@ -167,8 +258,6 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                 PartShape.Cylinder => aPhysics.AddBody(new Cylinder(part.Size.X, part.Size.Y), part.Mass, pose, group, index, part.Friction),
                 _ => aPhysics.AddBody(new Box(part.Size.X, part.Size.Y, part.Size.Z), part.Mass, pose, group, index, part.Friction)
             };
-            _positions[index] = position;
-            _orientations[index] = orientation;
         }
 
         for (var index = 0; index < Plan.Joints.Count; index++)
@@ -350,16 +439,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             _orientations[index] = Quaternion.Normalize(pose.Orientation * Quaternion.Inverse(FixOf(Plan.Parts[index])));
         }
 
-        for (var joint = 0; joint < _yaw.Length; joint++)
-        {
-            if (Plan.Joints[joint].Kind != JointKind.Ball)
-                continue;
-            var relative = Quaternion.Inverse(_orientations[_parents[joint]]) * _orientations[_children[joint]];
-            var bend = Quaternion.Inverse(_restRelative[joint]) * relative;
-            var axis = Vector3.Transform(Vector3.UnitX, bend);
-            _yaw[joint] = MathF.Atan2(axis.Y, axis.X);
-            _pitch[joint] = MathF.Atan2(-axis.Z, MathF.Sqrt(axis.X * axis.X + axis.Y * axis.Y));
-        }
+        MeasureJoints();
 
         // Układ stwora z korzenia: poza, w której korzeń byłby w swojej pozie spoczynkowej.
         var root = Plan.Root;
@@ -371,6 +451,21 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     }
 
     // ---------- pomocnicze ----------
+
+    /// <summary>Kąty stawów kulowych z bieżących orientacji części.</summary>
+    private void MeasureJoints()
+    {
+        for (var joint = 0; joint < _yaw.Length; joint++)
+        {
+            if (Plan.Joints[joint].Kind != JointKind.Ball)
+                continue;
+            var relative = Quaternion.Inverse(_orientations[_parents[joint]]) * _orientations[_children[joint]];
+            var bend = Quaternion.Inverse(_restRelative[joint]) * relative;
+            var axis = Vector3.Transform(Vector3.UnitX, bend);
+            _yaw[joint] = MathF.Atan2(axis.Y, axis.X);
+            _pitch[joint] = MathF.Atan2(-axis.Z, MathF.Sqrt(axis.X * axis.X + axis.Y * axis.Y));
+        }
+    }
 
     private void SetPlan(BodyPlan aPlan)
     {

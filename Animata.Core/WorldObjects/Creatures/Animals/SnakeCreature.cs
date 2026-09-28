@@ -23,6 +23,19 @@ public sealed class SnakeCreature : ArticulatedCreature
     public int Segments { get; private set; }
 
     /// <summary>
+    /// Wspinacz: uczy się wchodzić na drzewo (próby zaczyna owinięty wokół pnia, cel na jego szczycie —
+    /// <see cref="Training.SeekRigs.ClimbWith"/>), a nie pełzać po ziemi.
+    /// </summary>
+    public bool Climber { get; set; }
+
+    /// <summary>Owija węża wokół pnia (<see cref="SnakeWrap.Around"/>) i robi z niego wspinacza.</summary>
+    public void WrapAround(Tree aTree, float aAngle = 0)
+    {
+        SnakeWrap.Around(this, aTree.Body.Position, aTree.Radius, aAngle);
+        Climber = true;
+    }
+
+    /// <summary>
     /// Nowa liczba segmentów w miejscu: ciało przebudowane w pozie spoczynkowej przy głowie, porty kręgosłupa,
     /// czucia stawów i CPG idą za liczbą stawów, a połączenia „port do portu tej samej nazwy” (Yaw3 → Yaw3)
     /// obejmują nowe stawy. Parametry CPG zostają (nie zależą od długości węża). Sieć sterująca stawami

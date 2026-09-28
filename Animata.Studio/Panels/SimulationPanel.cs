@@ -260,10 +260,10 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             _items.Clear();
             AddGroup("Stwory", entities.OfType<ActiveEntity>());
             AddGroup("Cele", entities.OfType<TargetBall>());
-            AddGroup("Przeszkody", entities.OfType<Obstacle>());
+            AddGroup("Przeszkody", entities.Where(aEntity => aEntity is Obstacle or Tree));
             AddGroup("Teren", entities.OfType<Slab>());
             AddGroup("Podłoże", entities.OfType<Floor>());
-            AddGroup("Inne", entities.Where(aEntity => aEntity is not ActiveEntity and not TargetBall and not Obstacle and not Slab and not Floor));
+            AddGroup("Inne", entities.Where(aEntity => aEntity is not ActiveEntity and not TargetBall and not Obstacle and not Tree and not Slab and not Floor));
             UpdateListSelection();
         }
 
@@ -425,7 +425,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         if (entity is ActiveEntity or Slab)
             transform.Children.Add(Ui.Row("Kierunek [°]", yaw));
         var height = Ui.MonoText(string.Empty, 12.5);
-        _updaters.Add(() => height.Text = $"{Ui.F(entity.Body.Position.Z)} m" + (Session.SnapToGround && entity is TargetBall or Obstacle or Slab ? " · teren" : string.Empty));
+        _updaters.Add(() => height.Text = $"{Ui.F(entity.Body.Position.Z)} m" + (Session.SnapToGround && entity is TargetBall or Obstacle or Slab or Tree ? " · teren" : string.Empty));
         transform.Children.Add(Ui.Row("Wysokość", height));
         switch (entity)
         {
@@ -434,6 +434,23 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 break;
             case TargetBall ball:
                 transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(ball.Radius), aText => SetRadius(aText, aValue => ball.Radius = aValue), 110)));
+                break;
+            case Tree tree:
+                transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(tree.Radius), aText => SetRadius(aText, aValue => tree.Radius = aValue), 110)));
+                transform.Children.Add(Ui.Row("Wysokość pnia [m]", Ui.Field(Ui.F(tree.Height), aText =>
+                {
+                    if (!Ui.TryParse(aText, out var value) || value < 0.3f || value > 30)
+                        return false;
+                    tree.Height = value;
+                    return true;
+                }, 110)));
+                transform.Children.Add(Ui.Row("Tarcie kory", Ui.Field(Ui.F(tree.Bark), aText =>
+                {
+                    if (!Ui.TryParse(aText, out var value) || value < 0 || value > 5)
+                        return false;
+                    tree.Bark = value;
+                    return true;
+                }, 110)));
                 break;
             case Slab slab:
                 transform.Children.Add(Ui.Row("Szerokość [m]", Ui.Field(Ui.F(slab.Size.X), aText => SetSlabSize(slab, aText, 0), 110)));
@@ -446,6 +463,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         if (entity is ActiveEntity active)
         {
             var details = Ui.VStack(2, Ui.Header("Budowa"));
+            details.Children.Add(Ui.Row("Kolor", PanelParts.ColorPicker(active, () => { _listKey = string.Empty; _propertiesBuilt = false; }), 34));
             var controllers = active.Brain?.Graph.Modules.Where(aModule => aModule is not SensorModule and not ActuatorModule)
                 .Select(GraphCanvas.TitleOf).ToList() ?? [];
             details.Children.Add(Ui.Row("Mózg", controllers.Count > 0 ? string.Join(", ", controllers) : "—"));
@@ -453,7 +471,13 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             if (active is CarCreature car)
                 details.Children.Add(Ui.Row("Wąsy", PanelParts.WhiskerPicker(Session, car, () => _propertiesBuilt = false)));
             if (active is SnakeCreature snake)
+            {
                 details.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(Session, snake, () => _propertiesBuilt = false)));
+                var climber = new CheckBox { IsChecked = snake.Climber, Content = Ui.Text("wspinaczka na drzewo", 12.5) };
+                ToolTip.SetTip(climber, "Nauka uczy wchodzenia na drzewo (próby: wąż owinięty wokół pnia, kulka na szczycie) zamiast pełzania po ziemi.");
+                climber.IsCheckedChanged += (_, _) => snake.Climber = climber.IsChecked == true;
+                details.Children.Add(Ui.Row("Uczy się", climber, 34));
+            }
             details.Children.Add(Ui.Row("Napęd", string.Join(", ", active.Body.Actuators.Select(aActuator => aActuator.GetType().Name.Replace("Actuator", string.Empty)))));
             _properties.Children.Add(details);
             if (PanelParts.DriveEditor(active) is { } drive)
@@ -658,6 +682,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             case Key.P:
                 SelectNew(Session.AddSlab(_renderer.GroundPointAtCenter()));
                 return true;
+            case Key.R:
+                SelectNew(Session.AddTree(_renderer.GroundPointAtCenter()));
+                return true;
             case Key.G:
                 Session.ToggleSnap();
                 return true;
@@ -702,6 +729,12 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
             if (!many && entity is TargetBall ball)
                 menu.Items.Add(Item("Wszystkie oczy na tę kulkę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
+            if (!many && entity is SnakeCreature snake && Session.World.Entities.OfType<Tree>().Any())
+                menu.Items.Add(Item("Owiń wokół drzewa · wspinaczka", Icons.Tree, () =>
+                {
+                    Session.WrapAroundNearestTree(snake);
+                    _propertiesBuilt = false;
+                }));
             if (!entity.IsFixed)
             {
                 menu.Items.Add(Item("Kopiuj", Icons.Composite, CopySelection, Key.C, KeyModifiers.Control));
@@ -719,14 +752,13 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
         menu.Items.Add(Item("Autko", Icons.Wheel, () => SelectNew(Session.AddCreature(CreatureKind.Car, at))));
         menu.Items.Add(Item("Walec", Icons.Target, () => SelectNew(Session.AddCreature(CreatureKind.Cylinder, at))));
-        menu.Items.Add(Item("Wąż CPG", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.Snake, at))));
-        menu.Items.Add(Item("Wąż NN", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.NeuralSnake, at))));
+        menu.Items.Add(Item("Wąż", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.Snake, at))));
         menu.Items.Add(Item("Pająk", Icons.Spider, () => SelectNew(Session.AddCreature(CreatureKind.Spider, at))));
-        menu.Items.Add(Item("Pająk NN", Icons.Spider, () => SelectNew(Session.AddCreature(CreatureKind.NeuralSpider, at))));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Kulka", Icons.Target, () => SelectNew(Session.AddTarget(at)), Key.Insert));
         menu.Items.Add(Item("Słupek", Icons.Pillar, () => SelectNew(Session.AddObstacle(at)), Key.O));
         menu.Items.Add(Item("Płyta", Icons.Slab, () => SelectNew(Session.AddSlab(at)), Key.P));
+        menu.Items.Add(Item("Drzewo", Icons.Tree, () => SelectNew(Session.AddTree(at)), Key.R));
 
         menu.Open(_renderer.View);
     }
