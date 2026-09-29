@@ -129,12 +129,12 @@ public class EntityTypeTests
 /// Nowy stwór od zera — tylko ta klasa i jedna linijka rejestracji: toczek, klocek na dwóch kołach z okiem.
 /// Zapis, kopiowanie, wymiana mózgu i nauka działają bez żadnej zmiany w zapisie świata ani w nauce.
 /// </summary>
-public sealed class RollerCreature(Animata.Core.Brains.Brain? aBrain = null) : ArticulatedCreature(Plan(), aBrain)
+public sealed class RollerCreature(Animata.Core.Brains.Brain? aBrain = null) : ArticulatedCreature(DefaultPlan(), aBrain)
 {
     [Setting]
     public float Mood { get; set; } = 0.5f;
 
-    public static Animata.Core.Bodies.BodyPlan Plan()
+    public static Animata.Core.Bodies.BodyPlan DefaultPlan()
     {
         var builder = new Animata.Core.Bodies.BodyPlanBuilder()
             .Part(new Animata.Core.Bodies.PartPlan("Kadłub", Animata.Core.Bodies.PartShape.Box, new Vector3(0.5f, 0.3f, 0.15f), 1,
