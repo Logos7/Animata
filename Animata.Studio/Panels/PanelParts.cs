@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Animata.Core.Actuators;
 using Animata.Core.Entities;
+using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
 using Animata.Studio.Controls;
@@ -151,6 +152,52 @@ public static class PanelParts
             });
         };
         return picker;
+    }
+
+    /// <summary>
+    /// Wybór celu oka: „brak” albo jedna z kul sceny. Lista odświeża się przy każdym otwarciu (kule mogą przybyć lub zniknąć).
+    /// </summary>
+    public static Control TargetPicker(StudioSession aSession, TargetSensor aEye, Action? aChanged = null)
+    {
+        var picker = new ComboBox { MinWidth = 150 };
+        ToolTip.SetTip(picker, "Na co patrzy oko. Nauka i tak ćwiczy na własnych celach — to zmienia tylko cel w scenie.");
+        var updating = false;
+        var shown = string.Empty;
+        void Fill()
+        {
+            var current = aEye.TargetId is { } id ? aSession.World.Find(id) : null;
+            var key = string.Join("|", aSession.World.Entities.OfType<Sphere>().Select(aSphere => $"{aSphere.Id}:{StudioSession.NameOf(aSphere)}")) +
+                $"#{current?.Id}";
+            if (key == shown)
+                return;
+            shown = key;
+            updating = true;
+            var choices = new List<TargetChoice> { new(null, "brak") };
+            choices.AddRange(aSession.World.Entities.OfType<Sphere>().Select(aSphere => new TargetChoice(aSphere, StudioSession.NameOf(aSphere))));
+            if (current is not null and not Sphere)
+                choices.Add(new TargetChoice(current, StudioSession.NameOf(current)));
+            picker.ItemsSource = choices;
+            picker.SelectedItem = choices.FirstOrDefault(aChoice => ReferenceEquals(aChoice.Target, current)) ?? choices[0];
+            updating = false;
+        }
+        Fill();
+        picker.Tapped += (_, aEvent) => aEvent.Handled = true;
+        picker.PointerEntered += (_, _) => Fill();
+        picker.GotFocus += (_, _) => Fill();
+        picker.SelectionChanged += (_, _) =>
+        {
+            if (updating || picker.SelectedItem is not TargetChoice choice)
+                return;
+            aEye.TargetId = choice.Target?.Id;
+            aSession.Status = choice.Target is null ? "oko bez celu" : $"oko patrzy na: {choice.Name}";
+            aChanged?.Invoke();
+        };
+        return picker;
+    }
+
+    private sealed record TargetChoice(Entity? Target, string Name)
+    {
+        public override string ToString() => Name;
     }
 
     /// <summary>

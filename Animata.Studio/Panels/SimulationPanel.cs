@@ -451,9 +451,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         }
         if (entity is not ActiveEntity)
         {
-            var locked = new CheckBox { IsChecked = entity.Locked, Content = Ui.Text("nie przesuwa się ani nie usuwa", 12.5) };
-            ToolTip.SetTip(locked, "Zablokowanej encji (np. podłogi) nie przesuwa mysz, panel ani przyciąganie do terenu i nie da się jej usunąć — " +
-                "da się ją zaznaczyć i zmieniać tutaj.");
+            var locked = new CheckBox { IsChecked = entity.Locked, Content = Ui.Text("stoi — klik w scenie jej nie zaznacza", 12.5) };
+            ToolTip.SetTip(locked, "Zablokowana encja (np. podłoga) jest jak tło: klik w scenie jej nie zaznacza, nie przesuwa jej mysz, panel " +
+                "ani przyciąganie do terenu i nie da się jej usunąć. Zaznaczysz ją z listy albo przez PPM → Właściwości / Odblokuj.");
             locked.IsCheckedChanged += (_, _) => entity.Locked = locked.IsChecked == true;
             transform.Children.Add(Ui.Row("Zablokowany", locked, 34));
         }
@@ -467,6 +467,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 .Select(GraphCanvas.TitleOf).ToList() ?? [];
             details.Children.Add(Ui.Row("Mózg", controllers.Count > 0 ? string.Join(", ", controllers) : "—"));
             details.Children.Add(Ui.Row("Zmysły", string.Join(", ", active.Body.Sensors.Select(SensorName))));
+            if (active.Body.Sensors.OfType<TargetSensor>().FirstOrDefault() is { } eye)
+                details.Children.Add(Ui.Row("Cel oka", PanelParts.TargetPicker(Session, eye), 34));
             if (active is CarCreature car)
                 details.Children.Add(Ui.Row("Wąsy", PanelParts.WhiskerPicker(Session, car, () => _propertiesBuilt = false)));
             if (active is SnakeCreature snake)
@@ -719,25 +721,44 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         var selection = _renderer.Selection.Where(Session.World.Contains).ToList();
         if (aContext.Entity is { } entity && Session.World.Contains(entity))
         {
-            var many = selection.Count > 1 && selection.Contains(entity);
+            var many = !entity.Locked && selection.Count > 1 && selection.Contains(entity);
             menu.Items.Add(new MenuItem { Header = many ? $"Zaznaczono {selection.Count}" : StudioSession.NameOf(entity), IsEnabled = false });
-            if (!many && entity is ActiveEntity { Brain: not null } creature)
-                menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
-            if (!many && entity is Sphere ball)
-                menu.Items.Add(Item("Wszystkie oczy na tę kulę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
-            if (!many && entity is SnakeCreature snake && Session.World.Entities.OfType<Cylinder>().Any())
-                menu.Items.Add(Item("Owiń wokół cylindra · wspinaczka", Icons.Tree, () =>
-                {
-                    Session.WrapAroundNearestCylinder(snake);
-                    _propertiesBuilt = false;
-                }));
-            if (!entity.Locked)
+            if (entity.Locked)
             {
+                // Zablokowana stoi jak tło: klik jej nie zaznacza, menu pozwala ją obejrzeć albo odblokować.
+                menu.Items.Add(Item("Właściwości", Icons.Enter, () => _renderer.Select(entity)));
+                menu.Items.Add(Item("Odblokuj", Icons.Plus, () =>
+                {
+                    entity.Locked = false;
+                    _renderer.Select(entity);
+                    _propertiesBuilt = false;
+                    Session.Status = $"{StudioSession.NameOf(entity)}: odblokowane";
+                }));
+            }
+            else
+            {
+                if (!many && entity is ActiveEntity { Brain: not null } creature)
+                    menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
+                if (!many && entity is Sphere ball)
+                    menu.Items.Add(Item("Wszystkie oczy na tę kulę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
+                if (!many && entity is SnakeCreature snake && Session.World.Entities.OfType<Cylinder>().Any())
+                    menu.Items.Add(Item("Owiń wokół cylindra · wspinaczka", Icons.Tree, () =>
+                    {
+                        Session.WrapAroundNearestCylinder(snake);
+                        _propertiesBuilt = false;
+                    }));
+                if (!many && entity is Box or Cylinder or Sphere)
+                    menu.Items.Add(Item("Zablokuj", Icons.Pillar, () =>
+                    {
+                        entity.Locked = true;
+                        _renderer.Select(null);
+                        Session.Status = $"{StudioSession.NameOf(entity)}: zablokowane — stoi, klik go nie zaznacza (PPM → Odblokuj)";
+                    }));
                 menu.Items.Add(Item("Kopiuj", Icons.Composite, CopySelection, Key.C, KeyModifiers.Control));
                 menu.Items.Add(Item("Wytnij", Icons.Ungroup, CutSelection, Key.X, KeyModifiers.Control));
+                menu.Items.Add(Item(many ? $"Usuń ({selection.Count})" : "Usuń", Icons.Trash,
+                    () => RemoveEntities(many ? selection : [entity]), Key.Delete));
             }
-            menu.Items.Add(Item(many ? $"Usuń ({selection.Count})" : "Usuń", Icons.Trash,
-                () => RemoveEntities(many ? selection : [entity]), Key.Delete));
             menu.Items.Add(new Separator());
         }
         if (StudioSession.HasClipboard)

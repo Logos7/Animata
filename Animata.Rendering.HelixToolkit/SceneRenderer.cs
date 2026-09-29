@@ -262,13 +262,14 @@ public sealed class SceneRenderer : IDisposable
             : null;
         aEvent.Handled = true;
 
-        if (hit is null || (hit.Locked && !control && !shift && aEvent.ClickCount < 2))
+        if (hit is null || hit.Locked)
         {
-            // Pusto albo encja zablokowana (np. podłoga): klik ją zaznacza, a przeciągnięcie robi ramkę zaznaczenia
-            // (z Ctrl/Shift dokłada do obecnego zaznaczenia). Zablokowanej nie da się przesunąć.
+            // Pusto albo encja zablokowana (np. podłoga) — zablokowana stoi jak tło: LPM jej nie zaznacza (także z Ctrl/Shift
+            // i dwuklikiem), klik czyści zaznaczenie, a przeciągnięcie robi ramkę (z Ctrl/Shift dokłada do obecnego).
+            // Zaznaczyć ją można z listy encji albo z menu PPM (tam też „Odblokuj”).
             _bandBase = control || shift ? _selection.ToList() : [];
             if (!control && !shift)
-                Select(hit);
+                Select(null);
             _bandStart = point;
             _bandPointer = aEvent.Pointer;
             _bandPointer.Capture(_viewport);
@@ -293,7 +294,7 @@ public sealed class SceneRenderer : IDisposable
             EntityActivated?.Invoke(hit);
             return;
         }
-        if (!hit.Locked && TryGroundPoint(point, hit.Body.Position.Z, out var ground))
+        if (TryGroundPoint(point, hit.Body.Position.Z, out var ground))
         {
             // Płaszczyzna przeciągania na wysokości z chwili chwycenia — wysokość z terenu nie może jej przesuwać.
             // Przesuwa się całe zaznaczenie (bez encji zablokowanych), każda encja z własnym przesunięciem względem kursora.
@@ -420,9 +421,10 @@ public sealed class SceneRenderer : IDisposable
             ? ScenePicker.Pick(_world, origin, direction)
             : null;
         // Klik w zaznaczoną encję zostawia całe zaznaczenie (menu działa na wszystkich); w pustkę — też.
-        if (entity is not null && _selection.Contains(entity))
+        // Zablokowana encja dostaje menu (jest klikalna), ale się nie zaznacza.
+        if (entity is { Locked: false } && _selection.Contains(entity))
             SetSelection(_selection.ToList(), entity);
-        else if (entity is not null)
+        else if (entity is { Locked: false })
             Select(entity);
         Vector3? ground = TryGroundPoint(aPoint, 0, out var point) ? point : null;
         ContextRequested?.Invoke(new SceneContext(ground, entity));

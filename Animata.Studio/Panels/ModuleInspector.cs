@@ -244,7 +244,7 @@ public sealed class ModuleInspector
                 section.Children.Add(Ui.Row("Wykrywa", rays.Detects.ToString(), true));
                 break;
             case TargetSensor eye:
-                section.Children.Add(Ui.Row("Cel", eye.TargetId is { } id && _session.World.Find(id) is { } target ? StudioSession.NameOf(target) : "brak"));
+                section.Children.Add(Ui.Row("Cel", PanelParts.TargetPicker(_session, eye, () => Changed?.Invoke()), 34));
                 break;
             case JointSensor joints:
                 section.Children.Add(Ui.Row("Stawy", $"{joints.Joints} (Yaw, Pitch jako ułamek zakresu)", true));

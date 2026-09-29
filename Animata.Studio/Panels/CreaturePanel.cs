@@ -185,8 +185,7 @@ public sealed class CreaturePanel : StudioPanel
                 Grid.SetColumn(rows, 1);
                 grid.Children.Add(rows);
                 content.Children.Add(grid);
-                var target = Ui.Text(string.Empty, 12, "Studio.Text3");
-                content.Children.Add(target);
+                content.Children.Add(Ui.Row("Cel", PanelParts.TargetPicker(Session, eye), 34));
                 _updaters.Add(() =>
                 {
                     var readings = Read();
@@ -196,9 +195,6 @@ public sealed class CreaturePanel : StudioPanel
                             : Ui.F(readings.GetValueOrDefault(port), port.StartsWith("Direction") ? 3 : 2);
                     compass.Set(MathF.Atan2(readings.GetValueOrDefault(TargetSensor.DirectionYPort), readings.GetValueOrDefault(TargetSensor.DirectionXPort)),
                         readings.GetValueOrDefault(TargetSensor.FoundPort) > 0);
-                    target.Text = eye.TargetId is { } id && Session.World.Find(id) is { } found
-                        ? $"cel: {StudioSession.NameOf(found)}"
-                        : "cel: brak (w scenie: PPM → Kula)";
                 });
                 break;
             }
