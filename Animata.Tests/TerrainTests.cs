@@ -17,8 +17,8 @@ public class TerrainTests
     public void HeightAt_TakesTheHighestSurface_AndRespectsRotation()
     {
         using var world = new World();
-        world.Add(Floor.At(10, 10));
-        var slab = WorldObjectCatalog.CreateSlab(new Vector3(1, 0, 0), new Vector3(2, 0.4f, 0.1f), MathF.PI / 2);
+        world.Add(WorldObjectCatalog.CreateFloor(10, 10));
+        var slab = WorldObjectCatalog.CreateBox(new Vector3(1, 0, 0), new Vector3(2, 0.4f, 0.1f), MathF.PI / 2);
         world.Add(slab);
         Assert.Equal(0, Terrain.HeightAt(world, new Vector2(-3, 0)));
         Assert.Equal(0.1f, Terrain.HeightAt(world, new Vector2(1, 0.9f)), 1e-5f);
@@ -28,18 +28,35 @@ public class TerrainTests
     }
 
     [Fact]
+    public void Floor_IsAnOrdinaryBox_ThatMovesOnceUnlocked()
+    {
+        using var world = new World();
+        var floor = WorldObjectCatalog.CreateFloor(10, 10);
+        world.Add(floor);
+        floor.Place(new Vector3(2, 0, -0.2f), Quaternion.Identity);
+        Assert.Equal(new Vector3(0, 0, -0.2f), floor.Body.Position);
+        Assert.False(Terrain.Snap(world, floor));
+
+        floor.Locked = false;
+        floor.Place(new Vector3(2, 0, -0.2f), Quaternion.Identity);
+        Assert.Equal(new Vector3(2, 0, -0.2f), floor.Body.Position);
+        Assert.Equal(0, Terrain.HeightAt(world, new Vector2(6.5f, 0)));
+        Assert.Equal(0, Terrain.HeightAt(world, new Vector2(-3.5f, 0), aLockedOnly: true));
+    }
+
+    [Fact]
     public void Snap_PutsTargetOnSlab_ButNotSlabOnItself()
     {
         using var world = new World();
-        world.Add(Floor.At(10, 10));
-        var slab = WorldObjectCatalog.CreateSlab(Vector3.Zero, new Vector3(2, 2, 0.08f));
+        world.Add(WorldObjectCatalog.CreateFloor(10, 10));
+        var slab = WorldObjectCatalog.CreateBox(Vector3.Zero, new Vector3(2, 2, 0.08f));
         world.Add(slab);
-        var target = WorldObjectCatalog.CreateTargetBall(new Vector3(0.5f, 0.5f, 0));
+        var target = WorldObjectCatalog.CreateSphere(new Vector3(0.5f, 0.5f, 0));
         world.Add(target);
         Assert.True(Terrain.Snap(world, target));
         Assert.Equal(0.08f, target.Body.Position.Z, 1e-5f);
         Assert.False(Terrain.Snap(world, slab));
-        var overlapping = WorldObjectCatalog.CreateSlab(new Vector3(0.5f, 0, 0), new Vector3(2, 2, 0.05f));
+        var overlapping = WorldObjectCatalog.CreateBox(new Vector3(0.5f, 0, 0), new Vector3(2, 2, 0.05f));
         world.Add(overlapping);
         for (var round = 0; round < 3; round++)
         {
@@ -57,8 +74,8 @@ public class TerrainTests
     public void Snake_LiesOnASlab_InPhysics()
     {
         using var world = new World();
-        world.Add(Floor.At(20, 20));
-        var slab = WorldObjectCatalog.CreateSlab(new Vector3(-1, 0, 0), new Vector3(4, 1, 0.1f), 0);
+        world.Add(WorldObjectCatalog.CreateFloor(20, 20));
+        var slab = WorldObjectCatalog.CreateBox(new Vector3(-1, 0, 0), new Vector3(4, 1, 0.1f), 0);
         world.Add(slab);
         var snake = new SnakeCreature(6);   // bez mózgu: leży, nie pełza
         snake.Place(new Vector3(0.4f, 0, 0.1f), Quaternion.Identity);
@@ -79,7 +96,7 @@ public class TerrainTests
     public void NeuralSnake_ChangesLength_KeepingWeightsAndConvertingSnapshots()
     {
         using var world = new World();
-        world.Add(Floor.At(20, 20));
+        world.Add(WorldObjectCatalog.CreateFloor(20, 20));
         var snake = WorldObjectCatalog.CreateNeuralSnake(Vector3.Zero, 0, null, 5);
         world.Add(snake);
         var network = snake.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();

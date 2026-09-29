@@ -10,7 +10,7 @@ namespace Animata.Rendering.HelixToolkit;
 
 /// <summary>
 /// Picking myszą: promień z kamery przez piksel i trafienia w uproszczone bryły encji
-/// (kula celu, pionowe walce: walec, autko, słupek). Obrót ciał jest tylko wokół Z, więc walce zostają pionowe.
+/// (kula, pionowe walce: walec, autko, cylinder; klocki — także zablokowane, np. podłoga). Obrót ciał jest tylko wokół Z, więc walce zostają pionowe.
 /// </summary>
 internal static class ScenePicker
 {
@@ -90,15 +90,13 @@ internal static class ScenePicker
         {
             var hit = entity switch
             {
-                TargetBall target => HitBall(target, aOrigin, aDirection),
+                Sphere sphere => HitBall(sphere, aOrigin, aDirection),
                 CylinderCreature cylinder => HitCylinder(cylinder.Body, cylinder.Radius, cylinder.Height, aOrigin, aDirection),
                 CarCreature car => HitCylinder(car.Body, 0.5f * MathF.Max(car.Length, car.Width),
                     CarClearance + car.Height, aOrigin, aDirection),
-                Obstacle obstacle => HitCylinder(obstacle.Body, obstacle.Radius, obstacle.Height, aOrigin, aDirection),
-                Slab slab => HitSlab(slab, aOrigin, aDirection),
-                Tree tree => HitCylinder(tree.Body, tree.Radius, tree.Height, aOrigin, aDirection),
+                Cylinder cylinder => HitCylinder(cylinder.Body, cylinder.Radius, cylinder.Height, aOrigin, aDirection),
+                Box box => HitBox(box, aOrigin, aDirection),
                 ArticulatedCreature body => HitParts(body, aOrigin, aDirection),
-                // Podłoga (i każda encja IsFixed) nie jest łapana — kliknięcie w nią nic nie zaznacza ani nie przesuwa.
                 _ => null
             };
             if (hit is float distance && distance < best)
@@ -135,14 +133,14 @@ internal static class ScenePicker
         return near > 0 ? near : null;
     }
 
-    /// <summary>Promień kontra płyta: prostopadłościan w jej układzie (środek spodu w Body.Position, obrót wokół pionu).</summary>
-    private static float? HitSlab(Slab aSlab, Vector3 aOrigin, Vector3 aDirection)
+    /// <summary>Promień kontra klocek: prostopadłościan w jego układzie (środek spodu w Body.Position, obrót wokół pionu).</summary>
+    private static float? HitBox(Box aBox, Vector3 aOrigin, Vector3 aDirection)
     {
-        var inverse = Quaternion.Inverse(aSlab.Body.Rotation);
-        var origin = Vector3.Transform(aOrigin - aSlab.Body.Position, inverse);
+        var inverse = Quaternion.Inverse(aBox.Body.Rotation);
+        var origin = Vector3.Transform(aOrigin - aBox.Body.Position, inverse);
         var direction = Vector3.Transform(aDirection, inverse);
-        var min = new Vector3(-aSlab.Size.X / 2, -aSlab.Size.Y / 2, 0);
-        var max = new Vector3(aSlab.Size.X / 2, aSlab.Size.Y / 2, aSlab.Size.Z);
+        var min = new Vector3(-aBox.Size.X / 2, -aBox.Size.Y / 2, 0);
+        var max = new Vector3(aBox.Size.X / 2, aBox.Size.Y / 2, aBox.Size.Z);
         var near = float.NegativeInfinity;
         var far = float.PositiveInfinity;
         for (var axis = 0; axis < 3; axis++)
@@ -168,7 +166,7 @@ internal static class ScenePicker
     }
 
     /// <summary>Kulka leży na <see cref="Body.Position"/> (środek o promień wyżej).</summary>
-    private static float? HitBall(TargetBall aBall, Vector3 aOrigin, Vector3 aDirection) => aBall.Radius <= 0
+    private static float? HitBall(Sphere aBall, Vector3 aOrigin, Vector3 aDirection) => aBall.Radius <= 0
         ? null
         : HitSphere(aBall.Body.Position + Vector3.UnitZ * aBall.Radius, aBall.Radius, aOrigin, aDirection);
 

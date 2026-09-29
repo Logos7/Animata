@@ -24,7 +24,7 @@ public sealed class World : IDisposable
 
     /// <summary>
     /// Fizyka brył (Bepu) albo null. Powstaje przy dodaniu pierwszej encji dynamicznej (<see cref="IPhysicalEntity.IsDynamic"/>);
-    /// wtedy podpinają się też wszystkie statyczne encje fizyczne (podłoga, słupki).
+    /// wtedy podpinają się też wszystkie statyczne encje fizyczne (klocki, cylindry).
     /// </summary>
     public PhysicsWorld? Physics { get; private set; }
 

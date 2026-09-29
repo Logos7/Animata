@@ -18,17 +18,17 @@ public class SnakeTests
     private static World FloorWorld()
     {
         var world = new World();
-        world.Add(Floor.At(40, 40));
+        world.Add(WorldObjectCatalog.CreateFloor(40, 40));
         return world;
     }
 
     // ---------- podłoga ----------
 
     [Fact]
-    public void Floor_IsFixed_AndInvisibleToWhiskers()
+    public void Floor_IsALockedBox_AndInvisibleToWhiskers()
     {
         using var world = new World();
-        var floor = Floor.At(10, 10);
+        var floor = WorldObjectCatalog.CreateFloor(10, 10);
         world.Add(floor);
         var car = WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, null);
         world.Add(car);
@@ -36,8 +36,8 @@ public class SnakeTests
         floor.Place(new Vector3(3, 3, 3), Quaternion.Identity);
         world.Update(Delta);
 
-        Assert.True(floor.IsFixed);
-        Assert.Equal(new Vector3(0, 0, -0.1f), floor.Body.Position);
+        Assert.True(floor.Locked);
+        Assert.Equal(new Vector3(0, 0, -0.2f), floor.Body.Position);
         Assert.Equal(0f, floor.Top, 5);
         Assert.Equal(0, floor.BoundingRadius);
         Assert.NotNull(world.Physics);
@@ -128,7 +128,7 @@ public class SnakeTests
     public void HandCpg_CrawlsTowardsTheTarget()
     {
         using var world = FloorWorld();
-        var target = WorldObjectCatalog.CreateTargetBall(new Vector3(6, 0, 0));
+        var target = WorldObjectCatalog.CreateSphere(new Vector3(6, 0, 0));
         world.Add(target);
         var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), target.Id, WorldObjectCatalog.CreateCpg());
         world.Add(snake);
@@ -145,7 +145,7 @@ public class SnakeTests
     public void HandCpg_TurnsTowardsATargetOnTheSide()
     {
         using var world = FloorWorld();
-        var target = WorldObjectCatalog.CreateTargetBall(new Vector3(0, 5, 0));
+        var target = WorldObjectCatalog.CreateSphere(new Vector3(0, 5, 0));
         world.Add(target);
         var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), target.Id, WorldObjectCatalog.CreateCpg());
         world.Add(snake);

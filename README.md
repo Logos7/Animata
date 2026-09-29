@@ -33,7 +33,8 @@ and let it run on.
 
 ## What works today
 
-- **World and bodies.** Entities on a floor (a fixed box nothing can move). Every creature is built from blocks
+- **World and bodies.** Simple shapes are geometric: `Box`, `Cylinder` and `Sphere` (the target). The floor is just a
+  locked box — selectable, but it cannot be moved or deleted until unlocked. Every creature is built from blocks
   (parts and joints, a `BodyPlan`) and lives in real 3D rigid-body physics (BepuPhysics 2). Three creatures:
   a **car** (box body on four wheel bodies with suspension, front-wheel steering, rear-wheel drive), a **cylinder**
   (disc on two driven side wheels and two support balls, turns in place) and a **snake**. Drive settings — top speed,
@@ -48,7 +49,7 @@ and let it run on.
   something), so it can learn to lift its head at an edge.
 - **A spider.** A four-legged walker built from the same blocks: a flat trunk and four legs (hip: swing and lift,
   knee: bend). A trot generator (diagonal legs in step, six learnable parameters: stride, lift, knee bend, knee swing,
-  frequency, turning) walks it to the target — the hand-tuned gait reaches 8/8 targets on terrain with low slabs, and
+  frequency, turning) walks it to the target — the hand-tuned gait reaches 8/8 targets on terrain with low boxes, and
   evolution teaches a random gait the same in about ten generations. A second spider has a neural network (clock and
   eye in, sixteen joint commands out) and has to find a gait on its own. Spiders feel **touch** (each foot and the
   belly) and **balance** (trunk pitch and roll); training punishes lying on the belly or falling over, which removed the
@@ -56,16 +57,16 @@ and let it run on.
 - **Bodies that don't pass through themselves.** Parts of one creature collide with each other unless they are
   neighbours in the joint tree (one or two joints apart), so a coiled snake stays coiled and legs don't cross.
   Joint angles are measured around the child part's own axes, so a leg pointing sideways bends like one pointing forward.
-- **Climbing.** Trees are vertical trunks with grippy bark. A snake can be wrapped around a trunk (context menu
-  "Owiń wokół drzewa"): its joints get the constant bend of a helix slightly tighter than the trunk, so the coil
+- **Climbing.** A trunk is a cylinder with grip friction. A snake can be wrapped around a cylinder (context menu
+  "Owiń wokół cylindra"): its joints get the constant bend of a helix slightly tighter than the trunk, so the coil
   squeezes and friction holds it. Rolling the coil — every joint's bend vector turning in time — screws it up the
   trunk: the hand-tuned rolling CPG climbs about 0.35 m/s and reaches the ball on top of a 2–3.5 m trunk in 5 of 6
   trials. A snake marked as a climber trains on climbing (wrapped at the base, target on top). A neural snake does
   not learn to climb from random weights yet (150 generations: no trial reached the top). Snake joints bend ±69° in
   both axes with 8 N·m servos.
-- **Terrain.** Flat slabs (a few centimetres high, any size and rotation) lie on the floor; snakes climb over them in
-  physics, and training episodes for snakes scatter 0–3 slabs on the way, sometimes with the target on top of one.
-  Targets, posts and slabs snap to the height of the ground under them (a toggle in the scene).
+- **Terrain.** Flat boxes (a few centimetres high, any size and rotation) lie on the floor; snakes climb over them in
+  physics, and training episodes for snakes scatter 0–3 boxes on the way, sometimes with the target on top of one.
+  Spheres, cylinders and boxes snap to the height of the ground under them (a toggle in the scene).
 - **Senses.** An eye that tracks a target (distance, gap, direction in the creature's own frame) and whiskers: rays
   that report how close obstacles are. A car can have any odd number of whiskers from 1 to 25, spread over 120°;
   the number can be changed on a living car (scene, creature view or graph inspector): the same brain is rewired in
@@ -156,12 +157,12 @@ CI (GitHub Actions, `.github/workflows/build.yml`) builds the whole solution and
 | Everywhere | Esc · Alt+← · mouse Back | Zoom out one level |
 | Scene, creature, graph | Space | Pause / resume the world |
 | Scene | LMB drag | Move entities (dragging one of several selected moves them all) |
-| Scene | LMB drag from empty space · Ctrl+click · Shift+click · Ctrl+A | Box-select · toggle · add to selection · select all |
+| Scene | LMB drag from empty space or a locked entity (floor) · Ctrl+click · Shift+click · Ctrl+A | Box-select · toggle · add to selection · select all |
 | Scene | Del · Ctrl+C · Ctrl+X · Ctrl+V | Delete the whole selection · copy · cut · paste under the mouse (brains, snapshots and settings included; works across scenes) |
-| Scene | RMB click | Context menu: insert a car, cylinder, snake or spider (each with a two-hidden-layer neural network with random weights and a random colour; swap the brain module in the graph), a target, post, slab or tree where you clicked; on an entity: enter, aim eyes, copy, cut, delete, and on a snake: wrap it around the nearest tree |
+| Scene | RMB click | Context menu: insert a car, walec (disc robot), snake or spider (each with a two-hidden-layer neural network with random weights and a random colour; swap the brain module in the graph), a sphere (target), cylinder or box where you clicked; on an entity: enter, aim eyes, copy, cut, delete, and on a snake: wrap it around the nearest cylinder |
 | Scene | RMB drag · WSADQE · wheel | Look around · fly · fly forward/back (the wheel works like W/S) |
-| Scene | Ins · O · P · R · T · Del | Add target · post · slab · tree · aim all eyes at the selected target · delete |
-| Scene | G · magnet button | Snap to ground on/off: targets, posts and dragged entities stand on the floor or slab below |
+| Scene | Ins · O · P · T · Del | Add sphere · cylinder · box · aim all eyes at the selected sphere · delete |
+| Scene | G · magnet button | Snap to ground on/off: spheres, cylinders and dragged entities stand on the highest box below (e.g. the floor) |
 | Scene | L · K | Start/stop training · random weights and retrain |
 | Scene, creature | Ctrl+S · Z | Snapshot the brain · step back through snapshots |
 | Scene | Save · Load (toolbar) | Write the whole world to a `.animata.json` file · replace the scene with a saved one |

@@ -77,7 +77,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     /// <summary>Orientacje części w świecie (oś X części = jej długość).</summary>
     public IReadOnlyList<Quaternion> PartOrientations => _orientations;
 
-    /// <summary>Czy część czegoś dotykała w ostatnim kroku fizyki (podłoża, płyty, przeszkody, innej części).</summary>
+    /// <summary>Czy część czegoś dotykała w ostatnim kroku fizyki (klocka, cylindra, innej części).</summary>
     public bool IsPartTouching(int aPart) => _physics is { } physics && aPart < _bodies.Length && physics.IsTouching(_bodies[aPart]);
 
     /// <summary>Zmierzony skręt stawu (rad, wokół osi Z dziecka w pozie spoczynkowej).</summary>

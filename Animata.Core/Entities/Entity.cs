@@ -33,18 +33,18 @@ public abstract class Entity
     public virtual EntityCategory Category => EntityCategory.None;
 
     /// <summary>
-    /// Nieruszalna: ani myszą, ani z panelu, ani kolizjami, ani przez <see cref="Place"/> (np. podłoga).
-    /// UI jej nie przesuwa i nie usuwa, picking w 3D jej nie łapie.
+    /// Zablokowana (np. klocek-podłoga): nie przesuwa jej mysz, panel, <see cref="Place"/> ani przyciąganie do terenu,
+    /// UI jej nie usuwa ani nie kopiuje. Da się ją zaznaczyć i zmienić we właściwościach (tam też się ją odblokowuje).
     /// </summary>
-    public virtual bool IsFixed => false;
+    public bool Locked { get; set; }
 
     /// <summary>
     /// Stawia encję w nowym miejscu (np. przeciągnięcie myszą, początek próby w nauce). Ciało złożone z części
-    /// przenosi wszystkie części i zeruje ich prędkości. Encji <see cref="IsFixed"/> nie rusza.
+    /// przenosi wszystkie części i zeruje ich prędkości. Encji <see cref="Locked"/> nie rusza.
     /// </summary>
     public virtual void Place(Vector3 aPosition, Quaternion aRotation)
     {
-        if (IsFixed)
+        if (Locked)
             return;
         Body.Position = aPosition;
         Body.Rotation = aRotation;

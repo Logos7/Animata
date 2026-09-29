@@ -90,13 +90,12 @@ public sealed class StudioSession : IDisposable
     public static string NameOf(Entity aEntity) => !string.IsNullOrWhiteSpace(aEntity.Name) ? aEntity.Name : aEntity switch
     {
         SnakeCreature => "Wąż",
-        Tree => "Drzewo",
         SpiderCreature => "Pająk",
-        Floor floor => $"Podłoga {floor.Size.X:0.#} × {floor.Size.Y:0.#} m",
         CarCreature => "Autko",
         CylinderCreature => "Walec",
-        TargetBall => "Kulka",
-        Obstacle obstacle => $"Słupek r {obstacle.Radius:0.0#}",
+        Box box => $"Klocek {box.Size.X:0.##} × {box.Size.Y:0.##} × {box.Size.Z:0.##} m",
+        Cylinder cylinder => $"Cylinder r {cylinder.Radius:0.0#}",
+        Sphere => "Kula",
         _ => aEntity.GetType().Name
     };
 
@@ -253,15 +252,15 @@ public sealed class StudioSession : IDisposable
     };
 
     /// <summary>
-    /// Przyciąganie do terenu (domyślnie włączone): kulki i słupki stoją na najwyższej powierzchni pod nimi (podłoga, płyta),
-    /// płyty — na podłodze; nowe i przeciągane encje (także stwory) lądują na tej wysokości. Wyłączone — wysokość się nie zmienia.
+    /// Przyciąganie do terenu (domyślnie włączone): kule i cylindry stoją na najwyższym klocku pod nimi, klocki — na klocku
+    /// zablokowanym (podłodze); nowe i przeciągane encje (także stwory) lądują na tej wysokości. Wyłączone — wysokość się nie zmienia.
     /// </summary>
     public bool SnapToGround { get; set; } = true;
 
     /// <summary>Wysokość, na której staje encja w punkcie (przy wyłączonym przyciąganiu — 0 albo bez zmian).</summary>
     public float GroundAt(Vector3 aPoint, Entity? aEntity = null) =>
         !SnapToGround ? aEntity?.Body.Position.Z ?? 0
-        : aEntity is Slab ? Terrain.HeightAt(World, new Vector2(aPoint.X, aPoint.Y), aEntity, aFloorsOnly: true)
+        : aEntity is Box ? Terrain.HeightAt(World, new Vector2(aPoint.X, aPoint.Y), aEntity, aLockedOnly: true)
         : Terrain.HeightAt(World, new Vector2(aPoint.X, aPoint.Y), aEntity);
 
     public string ToggleSnap()
@@ -270,13 +269,13 @@ public sealed class StudioSession : IDisposable
         return Status = SnapToGround ? "przyciąganie do terenu: włączone" : "przyciąganie do terenu: wyłączone";
     }
 
-    /// <summary>Kulki, słupki i płyty z powrotem na terenie (np. po zmianie pozycji w panelu albo przesunięciu płyty).</summary>
+    /// <summary>Kule, cylindry i klocki z powrotem na terenie (np. po zmianie pozycji w panelu albo przesunięciu klocka); zablokowanych nie rusza.</summary>
     private void SnapStatics()
     {
         if (!SnapToGround)
             return;
         foreach (var entity in World.Entities)
-            if (entity is Slab or TargetBall or Obstacle or Tree)
+            if (entity is Box or Sphere or Cylinder)
                 Terrain.Snap(World, entity);
     }
 
@@ -295,7 +294,7 @@ public sealed class StudioSession : IDisposable
     }
 
     /// <summary>
-    /// Wstawia zwierzątko w punkcie podłoża: patrzy na najbliższą kulkę i na nią poluje; ma losowe parametry i nie uczy się, dopóki użytkownik nie włączy nauki
+    /// Wstawia zwierzątko w punkcie podłoża: patrzy na najbliższą kulę i na nią poluje; ma losowe parametry i nie uczy się, dopóki użytkownik nie włączy nauki
     /// (autko i walec — sieć neuronowa, wąż — CPG). Liczbę wąsów i segmentów zmienia się potem we właściwościach.
     /// </summary>
     public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition)
@@ -320,15 +319,15 @@ public sealed class StudioSession : IDisposable
         creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));
         creature.Name = UniqueName(KindName(aKind));
         World.Add(creature);
-        Status = target is null ? $"dodano: {creature.Name} (brak kulki — dodaj cel)" : $"dodano: {creature.Name}";
+        Status = target is null ? $"dodano: {creature.Name} (brak kuli — dodaj cel)" : $"dodano: {creature.Name}";
         return creature;
     }
 
-    /// <summary>Nowa kulka; oczy, które nie mają celu (albo ich cel zniknął), patrzą na nią.</summary>
-    public TargetBall AddTarget(Vector3 aPosition)
+    /// <summary>Nowa kula; oczy, które nie mają celu (albo ich cel zniknął), patrzą na nią.</summary>
+    public Sphere AddSphere(Vector3 aPosition)
     {
-        var target = WorldObjectCatalog.CreateTargetBall(aPosition with { Z = GroundAt(aPosition) });
-        target.Name = UniqueName("Kulka");
+        var target = WorldObjectCatalog.CreateSphere(aPosition with { Z = GroundAt(aPosition) });
+        target.Name = UniqueName("Kula");
         World.Add(target);
         foreach (var eye in Creatures.SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>()))
             if (eye.TargetId is not { } id || World.Find(id) is null)
@@ -337,35 +336,27 @@ public sealed class StudioSession : IDisposable
         return target;
     }
 
-    public Obstacle AddObstacle(Vector3 aPosition)
+    /// <summary>Cylinder r 0.5 m, 0.8 m na terenie.</summary>
+    public Cylinder AddCylinder(Vector3 aPosition)
     {
-        var obstacle = WorldObjectCatalog.CreateObstacle(aPosition with { Z = GroundAt(aPosition) });
-        World.Add(obstacle);
-        Status = "dodano słupek";
-        return obstacle;
-    }
-
-    /// <summary>Drzewo (pień r 0.25 m, 3 m) na terenie.</summary>
-    public Tree AddTree(Vector3 aPosition)
-    {
-        var tree = new Tree { Radius = SeekRigs.ClimbTrunkRadius, Height = 3, Body = { Position = aPosition with { Z = GroundAt(aPosition) } } };
-        tree.Name = UniqueName("Drzewo");
-        World.Add(tree);
-        Status = $"dodano: {tree.Name}";
-        return tree;
+        var cylinder = WorldObjectCatalog.CreateCylinder(aPosition with { Z = GroundAt(aPosition) });
+        cylinder.Name = UniqueName("Cylinder");
+        World.Add(cylinder);
+        Status = $"dodano: {cylinder.Name}";
+        return cylinder;
     }
 
     /// <summary>
-    /// Owija węża wokół najbliższego drzewa (jego podstawy) i robi z niego wspinacza — nauka będzie go uczyć wchodzenia
-    /// na drzewo. Zwraca false, gdy w scenie nie ma drzewa.
+    /// Owija węża wokół najbliższego cylindra (jego podstawy) i robi z niego wspinacza — nauka będzie go uczyć wchodzenia
+    /// na ten cylinder (trzyma się tylko cylindra z tarciem chwytnym). Zwraca false, gdy w scenie nie ma cylindra.
     /// </summary>
-    public bool WrapAroundNearestTree(SnakeCreature aSnake)
+    public bool WrapAroundNearestCylinder(SnakeCreature aSnake)
     {
-        var tree = World.Entities.OfType<Tree>()
+        var tree = World.Entities.OfType<Cylinder>()
             .MinBy(aTree => Vector2.Distance(new Vector2(aTree.Body.Position.X, aTree.Body.Position.Y), new Vector2(aSnake.Body.Position.X, aSnake.Body.Position.Y)));
         if (tree is null)
         {
-            Status = "w scenie nie ma drzewa";
+            Status = "w scenie nie ma cylindra";
             return false;
         }
         if (WithTrainingPaused(aSnake, () =>
@@ -374,15 +365,16 @@ public sealed class StudioSession : IDisposable
                 aSnake.Brain?.Reset();
             }) is null)
             return false;
-        Status = $"{NameOf(aSnake)} owinięty wokół: {NameOf(tree)} — uczy się wspinać";
+        Status = $"{NameOf(aSnake)} owinięty wokół: {NameOf(tree)} — uczy się wspinać"
+            + (tree.Grip > 0 ? string.Empty : " (cylinder bez tarcia chwytnego — wąż się zsunie; ustaw je we właściwościach)");
         return true;
     }
 
-    /// <summary>Płaska płyta terenu 1.5 × 1 × 0.06 m na podłodze.</summary>
-    public Slab AddSlab(Vector3 aPosition)
+    /// <summary>Płaski klocek 1.5 × 1 × 0.06 m na podłodze.</summary>
+    public Box AddBox(Vector3 aPosition)
     {
-        var slab = WorldObjectCatalog.CreateSlab(aPosition with { Z = 0 }, new Vector3(1.5f, 1, 0.06f));
-        slab.Name = UniqueName("Płyta");
+        var slab = WorldObjectCatalog.CreateBox(aPosition with { Z = 0 }, new Vector3(1.5f, 1, 0.06f));
+        slab.Name = UniqueName("Klocek");
         World.Add(slab);
         if (SnapToGround)
             Terrain.Snap(World, slab);
@@ -390,8 +382,8 @@ public sealed class StudioSession : IDisposable
         return slab;
     }
 
-    /// <summary>Wszystkie oczy patrzą na podaną kulkę.</summary>
-    public void AimAllEyes(TargetBall aTarget)
+    /// <summary>Wszystkie oczy patrzą na podaną kulę.</summary>
+    public void AimAllEyes(Sphere aTarget)
     {
         foreach (var eye in Creatures.SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>()))
             eye.TargetId = aTarget.Id;
@@ -497,7 +489,7 @@ public sealed class StudioSession : IDisposable
         return training;
     }
 
-    private TargetBall? NearestTarget(Vector3 aPosition) => World.Entities.OfType<TargetBall>()
+    private Sphere? NearestTarget(Vector3 aPosition) => World.Entities.OfType<Sphere>()
         .MinBy(aTarget => Vector3.DistanceSquared(aTarget.Body.Position, aPosition));
 
     private string UniqueName(string aName)
@@ -513,9 +505,9 @@ public sealed class StudioSession : IDisposable
 
     public void Remove(Entity aEntity)
     {
-        if (aEntity.IsFixed)
+        if (aEntity.Locked)
         {
-            Status = $"{NameOf(aEntity)} jest nieruszalna — nie da się jej usunąć";
+            Status = $"{NameOf(aEntity)}: zablokowane — odblokuj we właściwościach, żeby usunąć";
             return;
         }
         if (aEntity is ActiveEntity { Brain: { } brain })
@@ -533,7 +525,7 @@ public sealed class StudioSession : IDisposable
         var removed = 0;
         foreach (var entity in aEntities.ToList())
         {
-            if (entity.IsFixed || !World.Contains(entity))
+            if (entity.Locked || !World.Contains(entity))
                 continue;
             Remove(entity);
             removed++;
@@ -551,12 +543,12 @@ public sealed class StudioSession : IDisposable
     public static bool HasClipboard => _clipboard.Count > 0;
 
     /// <summary>
-    /// Kopiuje encje do schowka (całe: ciało, mózg, snapshoty, ustawienia — jak w pliku świata). Nieruszalne (podłoga)
+    /// Kopiuje encje do schowka (całe: ciało, mózg, snapshoty, ustawienia — jak w pliku świata). Zablokowane (np. podłoga)
     /// są pomijane. Schowek jest wspólny dla scen — można wkleić w drugiej scenie.
     /// </summary>
     public int Copy(IEnumerable<Entity> aEntities)
     {
-        var entities = aEntities.Where(aEntity => !aEntity.IsFixed && World.Contains(aEntity)).ToList();
+        var entities = aEntities.Where(aEntity => !aEntity.Locked && World.Contains(aEntity)).ToList();
         if (entities.Count == 0)
         {
             Status = "nic do skopiowania";
@@ -580,7 +572,7 @@ public sealed class StudioSession : IDisposable
     /// <summary>Kopiuje do schowka i usuwa ze sceny.</summary>
     public int Cut(IEnumerable<Entity> aEntities)
     {
-        var entities = aEntities.Where(aEntity => !aEntity.IsFixed && World.Contains(aEntity)).ToList();
+        var entities = aEntities.Where(aEntity => !aEntity.Locked && World.Contains(aEntity)).ToList();
         var copied = Copy(entities);
         if (copied == 0)
             return 0;

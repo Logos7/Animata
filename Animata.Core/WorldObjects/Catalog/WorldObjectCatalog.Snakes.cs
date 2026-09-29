@@ -68,7 +68,7 @@ public static partial class WorldObjectCatalog
     /// <summary>
     /// CPG wspinacza: toczenie zwoju — skręt i pochylenie każdego stawu to ten sam wektor zgięcia obracający się w czasie
     /// (Yaw = A sin φ, Pitch = A sin(φ + π/2)), o długości zgięcia helisy owiniętej wokół pnia r 0.25 m. Zwój toczy się po korze
-    /// i wkręca w górę (~0.35 m/s przy 1.2 Hz; na pniu 2–3.5 m dochodzi do kulki na szczycie w 5 z 6 prób). Bez skrętu do celu — na pniu cel jest „nad głową”.
+    /// i wkręca w górę (~0.35 m/s przy 1.2 Hz; na pniu 2–3.5 m dochodzi do kuli na szczycie w 5 z 6 prób). Bez skrętu do celu — na pniu cel jest „nad głową”.
     /// </summary>
     public static CpgModule CreateClimbingCpg(int aSegments = DefaultSnakeSegments)
     {

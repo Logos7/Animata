@@ -73,9 +73,9 @@ public class CompositeModuleTests
         (World, CarCreature) Build()
         {
             var world = new World();
-            var target = WorldObjectCatalog.CreateTargetBall(new Vector3(7, 1, 0));
+            var target = WorldObjectCatalog.CreateSphere(new Vector3(7, 1, 0));
             world.Add(target);
-            world.Add(WorldObjectCatalog.CreateObstacle(new Vector3(3.5f, 0.4f, 0), 0.7f));
+            world.Add(WorldObjectCatalog.CreateCylinder(new Vector3(3.5f, 0.4f, 0), 0.7f));
             var car = WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, target.Id);
             world.Add(car);
             return (world, car);

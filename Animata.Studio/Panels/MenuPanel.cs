@@ -187,10 +187,10 @@ public sealed class MenuPanel : StudioPanel
             var session = scene.Session;
             map.World = session.World;
             var creatures = session.Creatures.Count();
-            var obstacles = session.World.Entities.OfType<Obstacle>().Count();
-            var targets = session.World.Entities.OfType<TargetBall>().Count();
+            var obstacles = session.World.Entities.OfType<Cylinder>().Count();
+            var targets = session.World.Entities.OfType<Sphere>().Count();
             var learning = session.Creatures.Count(session.IsTraining);
-            info.Text = $"{creatures} stwory · {targets} cele · {obstacles} słupki" + (learning > 0 ? $" · {learning} uczą się" : string.Empty);
+            info.Text = $"{creatures} stwory · {targets} kule · {obstacles} cylindry" + (learning > 0 ? $" · {learning} uczą się" : string.Empty);
         }
     }
 

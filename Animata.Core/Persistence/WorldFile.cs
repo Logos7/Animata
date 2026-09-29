@@ -14,8 +14,8 @@ namespace Animata.Core.Persistence;
 // ---------- dokument ----------
 
 /// <summary>
-/// Zapisany świat (JSON). Format w <see cref="Format"/> — przy zmianie formatu podbić i dopisać migrację w <see cref="WorldFile"/>.
-/// Zapisuje się: encje (z Id, żeby oko mogło wskazywać kulkę), ich pozy i wymiary, parametry ciał (liczba wąsów,
+/// Zapisany świat (JSON). Format w <see cref="WorldFile.Format"/> — przy zmianie formatu podbić.
+/// Zapisuje się: encje (z Id, żeby oko mogło wskazywać kulę), ich pozy i wymiary, parametry ciał (liczba wąsów,
 /// segmentów), cel oka i pełny mózg: strukturę (moduły, porty, połączenia, podgrafy, położenia węzłów w edytorze),
 /// stan modułów (wagi, parametry) i snapshoty. Nie zapisuje się stanu chwilowego (pamięć sterowników, faza CPG,
 /// prędkości w fizyce) ani nauki w toku — po wczytaniu nauka startuje od zapisanych parametrów.
@@ -23,34 +23,31 @@ namespace Animata.Core.Persistence;
 public sealed record WorldDocument(int Format, string Name, double Time, IReadOnlyList<EntityDocument> Entities);
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(FloorDocument), "floor")]
-[JsonDerivedType(typeof(TargetDocument), "target")]
-[JsonDerivedType(typeof(ObstacleDocument), "obstacle")]
-[JsonDerivedType(typeof(SlabDocument), "slab")]
-[JsonDerivedType(typeof(TreeDocument), "tree")]
-[JsonDerivedType(typeof(CarDocument), "car")]
+[JsonDerivedType(typeof(BoxDocument), "box")]
 [JsonDerivedType(typeof(CylinderDocument), "cylinder")]
+[JsonDerivedType(typeof(SphereDocument), "sphere")]
+[JsonDerivedType(typeof(CarDocument), "car")]
+[JsonDerivedType(typeof(CylinderCreatureDocument), "cylinderCreature")]
 [JsonDerivedType(typeof(SnakeDocument), "snake")]
 [JsonDerivedType(typeof(SpiderDocument), "spider")]
 public abstract record EntityDocument(Guid Id, string Name, float[] Position, float[] Rotation);
 
-public sealed record FloorDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Size)
+/// <summary>Klocek: środek spodu, obrót, wymiary (X, Y, wysokość), kolor, blokada (podłoga).</summary>
+public sealed record BoxDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Size, float[] Color, bool Locked)
     : EntityDocument(Id, Name, Position, Rotation);
 
-public sealed record TargetDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius)
-    : EntityDocument(Id, Name, Position, Rotation);
+/// <summary>Cylinder: podstawa, promień, wysokość, tarcie chwytne (0 — brak), kolor, blokada.</summary>
+public sealed record CylinderDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius, float Height, float Grip,
+    float[] Color, bool Locked) : EntityDocument(Id, Name, Position, Rotation);
 
-public sealed record ObstacleDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius, float Height)
-    : EntityDocument(Id, Name, Position, Rotation);
-
-/// <summary>Płyta terenu: środek spodu, obrót, wymiary (X, Y, wysokość).</summary>
-public sealed record SlabDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Size)
+/// <summary>Kula (cel oka): spód, promień, blokada.</summary>
+public sealed record SphereDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius, bool Locked)
     : EntityDocument(Id, Name, Position, Rotation);
 
 public sealed record CarDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Whiskers,
     float WhiskerRange, Guid? Target, BrainDocument Brain, DriveDocument? Drive = null) : EntityDocument(Id, Name, Position, Rotation);
 
-public sealed record CylinderDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, Guid? Target,
+public sealed record CylinderCreatureDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, Guid? Target,
     BrainDocument Brain, DriveDocument? Drive = null) : EntityDocument(Id, Name, Position, Rotation);
 
 /// <summary>Ustawienia napędu (autko: prędkości, skręt, moment; walec: prędkość, obrót, moment). Brak = domyślne.</summary>
@@ -62,10 +59,6 @@ public sealed record DriveDocument(float MaxSpeed, float MaxReverseSpeed, float 
 /// </summary>
 public sealed record SnakeDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Segments,
     Guid? Target, BrainDocument Brain, bool Climber = false, float[]? Parts = null) : EntityDocument(Id, Name, Position, Rotation);
-
-/// <summary>Drzewo (pień do wspinania).</summary>
-public sealed record TreeDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius, float Height, float Bark)
-    : EntityDocument(Id, Name, Position, Rotation);
 
 public sealed record SpiderDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color,
     Guid? Target, BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
@@ -108,7 +101,8 @@ public sealed record CompositeNode(Guid Id, string Name, Guid InputId, Guid Outp
 /// <summary>Zapis i odczyt świata: <see cref="Capture"/> → <see cref="ToJson"/> / <see cref="FromJson"/> → <see cref="Restore"/>.</summary>
 public static class WorldFile
 {
-    public const int Format = 1;
+    /// <summary>Format 2: bryły geometryczne (box, cylinder, sphere) zamiast floor/slab/obstacle/tree/target; format 1 nie jest czytany.</summary>
+    public const int Format = 2;
 
     /// <summary>Sugerowane rozszerzenie pliku.</summary>
     public const string Extension = ".animata.json";
@@ -124,8 +118,8 @@ public static class WorldFile
     public static WorldDocument FromJson(string aJson)
     {
         var document = JsonSerializer.Deserialize<WorldDocument>(aJson, Options) ?? throw new JsonException("Pusty plik świata.");
-        if (document.Format > Format)
-            throw new NotSupportedException($"Plik świata ma format {document.Format}, a ta wersja zna najwyżej {Format}.");
+        if (document.Format != Format)
+            throw new NotSupportedException($"Plik świata ma format {document.Format}, a ta wersja czyta tylko format {Format}.");
         return document;
     }
 
@@ -158,7 +152,7 @@ public static class WorldFile
             EntityDocument moved = document switch
             {
                 CarDocument car => car with { Target = Remap(car.Target) },
-                CylinderDocument cylinder => cylinder with { Target = Remap(cylinder.Target) },
+                CylinderCreatureDocument cylinder => cylinder with { Target = Remap(cylinder.Target) },
                 SnakeDocument snake => snake with { Target = Remap(snake.Target) },
                 SpiderDocument spider => spider with { Target = Remap(spider.Target) },
                 _ => document
@@ -174,18 +168,17 @@ public static class WorldFile
         var rotation = Rotation(aEntity.Body.Rotation);
         return aEntity switch
         {
-            Floor floor => new FloorDocument(floor.Id, floor.Name, position, rotation, Vector(floor.Size)),
-            TargetBall target => new TargetDocument(target.Id, target.Name, position, rotation, target.Radius),
-            Obstacle obstacle => new ObstacleDocument(obstacle.Id, obstacle.Name, position, rotation, obstacle.Radius, obstacle.Height),
-            Slab slab => new SlabDocument(slab.Id, slab.Name, position, rotation, Vector(slab.Size)),
+            Box box => new BoxDocument(box.Id, box.Name, position, rotation, Vector(box.Size), Vector(box.Color), box.Locked),
+            Cylinder cylinder => new CylinderDocument(cylinder.Id, cylinder.Name, position, rotation, cylinder.Radius, cylinder.Height,
+                cylinder.Grip, Vector(cylinder.Color), cylinder.Locked),
+            Sphere sphere => new SphereDocument(sphere.Id, sphere.Name, position, rotation, sphere.Radius, sphere.Locked),
             CarCreature car => new CarDocument(car.Id, car.Name, position, rotation, Vector(car.Color),
                 WorldObjectCatalog.WhiskerCountOf(car), car.Body.Sensors.OfType<RaySensor>().FirstOrDefault()?.Range ?? WorldObjectCatalog.WhiskerRange,
                 TargetOf(car), CaptureBrain(car.Brain!), DriveOf(car)),
-            CylinderCreature cylinder => new CylinderDocument(cylinder.Id, cylinder.Name, position, rotation, Vector(cylinder.Color),
+            CylinderCreature cylinder => new CylinderCreatureDocument(cylinder.Id, cylinder.Name, position, rotation, Vector(cylinder.Color),
                 TargetOf(cylinder), CaptureBrain(cylinder.Brain!), DriveOf(cylinder)),
             SnakeCreature snake => new SnakeDocument(snake.Id, snake.Name, position, rotation, Vector(snake.Color), snake.Segments,
                 TargetOf(snake), CaptureBrain(snake.Brain!), snake.Climber, PartsOf(snake)),
-            Tree tree => new TreeDocument(tree.Id, tree.Name, position, rotation, tree.Radius, tree.Height, tree.Bark),
             SpiderCreature spider => new SpiderDocument(spider.Id, spider.Name, position, rotation, Vector(spider.Color),
                 TargetOf(spider), CaptureBrain(spider.Brain!)),
             _ => throw new NotSupportedException($"Zapis nie zna encji {aEntity.GetType().Name}.")
@@ -297,20 +290,22 @@ public static class WorldFile
         Entity entity;
         switch (aDocument)
         {
-            case FloorDocument floor:
-                entity = new Floor(position, ToVector(floor.Size)) { Id = floor.Id };
+            case BoxDocument box:
+                entity = new Box
+                {
+                    Id = box.Id, Size = ToVector(box.Size), Color = ToVector(box.Color), Locked = box.Locked,
+                    Body = { Position = position, Rotation = rotation }
+                };
                 break;
-            case TargetDocument target:
-                entity = new TargetBall { Id = target.Id, Radius = target.Radius, Body = { Position = position, Rotation = rotation } };
+            case CylinderDocument cylinder:
+                entity = new Cylinder
+                {
+                    Id = cylinder.Id, Radius = cylinder.Radius, Height = cylinder.Height, Grip = cylinder.Grip, Color = ToVector(cylinder.Color),
+                    Locked = cylinder.Locked, Body = { Position = position, Rotation = rotation }
+                };
                 break;
-            case ObstacleDocument obstacle:
-                entity = new Obstacle { Id = obstacle.Id, Radius = obstacle.Radius, Height = obstacle.Height, Body = { Position = position, Rotation = rotation } };
-                break;
-            case TreeDocument tree:
-                entity = new Tree { Id = tree.Id, Radius = tree.Radius, Height = tree.Height, Bark = tree.Bark, Body = { Position = position, Rotation = rotation } };
-                break;
-            case SlabDocument slab:
-                entity = new Slab { Id = slab.Id, Size = ToVector(slab.Size), Body = { Position = position, Rotation = rotation } };
+            case SphereDocument sphere:
+                entity = new Sphere { Id = sphere.Id, Radius = sphere.Radius, Locked = sphere.Locked, Body = { Position = position, Rotation = rotation } };
                 break;
             case CarDocument car:
             {
@@ -323,7 +318,7 @@ public static class WorldFile
                 entity = creature;
                 break;
             }
-            case CylinderDocument cylinder:
+            case CylinderCreatureDocument cylinder:
             {
                 var creature = WorldObjectCatalog.CreateSeeker(position, ToVector(cylinder.Color), cylinder.Target, new ApproachTargetModule());
                 RestoreBrain(creature.Brain!, cylinder.Brain);
@@ -360,7 +355,7 @@ public static class WorldFile
                 [.. Enumerable.Range(0, count).Select(aPart => new Vector3(parts[7 * aPart], parts[7 * aPart + 1], parts[7 * aPart + 2]))],
                 [.. Enumerable.Range(0, count).Select(aPart => new Quaternion(parts[7 * aPart + 3], parts[7 * aPart + 4], parts[7 * aPart + 5], parts[7 * aPart + 6]))]);
         }
-        else if (!entity.IsFixed)
+        else if (!entity.Locked)
             entity.Place(position, rotation);
         return entity;
     }

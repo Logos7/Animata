@@ -13,7 +13,7 @@ public class PhysicsTests
     private static World FloorWorld()
     {
         var world = new World();
-        world.Add(Floor.At(60, 60));
+        world.Add(WorldObjectCatalog.CreateFloor(60, 60));
         return world;
     }
 
@@ -91,7 +91,7 @@ public class PhysicsTests
     public void Collisions_ArePhysical_AndPostsDoNotMove()
     {
         using var world = FloorWorld();
-        var obstacle = WorldObjectCatalog.CreateObstacle(Vector3.Zero, 0.5f);
+        var obstacle = WorldObjectCatalog.CreateCylinder(Vector3.Zero, 0.5f);
         var creature = WorldObjectCatalog.CreateControllerSeeker(new Vector3(0.9f, 0, 0), null);
         world.Add(obstacle);
         world.Add(creature);
@@ -112,8 +112,8 @@ public class PhysicsTests
         var whiskers = new RaySensor([0f], aRange: 3);
         car.Body.Sensors.Add(whiskers);
         world.Add(car);
-        world.Add(WorldObjectCatalog.CreateObstacle(new Vector3(car.BoundingRadius + 1.5f + 0.5f, 0, 0), 0.5f));
-        world.Add(WorldObjectCatalog.CreateTargetBall(new Vector3(car.BoundingRadius + 0.5f, 0, 0)));
+        world.Add(WorldObjectCatalog.CreateCylinder(new Vector3(car.BoundingRadius + 1.5f + 0.5f, 0, 0), 0.5f));
+        world.Add(WorldObjectCatalog.CreateSphere(new Vector3(car.BoundingRadius + 0.5f, 0, 0)));
 
         var proximity = whiskers.Read(car, world)[RaySensor.PortName(0)];
 

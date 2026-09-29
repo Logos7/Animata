@@ -11,11 +11,13 @@ namespace Animata.Core.WorldObjects;
 /// <summary>Uchwyty do demo: świat i stwory.</summary>
 public sealed record DemoScene(World World, IReadOnlyList<ActiveEntity> Creatures);
 
-// Katalog encji świata: wspólne klocki (cel, słupek, płyta, budowa mózgu). Stwory i sceny są w plikach WorldObjectCatalog.*.cs.
+// Katalog encji świata: bryły (kula, cylinder, klocek, podłoga) i budowa mózgu. Stwory i sceny są w plikach WorldObjectCatalog.*.cs.
 public static partial class WorldObjectCatalog
 {
-    public static TargetBall CreateTargetBall(Vector3 aPosition) => new()
+    /// <summary>Kula (cel oka) leżąca na (x, y, z).</summary>
+    public static Sphere CreateSphere(Vector3 aPosition, float aRadius = 0.4f) => new()
     {
+        Radius = aRadius,
         Body = { Position = aPosition }
     };
 
@@ -49,17 +51,32 @@ public static partial class WorldObjectCatalog
         graph.Validate();
     }
 
-    public static Obstacle CreateObstacle(Vector3 aPosition, float aRadius = 0.5f) => new()
+    /// <summary>Pionowy cylinder stojący na (x, y, z).</summary>
+    public static Cylinder CreateCylinder(Vector3 aPosition, float aRadius = 0.5f, float aHeight = 0.8f) => new()
     {
         Radius = aRadius,
+        Height = aHeight,
         Body = { Position = aPosition }
     };
 
-    /// <summary>Płyta terenu: środek spodu w (x, y, z), wymiary, obrót wokół pionu.</summary>
-    public static Slab CreateSlab(Vector3 aPosition, Vector3 aSize, float aYaw = 0) => new()
+    /// <summary>Klocek: środek spodu w (x, y, z), wymiary, obrót wokół pionu.</summary>
+    public static Box CreateBox(Vector3 aPosition, Vector3 aSize, float aYaw = 0) => new()
     {
         Size = aSize,
         Body = { Position = aPosition, Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) }
+    };
+
+    /// <summary>Kolor podłogi.</summary>
+    public static readonly Vector3 FloorColor = new(0.20f, 0.27f, 0.33f);
+
+    /// <summary>Podłoga: zablokowany klocek szer. × głęb. × 0.2 m z górną ścianą na z = 0, środek w (0, 0).</summary>
+    public static Box CreateFloor(float aWidth, float aDepth) => new()
+    {
+        Name = "Podłoga",
+        Size = new Vector3(aWidth, aDepth, 0.2f),
+        Color = FloorColor,
+        Locked = true,
+        Body = { Position = new Vector3(0, 0, -0.2f) }
     };
 
     /// <summary>Wyjścia sieci sterującej stawami (wąż, pająk): Yaw0, Pitch0, Yaw1, Pitch1, … — nowy staw dopisuje się na końcu.</summary>

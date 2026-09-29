@@ -22,15 +22,15 @@ public sealed class SnakeCreature : ArticulatedCreature
     public int Segments { get; private set; }
 
     /// <summary>
-    /// Wspinacz: uczy się wchodzić na drzewo (próby zaczyna owinięty wokół pnia, cel na jego szczycie —
+    /// Wspinacz: uczy się wchodzić na pień — cylinder z tarciem chwytnym (próby zaczyna owinięty wokół pnia, cel na jego szczycie —
     /// <see cref="Training.SeekRigs.ClimbWith"/>), a nie pełzać po ziemi.
     /// </summary>
     public bool Climber { get; set; }
 
-    /// <summary>Owija węża wokół pnia (<see cref="SnakeWrap.Around"/>) i robi z niego wspinacza.</summary>
-    public void WrapAround(Tree aTree, float aAngle = 0)
+    /// <summary>Owija węża wokół cylindra-pnia (<see cref="SnakeWrap.Around"/>) i robi z niego wspinacza.</summary>
+    public void WrapAround(Cylinder aTrunk, float aAngle = 0)
     {
-        SnakeWrap.Around(this, aTree.Body.Position, aTree.Radius, aAngle);
+        SnakeWrap.Around(this, aTrunk.Body.Position, aTrunk.Radius, aAngle);
         Climber = true;
     }
 

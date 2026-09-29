@@ -65,14 +65,17 @@ public static class PanelParts
     ];
 
     /// <summary>Kolor stwora: kilka gotowych i „losuj”. Kolor nic nie znaczy — to tylko wygląd.</summary>
-    public static Control ColorPicker(ActiveEntity aCreature, Action? aChanged = null)
+    public static Control ColorPicker(ActiveEntity aCreature, Action? aChanged = null) => aCreature is ArticulatedCreature body
+        ? ColorPicker(() => body.Color, aColor => body.Color = aColor, aChanged)
+        : Ui.Text("—", 13);
+
+    /// <summary>Wybór koloru (gotowe odcienie i „losuj”) dowolnej encji z kolorem — stwora, klocka, cylindra.</summary>
+    public static Control ColorPicker(Func<System.Numerics.Vector3> aGet, Action<System.Numerics.Vector3> aSet, Action? aChanged = null)
     {
-        if (aCreature is not ArticulatedCreature body)
-            return Ui.Text("—", 13);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         void Set(System.Numerics.Vector3 aColor)
         {
-            body.Color = aColor;
+            aSet(aColor);
             aChanged?.Invoke();
         }
         foreach (var swatch in Swatches)
@@ -85,7 +88,7 @@ public static class PanelParts
                 Padding = new Thickness(0),
                 CornerRadius = new CornerRadius(10),
                 Background = new SolidColorBrush(Color.FromRgb((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255))),
-                BorderThickness = new Thickness(body.Color == color ? 2 : 0),
+                BorderThickness = new Thickness(aGet() == color ? 2 : 0),
                 BorderBrush = Brushes.White,
                 Focusable = false
             };

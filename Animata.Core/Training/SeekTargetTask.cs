@@ -21,7 +21,7 @@ public sealed record SeekTargetOptions
     /// <summary>Koszt energii ruchu: waga · średni wysiłek (patrz <see cref="SeekRig.Effort"/>). Bez niego sieć „taranuje” cel.</summary>
     public float EnergyWeight { get; init; } = 0.1f;
 
-    /// <summary>Liczba słupków na drodze do celu w próbie (losowana z zakresu).</summary>
+    /// <summary>Liczba cylindrów na drodze do celu w próbie (losowana z zakresu).</summary>
     public int MinObstacles { get; init; }
     public int MaxObstacles { get; init; }
     public float MinObstacleRadius { get; init; } = 0.3f;
@@ -29,11 +29,11 @@ public sealed record SeekTargetOptions
 
     /// <summary>
     /// Kara za kontakt z przeszkodą: waga · ułamek czasu próby w kontakcie. Bez niej sieć uczy się
-    /// „przepychać” po słupkach, bo kolizje i tak ją przesuwają.
+    /// „przepychać” po cylindrach, bo kolizje i tak ją przesuwają.
     /// </summary>
     public float ContactWeight { get; init; }
 
-    /// <summary>Najmniejsza odległość środka startu od brzegu słupka — żeby dało się ruszyć i skręcić.</summary>
+    /// <summary>Najmniejsza odległość środka startu od brzegu cylindra — żeby dało się ruszyć i skręcić.</summary>
     public float ObstacleClearanceFromStart { get; init; } = 2;
     public float ObstacleClearanceFromTarget { get; init; } = 1.5f;
 
@@ -47,7 +47,7 @@ public sealed record SeekTargetOptions
     /// <summary>Szczelina (powierzchnia–powierzchnia) na końcu próby, przy której cel uznaje się za osiągnięty.</summary>
     public float ReachGap { get; init; } = 0.3f;
 
-    /// <summary>Liczba płaskich płyt terenu w próbie (losowana z zakresu) — stwór uczy się chodzić po nierównym.</summary>
+    /// <summary>Liczba płaskich klocków w próbie (losowana z zakresu) — stwór uczy się chodzić po nierównym.</summary>
     public int MinSlabs { get; init; }
     public int MaxSlabs { get; init; }
     public float MinSlabSide { get; init; } = 0.8f;
@@ -61,16 +61,16 @@ public sealed record SeekTargetOptions
     /// </summary>
     public float PostureWeight { get; init; }
 
-    /// <summary>Długość ciała za głową w chwili startu (wąż leży wzdłuż −X) — płyty nie mogą leżeć pod nim.</summary>
+    /// <summary>Długość ciała za głową w chwili startu (wąż leży wzdłuż −X) — klocki nie mogą leżeć pod nim.</summary>
     public float BodyLength { get; init; }
 }
 
 public readonly record struct ObstacleSpec(Vector2 Position, float Radius);
 
-/// <summary>Płyta terenu: środek spodu, wymiary (X, Y), wysokość, obrót wokół pionu.</summary>
+/// <summary>Klocek terenu: środek spodu, wymiary (X, Y), wysokość, obrót wokół pionu.</summary>
 public readonly record struct SlabSpec(Vector2 Position, Vector2 Size, float Height, float Yaw);
 
-/// <summary>Jedna próba: stwór w (0,0) obrócony o Yaw, cel w TargetOffset (na terenie), słupki i płyty na drodze.</summary>
+/// <summary>Jedna próba: stwór w (0,0) obrócony o Yaw, cel w TargetOffset (na terenie), cylindry i klocki na drodze.</summary>
 public readonly record struct SeekEpisode(float Yaw, Vector2 TargetOffset, ObstacleSpec[] Obstacles, SlabSpec[]? Slabs = null);
 
 /// <summary>
@@ -83,7 +83,7 @@ public readonly record struct EpisodeResult(float Cost, float FinalGap, float Co
 /// „Ciało do treningu”: jak zbudować stwora z danym sterownikiem i jak liczyć wysiłek z jego komend.
 /// <see cref="PrepareWorld"/> dokłada do świata próby to, czego ciało potrzebuje (np. podłogę dla stwora w fizyce).
 /// <see cref="Posture"/> — zła postawa w danej chwili (0 = dobra, 1 = zła), karana z wagą <see cref="SeekTargetOptions.PostureWeight"/>.
-/// <see cref="Setup"/> — własne ustawienie próby (np. drzewo, cel na jego szczycie, wąż owinięty wokół pnia) zamiast
+/// <see cref="Setup"/> — własne ustawienie próby (np. pień, cel na jego szczycie, wąż owinięty wokół niego) zamiast
 /// zwykłego: stwór w (0, 0) obrócony o Yaw próby.
 /// </summary>
 public sealed record SeekRig(
@@ -93,7 +93,7 @@ public sealed record SeekRig(
     SeekTargetOptions DefaultOptions,
     Action<World>? PrepareWorld = null,
     Func<ActiveEntity, float>? Posture = null,
-    Action<World, TargetBall, ActiveEntity, SeekEpisode>? Setup = null);
+    Action<World, Sphere, ActiveEntity, SeekEpisode>? Setup = null);
 
 public static class SeekRigs
 {
@@ -109,7 +109,7 @@ public static class SeekRigs
     }
 
     /// <summary>Podłoga prób: wszystkie stwory są bryłami w fizyce, więc muszą na czymś stać.</summary>
-    private static void AddFloor(World aWorld) => aWorld.Add(Floor.At(60, 60));
+    private static void AddFloor(World aWorld) => aWorld.Add(WorldObjectCatalog.CreateFloor(60, 60));
 
     /// <summary>Walec z napędem różnicowym, bez przeszkód.</summary>
     public static readonly SeekRig Disk = new(
@@ -127,7 +127,7 @@ public static class SeekRigs
     public static SeekRig Car => CarWith(WorldObjectCatalog.DefaultWhiskers);
 
     /// <summary>
-    /// Autko z <paramref name="aWhiskers"/> wąsami, 1–3 słupki na drodze, cel 5–9 m, dłuższe próby
+    /// Autko z <paramref name="aWhiskers"/> wąsami, 1–3 cylindry na drodze, cel 5–9 m, dłuższe próby
     /// (autko nie skręca w miejscu). Ciało w rigu ma tyle wąsów, ile sieć ma wejść Ray{i}.
     /// </summary>
     public static SeekRig CarWith(int aWhiskers)
@@ -156,8 +156,8 @@ public static class SeekRigs
     private static readonly ConcurrentDictionary<int, SeekRig> SnakeRigs = new();
 
     /// <summary>
-    /// Wąż z <paramref name="aSegments"/> segmentami w fizyce: podłoga 60 × 60 m, 0–3 płaskie płyty terenu (3–10 cm)
-    /// na drodze, bez słupków, cel 3–6 m (także na płycie), 12 s. Wysiłek = średnia wielkość komend stawów.
+    /// Wąż z <paramref name="aSegments"/> segmentami w fizyce: podłoga 60 × 60 m, 0–3 płaskie klocki terenu (3–10 cm)
+    /// na drodze, bez cylindrów, cel 3–6 m (także na klocku), 12 s. Wysiłek = średnia wielkość komend stawów.
     /// </summary>
     public static SeekRig SnakeWith(int aSegments)
     {
@@ -187,8 +187,24 @@ public static class SeekRigs
     /// <summary>Promień pnia w próbach wspinania.</summary>
     public const float ClimbTrunkRadius = 0.25f;
 
-    /// <summary>Kulka na szczycie pnia — mała, żeby głowa owinięta tuż pod szczytem była „przy niej”.</summary>
+    /// <summary>Kula na szczycie pnia — mała, żeby głowa owinięta tuż pod szczytem była „przy niej”.</summary>
     public const float ClimbTargetRadius = 0.2f;
+
+    /// <summary>Tarcie chwytne pnia (kora).</summary>
+    public const float ClimbTrunkGrip = 1.2f;
+
+    /// <summary>Kolor pnia.</summary>
+    public static readonly Vector3 TrunkColor = new(0.45f, 0.32f, 0.2f);
+
+    /// <summary>Pień do wspinania: cylinder r 0.25 m z tarciem chwytnym, stojący na (x, y, z).</summary>
+    public static Cylinder CreateClimbCylinder(Vector3 aPosition, float aHeight) => new()
+    {
+        Radius = ClimbTrunkRadius,
+        Height = aHeight,
+        Grip = ClimbTrunkGrip,
+        Color = TrunkColor,
+        Body = { Position = aPosition }
+    };
 
     /// <summary>
     /// Wspinaczka węża z <paramref name="aSegments"/> segmentami: pień r 0.25 m o wysokości 2–3.5 m (długość
@@ -214,10 +230,10 @@ public static class SeekRigs
             ClimbSetup));
     }
 
-    /// <summary>Drzewo w (0, 0) o wysokości = odległość celu w próbie, cel na szczycie, wąż owinięty u podstawy.</summary>
-    private static void ClimbSetup(World aWorld, TargetBall aTarget, ActiveEntity aCreature, SeekEpisode aEpisode)
+    /// <summary>Pień w (0, 0) o wysokości = odległość celu w próbie, cel na szczycie, wąż owinięty u podstawy.</summary>
+    private static void ClimbSetup(World aWorld, Sphere aTarget, ActiveEntity aCreature, SeekEpisode aEpisode)
     {
-        var tree = new Tree { Radius = ClimbTrunkRadius, Height = aEpisode.TargetOffset.Length() };
+        var tree = CreateClimbCylinder(Vector3.Zero, aEpisode.TargetOffset.Length());
         aWorld.Add(tree);
         aTarget.Radius = ClimbTargetRadius;
         aTarget.Body.Position = new Vector3(0, 0, tree.Height);
@@ -226,7 +242,7 @@ public static class SeekRigs
     }
 
     /// <summary>
-    /// Pająk (czworonóg) w fizyce: podłoga 60 × 60 m, 0–2 niskie płyty (2–6 cm) na drodze, cel 2–5 m, 12 s.
+    /// Pająk (czworonóg) w fizyce: podłoga 60 × 60 m, 0–2 niskie klocki (2–6 cm) na drodze, cel 2–5 m, 12 s.
     /// Wysiłek = średnia wielkość komend stawów.
     /// </summary>
     public static readonly SeekRig Spider = new(
@@ -399,7 +415,7 @@ public sealed class SeekTargetTask
     }
 
     /// <summary>
-    /// Płyty na drodze start–cel (od ¼ do końca odcinka, z bocznym rozrzutem — cel może leżeć na płycie), nie pod ciałem
+    /// Klocki na drodze start–cel (od ¼ do końca odcinka, z bocznym rozrzutem — cel może leżeć na klocku), nie pod ciałem
     /// stwora na starcie i bez nakładania się środkami.
     /// </summary>
     private static SlabSpec[] PlaceSlabs(SeekTargetOptions aOptions, Vector2 aTarget, float aYaw, Random aRandom)
@@ -428,7 +444,7 @@ public sealed class SeekTargetTask
         return slabs.ToArray();
     }
 
-    /// <summary>Słupki w środkowej części odcinka start–cel, z bocznym rozrzutem, niezasłaniające startu ani celu.</summary>
+    /// <summary>Cylindry w środkowej części odcinka start–cel, z bocznym rozrzutem, niezasłaniające startu ani celu.</summary>
     private static ObstacleSpec[] PlaceObstacles(SeekTargetOptions aOptions, Vector2 aTarget, Random aRandom)
     {
         var count = aOptions.MaxObstacles <= 0 ? 0 : aRandom.Next(aOptions.MinObstacles, aOptions.MaxObstacles + 1);
@@ -468,7 +484,7 @@ public sealed class SeekTargetTask
     }
 
     /// <summary>
-    /// Przejeżdża próby jedna po drugiej. Każda próba ma własny, świeży świat (podłoga z rigu, cel, słupki, nowe ciało
+    /// Przejeżdża próby jedna po drugiej. Każda próba ma własny, świeży świat (podłoga z rigu, cel, cylindry, nowe ciało
     /// z tym samym sterownikiem), a mózg jest resetowany (<see cref="Brain.Reset"/>) — wynik próby nie zależy od tego,
     /// jak skończyła się poprzednia (także przez stan solvera fizyki).
     /// </summary>
@@ -486,14 +502,14 @@ public sealed class SeekTargetTask
             using var world = new World();
             aRig.PrepareWorld?.Invoke(world);
             foreach (var spec in episode.Slabs ?? [])
-                world.Add(WorldObjectCatalog.CreateSlab(new Vector3(spec.Position, 0), new Vector3(spec.Size, spec.Height), spec.Yaw));
-            var target = WorldObjectCatalog.CreateTargetBall(new Vector3(episode.TargetOffset, 0));
+                world.Add(WorldObjectCatalog.CreateBox(new Vector3(spec.Position, 0), new Vector3(spec.Size, spec.Height), spec.Yaw));
+            var target = WorldObjectCatalog.CreateSphere(new Vector3(episode.TargetOffset, 0));
             world.Add(target);
             Terrain.Snap(world, target);
-            var obstacles = new List<Obstacle>();
+            var obstacles = new List<Cylinder>();
             foreach (var spec in episode.Obstacles)
             {
-                var obstacle = WorldObjectCatalog.CreateObstacle(new Vector3(spec.Position, 0), spec.Radius);
+                var obstacle = WorldObjectCatalog.CreateCylinder(new Vector3(spec.Position, 0), spec.Radius);
                 obstacles.Add(obstacle);
                 world.Add(obstacle);
             }
@@ -536,7 +552,7 @@ public sealed class SeekTargetTask
 
     private BrainModule CreateModule(float[] aParameters) => TrainableModules.Create(_template, aParameters, _moduleName);
 
-    private static bool Touches(Entity aCreature, List<Obstacle> aObstacles)
+    private static bool Touches(Entity aCreature, List<Cylinder> aObstacles)
     {
         foreach (var obstacle in aObstacles)
             if (Gap(aCreature, obstacle) < 0.01f)

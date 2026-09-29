@@ -13,27 +13,21 @@ namespace Animata.Rendering.HelixToolkit;
 internal static class SceneMeshes
 {
     /// <summary>Encje z jedną siatką. Stwory z części (<see cref="ArticulatedCreature"/>) mają siatkę na część — <see cref="CreatePartGeometry"/>.</summary>
-    public static bool CanDraw(Entity aEntity) => aEntity is TargetBall or Obstacle or Floor or Slab or Tree;
+    public static bool CanDraw(Entity aEntity) => aEntity is Sphere or Cylinder or Box;
 
     public static global::HelixToolkit.SharpDX.MeshGeometry3D CreateGeometry(Entity aEntity)
     {
         var mesh = new MeshBuilder();
         switch (aEntity)
         {
-            case TargetBall target:
-                mesh.AddSphere(new Vector3(0, 0, target.Radius), target.Radius);
+            case Sphere sphere:
+                mesh.AddSphere(new Vector3(0, 0, sphere.Radius), sphere.Radius);
                 break;
-            case Obstacle obstacle:
-                mesh.AddCylinder(Vector3.Zero, new Vector3(0, 0, obstacle.Height), obstacle.Radius, 32, true, true);
+            case Cylinder cylinder:
+                mesh.AddCylinder(Vector3.Zero, new Vector3(0, 0, cylinder.Height), cylinder.Radius, 32, true, true);
                 break;
-            case Floor floor:
-                mesh.AddBox(Vector3.Zero, floor.Size.X, floor.Size.Y, floor.Size.Z);
-                break;
-            case Slab slab:
-                mesh.AddBox(new Vector3(0, 0, slab.Size.Z / 2), slab.Size.X, slab.Size.Y, slab.Size.Z);
-                break;
-            case Tree tree:
-                mesh.AddCylinder(Vector3.Zero, new Vector3(0, 0, tree.Height), tree.Radius, 32, true, true);
+            case Box box:
+                mesh.AddBox(new Vector3(0, 0, box.Size.Z / 2), box.Size.X, box.Size.Y, box.Size.Z);
                 break;
         }
 
@@ -43,22 +37,25 @@ internal static class SceneMeshes
     /// <summary>Wymiary wpływające na siatkę — zmiana oznacza, że trzeba ją przebudować.</summary>
     public static Vector3 ShapeOf(Entity aEntity) => aEntity switch
     {
-        TargetBall target => new Vector3(target.Radius, 0, 0),
-        Obstacle obstacle => new Vector3(obstacle.Radius, obstacle.Height, 0),
-        Floor floor => floor.Size,
-        Slab slab => slab.Size,
-        Tree tree => new Vector3(tree.Radius, tree.Height, 0),
+        Sphere sphere => new Vector3(sphere.Radius, 0, 0),
+        Cylinder cylinder => new Vector3(cylinder.Radius, cylinder.Height, 0),
+        Box box => box.Size,
+        _ => Vector3.Zero
+    };
+
+    /// <summary>Kolor bryły (zmiana — przemalować); kula ma stały kolor celu.</summary>
+    public static Vector3 ColorOf(Entity aEntity) => aEntity switch
+    {
+        Cylinder cylinder => cylinder.Color,
+        Box box => box.Color,
         _ => Vector3.Zero
     };
 
     public static PhongMaterial MaterialFor(Entity aEntity, bool aSelected) => aEntity switch
     {
-        Obstacle => aSelected ? Material(0.8f, 0.8f, 0.85f) : Material(0.5f, 0.5f, 0.55f),
-        TargetBall => aSelected ? Material(1f, 1f, 0.4f) : Material(1f, 0.67f, 0.2f),
+        Sphere => aSelected ? Material(1f, 1f, 0.4f) : Material(1f, 0.67f, 0.2f),
         ArticulatedCreature body => BodyMaterial(body.Color, aSelected),
-        Floor => Material(0.20f, 0.27f, 0.33f),
-        Tree => aSelected ? Material(0.65f, 0.5f, 0.35f) : Material(0.45f, 0.32f, 0.2f),
-        Slab => aSelected ? Material(0.62f, 0.70f, 0.78f) : Material(0.38f, 0.45f, 0.52f),
+        Cylinder or Box => BodyMaterial(ColorOf(aEntity), aSelected),
         _ => Material(0.5f, 0.5f, 0.5f)
     };
 

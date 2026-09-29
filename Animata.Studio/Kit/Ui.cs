@@ -338,11 +338,9 @@ public static class Ui
         Core.WorldObjects.CarCreature car => Color.FromRgb((byte)(car.Color.X * 255), (byte)(car.Color.Y * 255), (byte)(car.Color.Z * 255)),
         Core.WorldObjects.CylinderCreature cylinder => Color.FromRgb((byte)(cylinder.Color.X * 255), (byte)(cylinder.Color.Y * 255), (byte)(cylinder.Color.Z * 255)),
         Core.Entities.ArticulatedCreature body => Color.FromRgb((byte)(body.Color.X * 255), (byte)(body.Color.Y * 255), (byte)(body.Color.Z * 255)),
-        Core.WorldObjects.Floor => Color.FromRgb(62, 82, 98),
-        Core.WorldObjects.TargetBall => StudioPalette.Target,
-        Core.WorldObjects.Obstacle => StudioPalette.Obstacle,
-        Core.WorldObjects.Slab => Color.FromRgb(104, 122, 138),
-        Core.WorldObjects.Tree => Color.FromRgb(120, 86, 56),
+        Core.WorldObjects.Sphere => StudioPalette.Target,
+        Core.WorldObjects.Cylinder cylinder => Color.FromRgb((byte)(cylinder.Color.X * 255), (byte)(cylinder.Color.Y * 255), (byte)(cylinder.Color.Z * 255)),
+        Core.WorldObjects.Box box => Color.FromRgb((byte)(box.Color.X * 255), (byte)(box.Color.Y * 255), (byte)(box.Color.Z * 255)),
         _ => StudioTheme.Palette.Text3
     };
 }

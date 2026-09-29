@@ -7,7 +7,7 @@ using BepuPhysics.Collidables;
 namespace Animata.Core.Entities;
 
 /// <summary>
-/// Encja bez mózgu, która w fizyce jest statyczną bryłą (podłoga, płyta, słupek, drzewo). Sama fizyki nie tworzy;
+/// Encja bez mózgu, która w fizyce jest statyczną bryłą (klocek, cylinder). Sama fizyki nie tworzy;
 /// gdy świat ją ma, bryła powstaje z <see cref="Build"/>. Po ręcznej zmianie (przesunięcie, rozmiar) — gdy
 /// <see cref="Shape"/> różni się od tego z chwili budowy — bryła jest odtwarzana przed następnym krokiem.
 /// </summary>

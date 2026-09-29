@@ -15,8 +15,8 @@ public class SpiderTests
 
     private static SpiderCreature Walk(World aWorld, Vector3 aTarget, float aSeconds)
     {
-        aWorld.Add(Floor.At(30, 30));
-        var target = WorldObjectCatalog.CreateTargetBall(aTarget);
+        aWorld.Add(WorldObjectCatalog.CreateFloor(30, 30));
+        var target = WorldObjectCatalog.CreateSphere(aTarget);
         aWorld.Add(target);
         var spider = WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, Vector3.One, target.Id, new GaitModule());
         aWorld.Add(spider);
@@ -29,7 +29,7 @@ public class SpiderTests
     public void Spider_StandsOnItsLegs()
     {
         using var world = new World();
-        world.Add(Floor.At(10, 10));
+        world.Add(WorldObjectCatalog.CreateFloor(10, 10));
         var spider = new SpiderCreature();
         world.Add(spider);
         for (var tick = 0; tick < 90; tick++)
@@ -42,7 +42,7 @@ public class SpiderTests
     public void HipPitch_LiftsTheLeg_AndYawSwingsIt()
     {
         using var world = new World();
-        world.Add(Floor.At(10, 10));
+        world.Add(WorldObjectCatalog.CreateFloor(10, 10));
         var spider = new SpiderCreature();
         world.Add(spider);
         for (var tick = 0; tick < 30; tick++)
@@ -88,7 +88,7 @@ public class SpiderTests
     public void Touch_FeelsFeetOnTheGround_AndBellyWhenLyingDown()
     {
         using var world = new World();
-        world.Add(Floor.At(10, 10));
+        world.Add(WorldObjectCatalog.CreateFloor(10, 10));
         var spider = WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, Vector3.One, null, new GaitModule { Stride = 0, Lift = 0, KneeSwing = 0 });
         world.Add(spider);
         for (var tick = 0; tick < 30; tick++)
@@ -121,7 +121,7 @@ public class SpiderTests
     public void Snake_DoesNotPassThroughItself()
     {
         using var world = new World();
-        world.Add(Floor.At(20, 20));
+        world.Add(WorldObjectCatalog.CreateFloor(20, 20));
         var snake = new SnakeCreature(12);
         world.Add(snake);
         for (var joint = 0; joint < snake.JointCount; joint++)
@@ -139,8 +139,8 @@ public class SpiderTests
     public void Feel_ReportsAStepAheadOfTheHead()
     {
         using var world = new World();
-        world.Add(Floor.At(20, 20));
-        world.Add(WorldObjectCatalog.CreateSlab(new Vector3(1.2f, 0, 0), new Vector3(1, 2, 0.08f)));
+        world.Add(WorldObjectCatalog.CreateFloor(20, 20));
+        world.Add(WorldObjectCatalog.CreateBox(new Vector3(1.2f, 0, 0), new Vector3(1, 2, 0.08f)));
         var snake = WorldObjectCatalog.CreateNeuralSnake(new Vector3(0.5f, 0, 0), 0, null, 4);
         world.Add(snake);
         world.Update(Delta);

@@ -12,11 +12,11 @@ public class ClimbTests
 {
     private const float Delta = 1f / 30f;
 
-    private static (World World, Tree Tree, SnakeCreature Snake) Wrapped(CpgModule? aBrain = null)
+    private static (World World, Cylinder Tree, SnakeCreature Snake) Wrapped(CpgModule? aBrain = null)
     {
         var world = new World();
-        world.Add(Floor.At(20, 20));
-        var tree = new Tree { Radius = SeekRigs.ClimbTrunkRadius, Height = 4 };
+        world.Add(WorldObjectCatalog.CreateFloor(20, 20));
+        var tree = SeekRigs.CreateClimbCylinder(Vector3.Zero, 4);
         world.Add(tree);
         var snake = aBrain is null ? new SnakeCreature(8) : WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, null, aBrain);
         snake.WrapAround(tree, 0.7f);
@@ -73,7 +73,7 @@ public class ClimbTests
         var json = WorldFile.ToJson(WorldFile.Capture(world, "t"));
         using var restored = WorldFile.Restore(WorldFile.FromJson(json)).World;
         Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "t")));
-        Assert.Equal(2, restored.Entities.OfType<Tree>().Count());
+        Assert.Equal(2, restored.Entities.OfType<Cylinder>().Count());
         foreach (var snake in snakes)
         {
             var twin = (SnakeCreature)restored.Find(snake.Id)!;

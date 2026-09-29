@@ -57,7 +57,7 @@ public class WhiskerTests
     public void Cars_WithAnyValidCount_BuildAndRun(int aCount)
     {
         var world = new World();
-        var target = WorldObjectCatalog.CreateTargetBall(new Vector3(6, 0, 0));
+        var target = WorldObjectCatalog.CreateSphere(new Vector3(6, 0, 0));
         world.Add(target);
         var controllerCar = WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, target.Id, aCount);
         var neuralCar = WorldObjectCatalog.CreateNeuralCar(new Vector3(0, 3, 0), 0, target.Id, aCount);
@@ -106,7 +106,7 @@ public class WhiskerTests
     public void SetCount_KeepsTheSameCreatureSensorAndController()
     {
         var world = new World();
-        var target = WorldObjectCatalog.CreateTargetBall(new Vector3(6, 0, 0));
+        var target = WorldObjectCatalog.CreateSphere(new Vector3(6, 0, 0));
         world.Add(target);
         var car = WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, target.Id);
         world.Add(car);

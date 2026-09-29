@@ -12,10 +12,9 @@ using Animata.Studio.Theme;
 
 namespace Animata.Studio.Controls;
 
-/// <summary>Scena z góry w miniaturze (kafel w menu): podłogi, słupki, cele i stwory (wąż — jako łańcuch segmentów).</summary>
+/// <summary>Scena z góry w miniaturze (kafel w menu): klocki (z podłogą), cylindry, kule i stwory (wąż — jako łańcuch segmentów).</summary>
 public sealed class SceneMiniMap : ThemedControl
 {
-    private static readonly Color Ground = Color.FromRgb(51, 69, 84);
     private static readonly Color Sky = Color.FromRgb(24, 30, 45);
 
     public World? World { get; set; }
@@ -27,19 +26,19 @@ public sealed class SceneMiniMap : ThemedControl
         if (World is null || World.Entities.Count == 0)
             return;
 
-        // Zakres: podłogi i wszystko, co na nich (albo poza nimi) stoi, z małym marginesem.
-        var floors = World.Entities.OfType<Floor>().ToList();
-        var others = World.Entities.Where(aEntity => aEntity is not Floor).ToList();
+        // Zakres: zablokowane klocki (podłogi) i wszystko, co na nich (albo poza nimi) stoi, z małym marginesem.
+        var floors = World.Entities.OfType<Box>().Where(aBox => aBox.Locked).ToList();
+        var others = World.Entities.Where(aEntity => aEntity is not Box { Locked: true }).ToList();
         var minX = float.PositiveInfinity;
         var maxX = float.NegativeInfinity;
         var minY = float.PositiveInfinity;
         var maxY = float.NegativeInfinity;
         foreach (var floor in floors)
         {
-            minX = MathF.Min(minX, floor.Min.X);
-            maxX = MathF.Max(maxX, floor.Max.X);
-            minY = MathF.Min(minY, floor.Min.Y);
-            maxY = MathF.Max(maxY, floor.Max.Y);
+            minX = MathF.Min(minX, floor.Body.Position.X - floor.Size.X / 2);
+            maxX = MathF.Max(maxX, floor.Body.Position.X + floor.Size.X / 2);
+            minY = MathF.Min(minY, floor.Body.Position.Y - floor.Size.Y / 2);
+            maxY = MathF.Max(maxY, floor.Body.Position.Y + floor.Size.Y / 2);
         }
         foreach (var entity in others)
         {
@@ -54,12 +53,8 @@ public sealed class SceneMiniMap : ThemedControl
         var offset = new Point(bounds.Width / 2 - (minX + maxX) / 2 * scale, bounds.Height / 2 + (minY + maxY) / 2 * scale);
         Point Map(Vector3 aPosition) => new(offset.X + aPosition.X * scale, offset.Y - aPosition.Y * scale);
 
-        foreach (var floor in floors)
-            aContext.DrawRectangle(Ui.Brush(Ground), null,
-                new Rect(Map(new Vector3(floor.Min.X, floor.Max.Y, 0)), Map(new Vector3(floor.Max.X, floor.Min.Y, 0))), 6, 6);
-
-        // Płyty terenu: obrócone prostokąty pod wszystkim innym.
-        foreach (var slab in others.OfType<Slab>())
+        // Klocki: obrócone prostokąty pod wszystkim innym, najpierw zablokowane (podłogi).
+        foreach (var slab in floors.Concat(others.OfType<Box>()))
         {
             var heading = Vector3.Transform(Vector3.UnitX, slab.Body.Rotation);
             var angle = Math.Atan2(heading.Y, heading.X);
@@ -71,7 +66,7 @@ public sealed class SceneMiniMap : ThemedControl
 
         foreach (var entity in others)
         {
-            if (entity is Slab)
+            if (entity is Box)
                 continue;
             var center = Map(entity.Body.Position);
             var radius = entity.BoundingRadius * scale;

@@ -81,7 +81,7 @@ public class PersistenceTests
         using (restored)
         {
             Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test")));
-            Assert.Equal(5, restored.Entities.OfType<Slab>().Count());
+            Assert.Equal(5, restored.Entities.OfType<Box>().Count(aBox => !aBox.Locked));
             var neuralTwin = (SnakeCreature)restored.Find(neural.Id)!;
             Assert.Equal(5, neuralTwin.Segments);
             Assert.True(neural.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()!
@@ -90,7 +90,7 @@ public class PersistenceTests
             Assert.Equal(11, twin.Segments);
             Assert.NotNull(restored.Physics);
             Assert.Contains(twin.Brain!.Snapshots, aSnapshot => aSnapshot.Label == "ręczne parametry");
-            var target = restored.Entities.OfType<TargetBall>().Single();
+            var target = restored.Entities.OfType<Sphere>().Single();
             Assert.Equal(target.Id, twin.Body.Sensors.OfType<TargetSensor>().Single().TargetId);
             Assert.True(target.Body.Position.Z > 0.05f);
             restored.Update(Delta);
@@ -187,8 +187,8 @@ public class PersistenceTests
         using var world = WorldObjectCatalog.CreateSnakeScene().World;
         var neural = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż NN");
         var cpg = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż CPG");
-        var target = world.Entities.OfType<TargetBall>().Single();
-        var slab = world.Entities.OfType<Slab>().First();
+        var target = world.Entities.OfType<Sphere>().Single();
+        var slab = world.Entities.OfType<Box>().First(aBox => !aBox.Locked);
 
         var documents = WorldFile.CaptureEntities([neural, target, slab, cpg]);
         var offset = new Vector3(2, -1, 0);
@@ -199,11 +199,11 @@ public class PersistenceTests
             world.Add(copy);
 
         var neuralCopy = (SnakeCreature)copies[0];
-        var targetCopy = (TargetBall)copies[1];
+        var targetCopy = (Sphere)copies[1];
         Assert.Equal(neural.Body.Position + offset, neuralCopy.Body.Position);
         Assert.Equal(target.Body.Position + offset, targetCopy.Body.Position);
         Assert.Equal(targetCopy.Id, neuralCopy.Body.Sensors.OfType<TargetSensor>().Single().TargetId);
-        Assert.Equal(slab.Size, ((Slab)copies[2]).Size);
+        Assert.Equal(slab.Size, ((Box)copies[2]).Size);
         Assert.True(neural.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()!
             .SameAs(neuralCopy.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()));
         Assert.Equal(cpg.Brain!.Snapshots.Count, ((SnakeCreature)copies[3]).Brain!.Snapshots.Count);

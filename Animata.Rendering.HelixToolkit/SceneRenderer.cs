@@ -15,7 +15,7 @@ namespace Animata.Rendering.HelixToolkit;
 
 /// <summary>
 /// Widok świata w Helixie: modele encji (synchronizowane co klatkę z <see cref="Sync"/>; stwór z części — model na część,
-/// podłoga — pudło z encji <see cref="Floor"/>), wąsy, zaznaczanie i przeciąganie encji lewym przyciskiem myszy,
+/// podłoga — zablokowany klocek <see cref="Box"/>), wąsy, zaznaczanie i przeciąganie encji lewym przyciskiem myszy,
 /// kamera latająca (<see cref="FlyCameraController"/>), klik prawym przyciskiem (bez obracania kamerą) — <see cref="ContextRequested"/>.
 /// Zaznaczenie wielu: ramka (LPM ciągnięty od pustego miejsca), Ctrl+klik przełącza, Shift+klik dokłada;
 /// przeciągnięcie zaznaczonej encji przesuwa całe zaznaczenie.
@@ -104,7 +104,7 @@ public sealed class SceneRenderer : IDisposable
     public Vector3? GroundUnderPointer => _pointer is { } point && TryGroundPoint(point, 0, out var ground) ? ground : null;
 
     /// <summary>
-    /// Wysokość terenu dla przeciąganej encji w punkcie (np. przyciąganie do podłogi i płyt); null — przeciąganie
+    /// Wysokość terenu dla przeciąganej encji w punkcie (np. przyciąganie do klocków); null — przeciąganie
     /// zostawia wysokość bez zmian.
     /// </summary>
     public Func<Entity, Vector3, float>? GroundHeight { get; set; }
@@ -161,11 +161,13 @@ public sealed class SceneRenderer : IDisposable
 
             _current.Add(entity.Id);
             var body = entity.Body;
-            var state = new ModelState(body.Position, body.Rotation, SceneMeshes.ShapeOf(entity));
+            var state = new ModelState(body.Position, body.Rotation, SceneMeshes.ShapeOf(entity), SceneMeshes.ColorOf(entity));
 
             var hasPrevious = _states.TryGetValue(entity.Id, out var previous);
             if (hasPrevious && previous.Shape != state.Shape)
                 model.Geometry = SceneMeshes.CreateGeometry(entity);
+            if (hasPrevious && previous.Color != state.Color)
+                model.Material = SceneMeshes.MaterialFor(entity, _selection.Contains(entity));
 
             if (!hasPrevious || previous.Position != state.Position || previous.Rotation != state.Rotation)
                 model.Transform = Matrix4x4.CreateFromQuaternion(body.Rotation) * Matrix4x4.CreateTranslation(body.Position);
@@ -260,12 +262,13 @@ public sealed class SceneRenderer : IDisposable
             : null;
         aEvent.Handled = true;
 
-        if (hit is null)
+        if (hit is null || (hit.Locked && !control && !shift && aEvent.ClickCount < 2))
         {
-            // Pusto: ramka zaznaczenia (z Ctrl/Shift dokłada do obecnego zaznaczenia).
+            // Pusto albo encja zablokowana (np. podłoga): klik ją zaznacza, a przeciągnięcie robi ramkę zaznaczenia
+            // (z Ctrl/Shift dokłada do obecnego zaznaczenia). Zablokowanej nie da się przesunąć.
             _bandBase = control || shift ? _selection.ToList() : [];
             if (!control && !shift)
-                Select(null);
+                Select(hit);
             _bandStart = point;
             _bandPointer = aEvent.Pointer;
             _bandPointer.Capture(_viewport);
@@ -290,13 +293,13 @@ public sealed class SceneRenderer : IDisposable
             EntityActivated?.Invoke(hit);
             return;
         }
-        if (!hit.IsFixed && TryGroundPoint(point, hit.Body.Position.Z, out var ground))
+        if (!hit.Locked && TryGroundPoint(point, hit.Body.Position.Z, out var ground))
         {
             // Płaszczyzna przeciągania na wysokości z chwili chwycenia — wysokość z terenu nie może jej przesuwać.
-            // Przesuwa się całe zaznaczenie (bez encji nieruszalnych), każda encja z własnym przesunięciem względem kursora.
+            // Przesuwa się całe zaznaczenie (bez encji zablokowanych), każda encja z własnym przesunięciem względem kursora.
             _dragPlane = hit.Body.Position.Z;
             _dragOffsets.Clear();
-            foreach (var entity in _selection.Where(aEntity => !aEntity.IsFixed))
+            foreach (var entity in _selection.Where(aEntity => !aEntity.Locked))
                 _dragOffsets[entity] = entity.Body.Position - ground;
             _dragPointer = aEvent.Pointer;
             _dragPointer.Capture(_viewport);
@@ -363,7 +366,7 @@ public sealed class SceneRenderer : IDisposable
             _pointer = null;
     }
 
-    /// <summary>Ramka od punktu startu do kursora: zaznaczone = encje (poza nieruszalnymi), których środek widać w ramce.</summary>
+    /// <summary>Ramka od punktu startu do kursora: zaznaczone = encje (poza zablokowanymi), których środek widać w ramce.</summary>
     private void UpdateBand(Point aPoint)
     {
         var rect = new Avalonia.Rect(Math.Min(_bandStart.X, aPoint.X), Math.Min(_bandStart.Y, aPoint.Y),
@@ -380,7 +383,7 @@ public sealed class SceneRenderer : IDisposable
         _band.Height = rect.Height;
         if (_world is null)
             return;
-        var inside = _world.Entities.Where(aEntity => !aEntity.IsFixed &&
+        var inside = _world.Entities.Where(aEntity => !aEntity.Locked &&
             ScenePicker.TryProject(_camera, _viewport.Bounds.Size, CenterOf(aEntity), out var screen) && rect.Contains(screen));
         SelectMany(_bandBase.Concat(inside));
     }
@@ -393,12 +396,12 @@ public sealed class SceneRenderer : IDisposable
         pointer?.Capture(null);
     }
 
-    /// <summary>Punkt encji do ramki: środek części stwora z części, środek kulki, podstawa pozostałych.</summary>
+    /// <summary>Punkt encji do ramki: środek części stwora z części, środek kuli, podstawa pozostałych.</summary>
     private static Vector3 CenterOf(Entity aEntity) => aEntity switch
     {
         ArticulatedCreature creature when creature.PartPositions.Count > 0 =>
             creature.PartPositions.Aggregate(Vector3.Zero, (aSum, aPart) => aSum + aPart) / creature.PartPositions.Count,
-        TargetBall ball => ball.Body.Position + Vector3.UnitZ * ball.Radius,
+        Sphere sphere => sphere.Body.Position + Vector3.UnitZ * sphere.Radius,
         _ => aEntity.Body.Position + Vector3.UnitZ * 0.1f
     };
 
@@ -490,7 +493,7 @@ public sealed class SceneRenderer : IDisposable
             ScenePicker.TryGroundPoint(origin, direction, aHeight, out aResult);
     }
 
-    private readonly record struct ModelState(Vector3 Position, Quaternion Rotation, Vector3 Shape);
+    private readonly record struct ModelState(Vector3 Position, Quaternion Rotation, Vector3 Shape, Vector3 Color);
 }
 
 /// <summary>Klik prawym przyciskiem w scenie: punkt podłoża pod kursorem (null — niebo), encja pod kursorem.</summary>

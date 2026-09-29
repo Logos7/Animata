@@ -7,7 +7,7 @@ namespace Animata.Core.Physics;
 /// </summary>
 public interface IPhysicalEntity
 {
-    /// <summary>Czy encja porusza się w fizyce (stwór z części). Statyczne (podłoga, słupek) same fizyki nie tworzą.</summary>
+    /// <summary>Czy encja porusza się w fizyce (stwór z części). Statyczne (klocek, cylinder) same fizyki nie tworzą.</summary>
     bool IsDynamic { get; }
 
     void AttachPhysics(PhysicsWorld aPhysics);

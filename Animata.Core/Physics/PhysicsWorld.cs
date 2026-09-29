@@ -21,7 +21,7 @@ public sealed class PhysicsWorld : IDisposable
 {
     public static readonly Vector3 Gravity = new(0, 0, -9.81f);
 
-    /// <summary>Tarcie kontaktu dla ciał bez własnego (statyki: podłoga, słupki). Kontakt dwóch ciał bierze mniejsze z nich.</summary>
+    /// <summary>Tarcie kontaktu dla ciał bez własnego (statyki: klocki, cylindry). Kontakt dwóch ciał bierze mniejsze z nich.</summary>
     public const float DefaultFriction = 0.6f;
 
     private readonly BufferPool _pool = new();
@@ -64,7 +64,7 @@ public sealed class PhysicsWorld : IDisposable
     }
 
     /// <param name="aGrip">
-    /// Tarcie „chwytne” (np. kora drzewa): kontakt z tym statykiem ma dokładnie takie tarcie, niezależnie od tarcia ciała —
+    /// Tarcie „chwytne” (np. pień do wspinania): kontakt z tym statykiem ma dokładnie takie tarcie, niezależnie od tarcia ciała —
     /// wąż, który po ziemi sunie na małym tarciu, na korze trzyma się, gdy się ściśnie. Null — zwykła reguła (min).
     /// </param>
     public StaticHandle AddStatic<TShape>(TShape aShape, RigidPose aPose, float? aGrip = null) where TShape : unmanaged, IShape

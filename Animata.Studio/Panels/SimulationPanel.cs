@@ -24,7 +24,7 @@ namespace Animata.Studio.Panels;
 /// Panel sceny: widok 3D w środku, z lewej lista encji, z prawej właściwości zaznaczonej, u dołu stan nauki.
 /// Dwuklik stwora (w 3D albo na liście) wjeżdża do niego — przejście wyrasta z miejsca, gdzie stwór jest na ekranie.
 /// Klik prawym przyciskiem w 3D otwiera menu podręczne: wstawianie stworów (autka z wybraną liczbą wąsów), kulek
-/// i słupków w miejscu kliknięcia, a na encji — wejście, wąsy, usunięcie.
+/// i brył (kula, cylinder, klocek) w miejscu kliknięcia, a na encji — wejście, usunięcie.
 /// </summary>
 public sealed class SimulationPanel : StudioPanel, IDisposable
 {
@@ -92,7 +92,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         };
         speed.Click += (_, _) => Session.CycleSpeed();
         ToolTip.SetTip(speed, "Prędkość symulacji");
-        _snap = Ui.IconButton(Icons.Magnet, "Przyciąganie do terenu (G): kulki, słupki i przeciągane encje stają na podłodze albo płycie pod nimi",
+        _snap = Ui.IconButton(Icons.Magnet, "Przyciąganie do terenu (G): kule, cylindry i przeciągane encje stają na najwyższym klocku pod nimi (np. podłodze)",
             () => Session.ToggleSnap());
         var center = PanelFrame.Group(_pause, step, speed, _snap);
 
@@ -228,8 +228,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         if (_status is not null)
             _status.Text = Session.Status ?? string.Empty;
         if (_counts is not null)
-            _counts.Text = $"{Session.Creatures.Count()} stwory · {Session.World.Entities.OfType<TargetBall>().Count()} cele · " +
-                $"{Session.World.Entities.OfType<Obstacle>().Count()} słupki · {Session.World.Entities.OfType<Slab>().Count()} płyty";
+            _counts.Text = $"{Session.Creatures.Count()} stwory · {Session.World.Entities.OfType<Sphere>().Count()} kule · " +
+                $"{Session.World.Entities.OfType<Cylinder>().Count()} cylindry · {Session.World.Entities.OfType<Box>().Count()} klocki";
 
         RefreshList();
         if (_propertiesOf is not null && !Session.World.Contains(_propertiesOf) || !_propertiesBuilt)
@@ -259,11 +259,10 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             _list.Children.Clear();
             _items.Clear();
             AddGroup("Stwory", entities.OfType<ActiveEntity>());
-            AddGroup("Cele", entities.OfType<TargetBall>());
-            AddGroup("Przeszkody", entities.Where(aEntity => aEntity is Obstacle or Tree));
-            AddGroup("Teren", entities.OfType<Slab>());
-            AddGroup("Podłoże", entities.OfType<Floor>());
-            AddGroup("Inne", entities.Where(aEntity => aEntity is not ActiveEntity and not TargetBall and not Obstacle and not Tree and not Slab and not Floor));
+            AddGroup("Kule", entities.OfType<Sphere>());
+            AddGroup("Cylindry", entities.OfType<Cylinder>());
+            AddGroup("Klocki", entities.OfType<Box>());
+            AddGroup("Inne", entities.Where(aEntity => aEntity is not ActiveEntity and not Sphere and not Cylinder and not Box));
             UpdateListSelection();
         }
 
@@ -380,24 +379,6 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             _properties.Children.Add(enter);
         }
 
-        if (entity is Floor floor)
-        {
-            var nameField = Ui.Field(entity.Name, aText =>
-            {
-                entity.Name = aText.Trim();
-                _listKey = string.Empty;
-                return true;
-            }, aMono: false);
-            nameField.Watermark = StudioSession.NameOf(entity);
-            _properties.Children.Add(Ui.VStack(4, Ui.Header("Podłoga"), Ui.Row("Nazwa", nameField),
-                Ui.Row("Środek", $"{Ui.F(floor.Body.Position.X)}, {Ui.F(floor.Body.Position.Y)}, {Ui.F(floor.Body.Position.Z)} m", true),
-                Ui.Row("Wymiary", $"{Ui.F(floor.Size.X)} × {Ui.F(floor.Size.Y)} × {Ui.F(floor.Size.Z)} m", true),
-                Ui.Row("Góra", $"z = {Ui.F(floor.Top)} m", true)));
-            _properties.Children.Add(Wrap(Ui.Text("Nieruszalna: nie przesuwa jej mysz, panel, kolizje ani fizyka. " +
-                "W fizyce to statyczne pudło, po którym chodzą stwory z części (wąż).", 12.5, "Studio.Text3")));
-            return;
-        }
-
         // Nazwa i transformacja.
         var name = Ui.Field(entity.Name, aText =>
         {
@@ -410,7 +391,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         var y = Ui.Field(Ui.F(entity.Body.Position.Y), aText => SetPosition(entity, aText, false), 110);
         var yaw = Ui.Field(Ui.F(YawDegrees(entity), 0), aText =>
         {
-            if (!Ui.TryParse(aText, out var degrees))
+            if (entity.Locked || !Ui.TryParse(aText, out var degrees))
                 return false;
             entity.Body.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, degrees * MathF.PI / 180);
             return true;
@@ -422,41 +403,59 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             Ui.SetIfIdle(yaw, Ui.F(YawDegrees(entity), 0));
         });
         var transform = Ui.VStack(4, Ui.Header("Transformacja"), Ui.Row("Nazwa", name), Ui.Row("X [m]", x), Ui.Row("Y [m]", y));
-        if (entity is ActiveEntity or Slab)
+        if (entity is ActiveEntity or Box)
             transform.Children.Add(Ui.Row("Kierunek [°]", yaw));
         var height = Ui.MonoText(string.Empty, 12.5);
-        _updaters.Add(() => height.Text = $"{Ui.F(entity.Body.Position.Z)} m" + (Session.SnapToGround && entity is TargetBall or Obstacle or Slab or Tree ? " · teren" : string.Empty));
+        _updaters.Add(() => height.Text = $"{Ui.F(entity.Body.Position.Z)} m" + (Session.SnapToGround && !entity.Locked && entity is Sphere or Cylinder or Box ? " · teren" : string.Empty));
         transform.Children.Add(Ui.Row("Wysokość", height));
         switch (entity)
         {
-            case Obstacle obstacle:
-                transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(obstacle.Radius), aText => SetRadius(aText, aValue => obstacle.Radius = aValue), 110)));
+            case Sphere sphere:
+                transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(sphere.Radius), aText => SetRadius(aText, aValue => sphere.Radius = aValue), 110)));
                 break;
-            case TargetBall ball:
-                transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(ball.Radius), aText => SetRadius(aText, aValue => ball.Radius = aValue), 110)));
-                break;
-            case Tree tree:
-                transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(tree.Radius), aText => SetRadius(aText, aValue => tree.Radius = aValue), 110)));
-                transform.Children.Add(Ui.Row("Wysokość pnia [m]", Ui.Field(Ui.F(tree.Height), aText =>
+            case Cylinder cylinder:
+                transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(cylinder.Radius), aText => SetRadius(aText, aValue => cylinder.Radius = aValue), 110)));
+                transform.Children.Add(Ui.Row("Wysokość bryły [m]", Ui.Field(Ui.F(cylinder.Height), aText =>
                 {
-                    if (!Ui.TryParse(aText, out var value) || value < 0.3f || value > 30)
+                    if (!Ui.TryParse(aText, out var value) || value < 0.05f || value > 30)
                         return false;
-                    tree.Height = value;
+                    cylinder.Height = value;
                     return true;
                 }, 110)));
-                transform.Children.Add(Ui.Row("Tarcie kory", Ui.Field(Ui.F(tree.Bark), aText =>
+                var grip = Ui.Field(Ui.F(cylinder.Grip), aText =>
                 {
                     if (!Ui.TryParse(aText, out var value) || value < 0 || value > 5)
                         return false;
-                    tree.Bark = value;
+                    cylinder.Grip = value;
                     return true;
-                }, 110)));
+                }, 110);
+                ToolTip.SetTip(grip, "Tarcie chwytne: kontakt z cylindrem ma takie tarcie niezależnie od tarcia ciała (np. pień do wspinania węża). 0 — zwykłe tarcie.");
+                transform.Children.Add(Ui.Row("Tarcie chwytne", grip));
                 break;
-            case Slab slab:
-                transform.Children.Add(Ui.Row("Szerokość [m]", Ui.Field(Ui.F(slab.Size.X), aText => SetSlabSize(slab, aText, 0), 110)));
-                transform.Children.Add(Ui.Row("Głębokość [m]", Ui.Field(Ui.F(slab.Size.Y), aText => SetSlabSize(slab, aText, 1), 110)));
-                transform.Children.Add(Ui.Row("Grubość [m]", Ui.Field(Ui.F(slab.Size.Z, 3), aText => SetSlabSize(slab, aText, 2), 110)));
+            case Box box:
+                transform.Children.Add(Ui.Row("Szerokość [m]", Ui.Field(Ui.F(box.Size.X), aText => SetBoxSize(box, aText, 0), 110)));
+                transform.Children.Add(Ui.Row("Głębokość [m]", Ui.Field(Ui.F(box.Size.Y), aText => SetBoxSize(box, aText, 1), 110)));
+                transform.Children.Add(Ui.Row("Grubość [m]", Ui.Field(Ui.F(box.Size.Z, 3), aText => SetBoxSize(box, aText, 2), 110)));
                 break;
+        }
+        switch (entity)
+        {
+            case Box box:
+                transform.Children.Add(Ui.Row("Kolor", PanelParts.ColorPicker(() => box.Color, aColor => box.Color = aColor,
+                    () => { _listKey = string.Empty; _propertiesBuilt = false; }), 34));
+                break;
+            case Cylinder cylinder:
+                transform.Children.Add(Ui.Row("Kolor", PanelParts.ColorPicker(() => cylinder.Color, aColor => cylinder.Color = aColor,
+                    () => { _listKey = string.Empty; _propertiesBuilt = false; }), 34));
+                break;
+        }
+        if (entity is not ActiveEntity)
+        {
+            var locked = new CheckBox { IsChecked = entity.Locked, Content = Ui.Text("nie przesuwa się ani nie usuwa", 12.5) };
+            ToolTip.SetTip(locked, "Zablokowanej encji (np. podłogi) nie przesuwa mysz, panel ani przyciąganie do terenu i nie da się jej usunąć — " +
+                "da się ją zaznaczyć i zmieniać tutaj.");
+            locked.IsCheckedChanged += (_, _) => entity.Locked = locked.IsChecked == true;
+            transform.Children.Add(Ui.Row("Zablokowany", locked, 34));
         }
         _properties.Children.Add(transform);
 
@@ -473,8 +472,8 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             if (active is SnakeCreature snake)
             {
                 details.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(Session, snake, () => _propertiesBuilt = false)));
-                var climber = new CheckBox { IsChecked = snake.Climber, Content = Ui.Text("wspinaczka na drzewo", 12.5) };
-                ToolTip.SetTip(climber, "Nauka uczy wchodzenia na drzewo (próby: wąż owinięty wokół pnia, kulka na szczycie) zamiast pełzania po ziemi.");
+                var climber = new CheckBox { IsChecked = snake.Climber, Content = Ui.Text("wspinaczka na cylinder", 12.5) };
+                ToolTip.SetTip(climber, "Nauka uczy wchodzenia na pień — cylinder z tarciem chwytnym (próby: wąż owinięty wokół niego, kula na szczycie) zamiast pełzania po ziemi.");
                 climber.IsCheckedChanged += (_, _) => snake.Climber = climber.IsChecked == true;
                 details.Children.Add(Ui.Row("Uczy się", climber, 34));
             }
@@ -502,9 +501,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             Ui.Text(string.Join(" · ", aSelection.GroupBy(aEntity => aEntity switch
             {
                 ActiveEntity => "stwory",
-                TargetBall => "kulki",
-                Obstacle => "słupki",
-                Slab => "płyty",
+                Sphere => "kule",
+                Cylinder => "cylindry",
+                Box => "klocki",
                 _ => "inne"
             }).Select(aGroup => $"{aGroup.Count()} {aGroup.Key}")), 12.5, "Studio.Text3")));
 
@@ -570,18 +569,18 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
     private static bool SetPosition(Entity aEntity, string aText, bool aX)
     {
-        if (!Ui.TryParse(aText, out var value))
+        if (aEntity.Locked || !Ui.TryParse(aText, out var value))
             return false;
         var position = aEntity.Body.Position;
         aEntity.Body.Position = aX ? position with { X = value } : position with { Y = value };
         return true;
     }
 
-    private static bool SetSlabSize(Slab aSlab, string aText, int aAxis)
+    private static bool SetBoxSize(Box aBox, string aText, int aAxis)
     {
         if (!Ui.TryParse(aText, out var value))
             return false;
-        var size = aSlab.Size;
+        var size = aBox.Size;
         size = aAxis switch
         {
             0 => size with { X = value },
@@ -590,7 +589,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         };
         try
         {
-            aSlab.Size = size;
+            aBox.Size = size;
             return true;
         }
         catch (ArgumentOutOfRangeException)
@@ -671,24 +670,21 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 PasteAt(_renderer.GroundUnderPointer);
                 return true;
             case Key.A when control:
-                _renderer.SelectMany(Session.World.Entities.Where(aEntity => !aEntity.IsFixed));
+                _renderer.SelectMany(Session.World.Entities.Where(aEntity => !aEntity.Locked));
                 return true;
             case Key.Insert:
-                SelectNew(Session.AddTarget(_renderer.GroundPointAtCenter()));
+                SelectNew(Session.AddSphere(_renderer.GroundPointAtCenter()));
                 return true;
             case Key.O:
-                SelectNew(Session.AddObstacle(_renderer.GroundPointAtCenter()));
+                SelectNew(Session.AddCylinder(_renderer.GroundPointAtCenter()));
                 return true;
             case Key.P:
-                SelectNew(Session.AddSlab(_renderer.GroundPointAtCenter()));
-                return true;
-            case Key.R:
-                SelectNew(Session.AddTree(_renderer.GroundPointAtCenter()));
+                SelectNew(Session.AddBox(_renderer.GroundPointAtCenter()));
                 return true;
             case Key.G:
                 Session.ToggleSnap();
                 return true;
-            case Key.T when _renderer.SelectedEntity is TargetBall chosen:
+            case Key.T when _renderer.SelectedEntity is Sphere chosen:
                 Session.AimAllEyes(chosen);
                 return true;
             case Key.L:
@@ -727,15 +723,15 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             menu.Items.Add(new MenuItem { Header = many ? $"Zaznaczono {selection.Count}" : StudioSession.NameOf(entity), IsEnabled = false });
             if (!many && entity is ActiveEntity { Brain: not null } creature)
                 menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
-            if (!many && entity is TargetBall ball)
-                menu.Items.Add(Item("Wszystkie oczy na tę kulkę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
-            if (!many && entity is SnakeCreature snake && Session.World.Entities.OfType<Tree>().Any())
-                menu.Items.Add(Item("Owiń wokół drzewa · wspinaczka", Icons.Tree, () =>
+            if (!many && entity is Sphere ball)
+                menu.Items.Add(Item("Wszystkie oczy na tę kulę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
+            if (!many && entity is SnakeCreature snake && Session.World.Entities.OfType<Cylinder>().Any())
+                menu.Items.Add(Item("Owiń wokół cylindra · wspinaczka", Icons.Tree, () =>
                 {
-                    Session.WrapAroundNearestTree(snake);
+                    Session.WrapAroundNearestCylinder(snake);
                     _propertiesBuilt = false;
                 }));
-            if (!entity.IsFixed)
+            if (!entity.Locked)
             {
                 menu.Items.Add(Item("Kopiuj", Icons.Composite, CopySelection, Key.C, KeyModifiers.Control));
                 menu.Items.Add(Item("Wytnij", Icons.Ungroup, CutSelection, Key.X, KeyModifiers.Control));
@@ -755,10 +751,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         menu.Items.Add(Item("Wąż", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.Snake, at))));
         menu.Items.Add(Item("Pająk", Icons.Spider, () => SelectNew(Session.AddCreature(CreatureKind.Spider, at))));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Kulka", Icons.Target, () => SelectNew(Session.AddTarget(at)), Key.Insert));
-        menu.Items.Add(Item("Słupek", Icons.Pillar, () => SelectNew(Session.AddObstacle(at)), Key.O));
-        menu.Items.Add(Item("Płyta", Icons.Slab, () => SelectNew(Session.AddSlab(at)), Key.P));
-        menu.Items.Add(Item("Drzewo", Icons.Tree, () => SelectNew(Session.AddTree(at)), Key.R));
+        menu.Items.Add(Item("Kula", Icons.Target, () => SelectNew(Session.AddSphere(at)), Key.Insert));
+        menu.Items.Add(Item("Cylinder", Icons.Pillar, () => SelectNew(Session.AddCylinder(at)), Key.O));
+        menu.Items.Add(Item("Klocek", Icons.Slab, () => SelectNew(Session.AddBox(at)), Key.P));
 
         menu.Open(_renderer.View);
     }

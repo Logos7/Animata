@@ -201,7 +201,7 @@ public sealed class CreaturePanel : StudioPanel
                         readings.GetValueOrDefault(TargetSensor.FoundPort) > 0);
                     target.Text = eye.TargetId is { } id && Session.World.Find(id) is { } found
                         ? $"cel: {StudioSession.NameOf(found)}"
-                        : "cel: brak (w scenie: PPM → Kulka)";
+                        : "cel: brak (w scenie: PPM → Kula)";
                 });
                 break;
             }
