@@ -52,7 +52,8 @@ public class Brain
         foreach (var actuator in body.Actuators)
             if (graph.Modules.OfType<ActuatorModule>().All(aModule => aModule.Slot != actuator.Slot))
                 graph.Modules.Add(new ActuatorModule(actuator));
-        graph.Connections.RemoveAll(aLink =>
+        // Odpadają też połączenia do węzłów slotów, których ciało nie ma (np. mózg wczytany z innego ciała).
+        graph.Connections.RemoveAll(aLink => graph.Find(aLink.SourceId) is null || graph.Find(aLink.TargetId) is null ||
             (graph.Find(aLink.SourceId) is SensorModule source && !source.OutputPorts.Contains(aLink.SourcePort)) ||
             (graph.Find(aLink.TargetId) is ActuatorModule target && !target.InputPorts.Contains(aLink.TargetPort)));
         graph.Invalidate();
@@ -141,6 +142,31 @@ public class Brain
 
         Graph.InvalidateDeep();
         return restored;
+    }
+
+    /// <summary>
+    /// Pusty mózg na tym samym ciele: znikają wszystkie moduły poza węzłami ciała, połączenia, położenia w edytorze
+    /// i snapshoty (snapshot to kawałek mózgu — bez jego modułów nie ma sensu). Do podmiany mózgu na inny.
+    /// </summary>
+    public void Clear()
+    {
+        Graph.Modules.RemoveAll(aModule => aModule is not SensorModule and not ActuatorModule);
+        Graph.Connections.Clear();
+        Graph.Positions.Clear();
+        _snapshots.Clear();
+        SyncBody();
+        Graph.InvalidateDeep();
+    }
+
+    /// <summary>
+    /// Zmienia nazwę snapshotu (na tym samym miejscu listy, z tym samym Id i stanem). Zwraca nowy snapshot albo null,
+    /// gdy go w mózgu nie ma. Pusta nazwa → <see cref="ArgumentException"/>.
+    /// </summary>
+    public BrainSnapshot? RenameSnapshot(BrainSnapshot aSnapshot, string aLabel)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(aLabel);
+        var renamed = aSnapshot with { Label = aLabel.Trim() };
+        return ReplaceSnapshot(aSnapshot, renamed) ? renamed : null;
     }
 
     /// <summary>Dodaje snapshot z zewnątrz (np. wczytany z pliku).</summary>

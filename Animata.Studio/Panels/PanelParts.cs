@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Animata.Core.Actuators;
 using Animata.Core.Entities;
+using Animata.Core.Persistence;
 using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
@@ -152,6 +153,75 @@ public static class PanelParts
             });
         };
         return picker;
+    }
+
+    /// <summary>
+    /// Pozycje menu „Mózg” stwora: gotowe mózgi dla tego ciała (podmiana — nauka staje, stare snapshoty znikają),
+    /// wczytanie mózgu z pliku i zapis do pliku. <paramref name="aOwner"/> — kontrolka, do której okna należą okna plików;
+    /// <paramref name="aChanged"/> — po podmianie mózgu.
+    /// </summary>
+    public static List<Control> BrainMenuItems(StudioSession aSession, ActiveEntity aCreature, Control aOwner, Action? aChanged = null)
+    {
+        var items = new List<Control>();
+        var header = new MenuItem { Header = "Nowy mózg (zastępuje obecny i jego snapshoty)", IsEnabled = false };
+        items.Add(header);
+        foreach (var preset in WorldObjectCatalog.BrainPresets(aCreature))
+        {
+            var chosen = preset;
+            var item = new MenuItem { Header = preset.Name, Icon = Ui.Icon(Icons.Brain, 14) };
+            ToolTip.SetTip(item, preset.Description);
+            item.Click += (_, _) =>
+            {
+                if (aSession.InstallBrain(aCreature, chosen))
+                    aChanged?.Invoke();
+            };
+            items.Add(item);
+        }
+        items.Add(new Separator());
+        var load = new MenuItem { Header = "Wczytaj mózg z pliku…", Icon = Ui.Icon(Icons.Open, 14) };
+        load.Click += (_, _) => _ = LoadBrainAsync(aSession, aCreature, aOwner, aChanged);
+        items.Add(load);
+        var save = new MenuItem { Header = "Zapisz mózg do pliku…", Icon = Ui.Icon(Icons.Save, 14) };
+        save.Click += (_, _) => _ = SaveBrainAsync(aSession, aCreature, aOwner);
+        items.Add(save);
+        return items;
+    }
+
+    private static async Task LoadBrainAsync(StudioSession aSession, ActiveEntity aCreature, Control aOwner, Action? aChanged)
+    {
+        if (await BrainFiles.PickOpenAsync(aOwner) is not { } file)
+            return;
+        try
+        {
+            await using var stream = await file.OpenReadAsync();
+            using var reader = new StreamReader(stream);
+            var document = BrainFile.FromJson(await reader.ReadToEndAsync());
+            if (aSession.LoadBrain(aCreature, document, file.Name))
+                aChanged?.Invoke();
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException or System.Text.Json.JsonException
+            or UnauthorizedAccessException)
+        {
+            aSession.Status = $"nie wczytano mózgu: {exception.Message}";
+        }
+    }
+
+    private static async Task SaveBrainAsync(StudioSession aSession, ActiveEntity aCreature, Control aOwner)
+    {
+        try
+        {
+            var document = aSession.CaptureBrain(aCreature);
+            if (await BrainFiles.PickSaveAsync(aOwner, StudioSession.NameOf(aCreature)) is not { } file)
+                return;
+            await using (var stream = await file.OpenWriteAsync())
+            await using (var writer = new StreamWriter(stream))
+                await writer.WriteAsync(BrainFile.ToJson(document));
+            aSession.Status = $"zapisano mózg: {file.Name}";
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException or UnauthorizedAccessException)
+        {
+            aSession.Status = $"nie zapisano mózgu: {exception.Message}";
+        }
     }
 
     /// <summary>

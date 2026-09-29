@@ -244,6 +244,77 @@ public sealed class StudioSession : IDisposable
         return Status = error ?? $"przywrócono: {aSnapshot.Label}";
     }
 
+    /// <summary>Nowa nazwa snapshotu (pusta — bez zmian). Zwraca komunikat.</summary>
+    public string RenameSnapshot(Brain aBrain, BrainSnapshot aSnapshot, string aLabel)
+    {
+        if (string.IsNullOrWhiteSpace(aLabel) || aLabel.Trim() == aSnapshot.Label)
+            return Status = "nazwa bez zmian";
+        return Status = aBrain.RenameSnapshot(aSnapshot, aLabel) is { } renamed
+            ? $"snapshot „{aSnapshot.Label}” → „{renamed.Label}”"
+            : "tego snapshotu już nie ma";
+    }
+
+    public string DeleteSnapshot(Brain aBrain, BrainSnapshot aSnapshot)
+    {
+        History.Forget(aBrain);
+        return Status = aBrain.RemoveSnapshot(aSnapshot) ? $"usunięto snapshot: {aSnapshot.Label}" : "tego snapshotu już nie ma";
+    }
+
+    // ---------- mózgi wymienne ----------
+
+    /// <summary>Rośnie przy każdej podmianie mózgu — panele porównują, żeby przebudować karty sterownika.</summary>
+    public int BrainRevision { get; private set; }
+
+    /// <summary>Świeży gotowy mózg zamiast obecnego (nauka tego stwora staje; stare snapshoty znikają razem ze starym mózgiem).</summary>
+    public bool InstallBrain(ActiveEntity aCreature, BrainPreset aPreset)
+    {
+        if (!ChangeBrain(aCreature, () => WorldObjectCatalog.InstallBrain(aCreature, aPreset)))
+            return false;
+        Status = $"{NameOf(aCreature)}: nowy mózg — {aPreset.Name}" + (aPreset.HandTuned ? " (ręczne parametry)" : " (losowe wagi — L uczy)");
+        return true;
+    }
+
+    /// <summary>Mózg stwora do zapisu w pliku (z opisem ciała i snapshotami).</summary>
+    public BrainFileDocument CaptureBrain(ActiveEntity aCreature) => BrainFile.Capture(aCreature.Brain!, NameOf(aCreature));
+
+    /// <summary>Mózg z pliku zamiast obecnego; komunikat mówi, co nie pasowało do tego ciała.</summary>
+    public bool LoadBrain(ActiveEntity aCreature, BrainFileDocument aDocument, string aSource)
+    {
+        BrainLoadReport? report = null;
+        if (!ChangeBrain(aCreature, () => report = BrainFile.Load(aCreature.Brain!, aDocument)))
+            return false;
+        var misfit = report!.Fits ? string.Empty
+            : " — nie pasuje do tego ciała:" +
+              (report.MissingSlots.Count > 0 ? $" brak {string.Join(", ", report.MissingSlots)};" : string.Empty) +
+              (report.DroppedConnections > 0 ? $" odpięto połączeń: {report.DroppedConnections}" : string.Empty);
+        Status = $"{NameOf(aCreature)}: mózg z {aSource}{misfit}";
+        return true;
+    }
+
+    /// <summary>Podmiana mózgu: nauka staje (nowy mózg uczy się dopiero po L), historia i postęp nauki są czyszczone.</summary>
+    private bool ChangeBrain(ActiveEntity aCreature, Action aChange)
+    {
+        if (aCreature.Brain is not { } brain)
+        {
+            Status = $"{NameOf(aCreature)} nie ma mózgu";
+            return false;
+        }
+        Training.Stop(brain, aSnapshot: false);
+        try
+        {
+            aChange();
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or BrainException or NotSupportedException)
+        {
+            Status = $"mózg bez zmian: {exception.Message}";
+            return false;
+        }
+        History.Forget(brain);
+        _progress.Remove(brain);
+        BrainRevision++;
+        return true;
+    }
+
     // ---------- świat ----------
 
     public static string KindName(CreatureKind aKind) => aKind switch

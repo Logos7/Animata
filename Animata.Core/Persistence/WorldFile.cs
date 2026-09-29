@@ -103,7 +103,7 @@ public static class WorldFile
     /// <summary>Sugerowane rozszerzenie pliku.</summary>
     public const string Extension = ".animata.json";
 
-    private static readonly JsonSerializerOptions Options = new()
+    internal static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.Never
@@ -230,7 +230,7 @@ public static class WorldFile
     private static Guid? TargetOf(Entity aCreature) => aCreature.Body.Sensors.OfType<TargetSensor>().FirstOrDefault()?.TargetId;
 
     /// <summary>Mózg stwora: graf, snapshoty i wskazanie bieżącego snapshotu (<see cref="Brain.CurrentSnapshot"/>).</summary>
-    private static BrainDocument CaptureBrain(Brain aBrain) =>
+    internal static BrainDocument CaptureBrain(Brain aBrain) =>
         CaptureBrain(aBrain.Graph, aBrain.Snapshots) with { Current = aBrain.CurrentSnapshot()?.Id };
 
     private static BrainDocument CaptureBrain(BrainGraph aGraph, IReadOnlyList<BrainSnapshot> aSnapshots, IEnumerable<BrainModule>? aSkip = null)
@@ -359,7 +359,7 @@ public static class WorldFile
     /// <summary>
     /// Zastępuje graf mózgu zapisanym (moduły, połączenia, położenia), dokłada zapisane snapshoty i przywraca bieżący.
     /// </summary>
-    private static void RestoreBrain(Brain aBrain, BrainDocument aDocument)
+    internal static void RestoreBrain(Brain aBrain, BrainDocument aDocument)
     {
         FillGraph(aBrain.Graph, aDocument);
         aBrain.SyncBody();

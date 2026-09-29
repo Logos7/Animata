@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Animata.Core.Actuators;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
@@ -33,6 +34,10 @@ public sealed class CreaturePanel : StudioPanel
     private float _snapshotCheck;
     private int _builtWhiskers;
     private int _builtSegments;
+    private int _builtRevision;
+
+    /// <summary>Snapshot, któremu właśnie zmienia się nazwę (lista wtedy się sama nie przebudowuje).</summary>
+    private Guid? _renaming;
 
     public CreaturePanel(StudioSession aSession, ActiveEntity aCreature) : base(aSession, StudioSession.NameOf(aCreature))
     {
@@ -50,7 +55,19 @@ public sealed class CreaturePanel : StudioPanel
         var titleExtra = Ui.HStack(8, Ui.Dot(Ui.ColorOf(_creature)),
             Ui.MonoText(controllers.Count > 0 ? string.Join(", ", controllers) : "bez sterownika", 12, "Studio.Text3"));
         titleExtra.Margin = new Thickness(6, 0, 0, 0);
+        _builtRevision = Session.BrainRevision;
+        var brainButton = Ui.Button("Mózg", () => { }, Icons.Brain);
+        ToolTip.SetTip(brainButton, "Wymień mózg tego ciała: gotowy (sieć, CPG, sterownik) albo z pliku; zapisz mózg do pliku.");
+        var brainMenu = new MenuFlyout();
+        brainMenu.Opening += (_, _) =>
+        {
+            brainMenu.Items.Clear();
+            foreach (var item in PanelParts.BrainMenuItems(Session, _creature, this, () => Child = Build()))
+                brainMenu.Items.Add(item);
+        };
+        brainButton.Flyout = brainMenu;
         var right = Ui.HStack(6,
+            brainButton,
             Ui.Button("Snapshot", () => Session.SaveSnapshot(_brain), Icons.Camera, aShortcut: "Ctrl+S"),
             Ui.Button("Cofnij", () => Session.StepBack(_brain), Icons.Undo, aShortcut: "Z"));
 
@@ -321,8 +338,13 @@ public sealed class CreaturePanel : StudioPanel
             _snapshots.Children.Add(empty);
             return;
         }
-        foreach (var snapshot in _brain.Snapshots.Reverse().Take(12))
+        foreach (var snapshot in _brain.Snapshots.Reverse())
         {
+            if (snapshot.Id == _renaming)
+            {
+                _snapshots.Children.Add(RenameBox(snapshot));
+                continue;
+            }
             var current = _brain.Matches(snapshot);
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 10 };
             row.Children.Add(Ui.Dot(current ? StudioTheme.Palette.Accent : StudioPalette.WithAlpha(StudioTheme.Palette.Text3, 0.5), 8));
@@ -342,8 +364,19 @@ public sealed class CreaturePanel : StudioPanel
                 BorderThickness = new Thickness(0),
                 Focusable = false
             };
-            ToolTip.SetTip(button, current ? "Mózg ma teraz dokładnie ten stan" : "Przywróć ten snapshot (zatrzymuje naukę)");
+            ToolTip.SetTip(button, (current ? "Mózg ma teraz dokładnie ten stan" : "Przywróć ten snapshot (zatrzymuje naukę)") +
+                " · PPM: zmień nazwę, usuń");
             var target = snapshot;
+            var rename = new MenuItem { Header = "Zmień nazwę" };
+            rename.Click += (_, _) => StartRename(target);
+            var remove = new MenuItem { Header = "Usuń snapshot", Icon = Ui.Icon(Icons.Trash, 14) };
+            remove.Click += (_, _) =>
+            {
+                Session.DeleteSnapshot(_brain, target);
+                _snapshotCount = -1;
+            };
+            button.ContextMenu = new ContextMenu { Items = { rename, remove } };
+
             button.Click += (_, _) =>
             {
                 Session.Restore(_brain, target);
@@ -351,6 +384,45 @@ public sealed class CreaturePanel : StudioPanel
             };
             _snapshots.Children.Add(button);
         }
+    }
+
+    private void StartRename(BrainSnapshot aSnapshot)
+    {
+        _renaming = aSnapshot.Id;
+        RebuildSnapshots();
+    }
+
+    /// <summary>Pole nazwy snapshotu: Enter (albo utrata fokusu) zapisuje, Esc anuluje.</summary>
+    private Control RenameBox(BrainSnapshot aSnapshot)
+    {
+        var box = new TextBox { Text = aSnapshot.Label, FontSize = 12.5, Margin = new Thickness(4, 2) };
+        var done = false;
+        void Finish(bool aSave)
+        {
+            if (done)
+                return;
+            done = true;
+            if (aSave && _brain.Snapshots.FirstOrDefault(aExisting => aExisting.Id == aSnapshot.Id) is { } live)
+                Session.RenameSnapshot(_brain, live, box.Text ?? string.Empty);
+            _renaming = null;
+            _snapshotCount = -1;
+            Dispatcher.UIThread.Post(RebuildSnapshots);
+        }
+        box.KeyDown += (_, aEvent) =>
+        {
+            if (aEvent.Key is Key.Enter or Key.Escape)
+            {
+                aEvent.Handled = true;
+                Finish(aEvent.Key == Key.Enter);
+            }
+        };
+        box.LostFocus += (_, _) => Finish(true);
+        box.AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            box.Focus();
+            box.SelectAll();
+        });
+        return box;
     }
 
     // ---------- nawigacja i odświeżanie ----------
@@ -366,7 +438,7 @@ public sealed class CreaturePanel : StudioPanel
     {
         // Liczba wąsów zmieniona (tu, w scenie albo w grafie) — karty, schemat i podgląd grafu od nowa.
         if (WorldObjectCatalog.WhiskerCountOf(_creature) != _builtWhiskers ||
-            ((_creature as SnakeCreature)?.Segments ?? 0) != _builtSegments)
+            ((_creature as SnakeCreature)?.Segments ?? 0) != _builtSegments || Session.BrainRevision != _builtRevision)
             Child = Build();
         foreach (var update in _updaters)
             update();
@@ -376,7 +448,7 @@ public sealed class CreaturePanel : StudioPanel
 
         // Snapshoty: przebudowa przy nowym snapshocie albo co sekundę (czy stan mózgu wciąż któremuś odpowiada).
         _snapshotCheck += aDelta;
-        if (_snapshotCount != _brain.Snapshots.Count || _snapshotCheck > 1)
+        if (_renaming is null && (_snapshotCount != _brain.Snapshots.Count || _snapshotCheck > 1))
         {
             _snapshotCount = _brain.Snapshots.Count;
             _snapshotCheck = 0;

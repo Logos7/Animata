@@ -738,7 +738,13 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             else
             {
                 if (!many && entity is ActiveEntity { Brain: not null } creature)
+                {
                     menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
+                    var brainItem = new MenuItem { Header = "Mózg", Icon = Ui.Icon(Icons.Brain, 14) };
+                    foreach (var item in PanelParts.BrainMenuItems(Session, creature, this, () => _propertiesBuilt = false))
+                        brainItem.Items.Add(item);
+                    menu.Items.Add(brainItem);
+                }
                 if (!many)
                     menu.Items.Add(Item(entity is ActiveEntity ? "Oczy innych stworów na niego" : "Wszystkie oczy na to",
                         Icons.Eye, () => Session.AimAllEyes(entity), Key.T));
