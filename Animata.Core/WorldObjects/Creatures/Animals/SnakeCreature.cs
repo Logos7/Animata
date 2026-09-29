@@ -1,7 +1,6 @@
 using Animata.Core.Actuators;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
-using Animata.Core.Brains.Neural;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
 
@@ -44,9 +43,7 @@ public sealed class SnakeCreature : ArticulatedCreature
     /// </summary>
     public void SetSegments(int aSegments)
     {
-        if (!WorldObjectCatalog.IsValidSnakeLength(aSegments))
-            throw new ArgumentOutOfRangeException(nameof(aSegments), aSegments,
-                $"Wąż ma od {WorldObjectCatalog.MinSnakeSegments} do {WorldObjectCatalog.MaxSnakeSegments} segmentów.");
+        WorldObjectCatalog.CheckSnakeLength(aSegments);
         if (aSegments == Segments)
             return;
 

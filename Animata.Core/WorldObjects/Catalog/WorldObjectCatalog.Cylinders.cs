@@ -1,28 +1,20 @@
 using System.Numerics;
 using Animata.Core.Actuators;
-using Animata.Core.Bodies;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Brains.Neural;
-using Animata.Core.Entities;
 using Animata.Core.Sensors;
-using Animata.Core.Worlds;
 
 namespace Animata.Core.WorldObjects;
 
 // Walce: sieć 3-6-2 z ręcznymi wagami i gotowe walce.
 public static partial class WorldObjectCatalog
 {
-    /// <summary>
-    /// Sieć 3-6-2 z ręcznie ustawionymi wagami startowymi (punkt wyjścia do ewolucji):
-    /// Turn ≈ tanh(2·tanh(3·DirectionY)), Step ≈ tanh(2·tanh(2·Gap) + 2·tanh(3·DirectionX) − 2).
-    /// Step spada do zera przy styku z celem i gdy cel jest z boku lub z tyłu.
-    /// </summary>
     /// <summary>Sieć walca z losowymi wagami: te same wejścia i wyjścia co <see cref="CreateCylinderNeuralModule()"/>, podane warstwy ukryte.</summary>
     public static NeuralNetworkModule CreateCylinderNeuralModule(params int[] aHidden)
     {
         var module = new NeuralNetworkModule(new NeuralNetwork([3, .. aHidden, 2])) { Name = "Neural" };
-        module.Ports.AddRange(TargetPorts);
+        module.Ports.AddRange(TargetSensor.SteeringPorts);
         module.Inputs.Add(new NeuralInput("Found * DirectionY"));
         module.Inputs.Add(new NeuralInput("Found * Gap"));
         module.Inputs.Add(new NeuralInput("Found * DirectionX"));
@@ -31,16 +23,14 @@ public static partial class WorldObjectCatalog
         return module;
     }
 
+    /// <summary>
+    /// Sieć 3-6-2 z ręcznie ustawionymi wagami startowymi (punkt wyjścia do ewolucji):
+    /// Turn ≈ tanh(2·tanh(3·DirectionY)), Step ≈ tanh(2·tanh(2·Gap) + 2·tanh(3·DirectionX) − 2).
+    /// Step spada do zera przy styku z celem i gdy cel jest z boku lub z tyłu.
+    /// </summary>
     public static NeuralNetworkModule CreateCylinderNeuralModule()
     {
-        var module = new NeuralNetworkModule(new NeuralNetwork(3, 6, 2)) { Name = "Neural" };
-        module.Ports.AddRange(TargetPorts);
-        module.Inputs.Add(new NeuralInput("Found * DirectionY"));
-        module.Inputs.Add(new NeuralInput("Found * Gap"));
-        module.Inputs.Add(new NeuralInput("Found * DirectionX"));
-        module.Outputs.Add(new NeuralOutput(DiskDriveActuator.TurnPort));
-        module.Outputs.Add(new NeuralOutput(DiskDriveActuator.StepPort));
-
+        var module = CreateCylinderNeuralModule(6);
         var weights = module.Network.Weights;
         var biases = module.Network.Biases;
         for (var layer = 0; layer < weights.Length; layer++)

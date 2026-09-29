@@ -28,8 +28,11 @@ public sealed class World : IDisposable
     /// </summary>
     public PhysicsWorld? Physics { get; private set; }
 
-    /// <summary>Czas symulacji w sekundach (suma kroków <see cref="Update"/>) — np. zegar rytmu <see cref="Sensors.ClockSensor"/>.</summary>
-    public double Time { get; private set; }
+    /// <summary>
+    /// Czas symulacji w sekundach (suma kroków <see cref="Update"/>) — np. zegar rytmu <see cref="Sensors.ClockSensor"/>.
+    /// Zapis świata go przechowuje, więc po wczytaniu zegar idzie dalej.
+    /// </summary>
+    public double Time { get; internal set; }
 
     public Entity? Find(Guid aId) => _index.GetValueOrDefault(aId);
 

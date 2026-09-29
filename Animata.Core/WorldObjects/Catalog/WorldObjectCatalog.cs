@@ -1,9 +1,7 @@
 using System.Numerics;
 using Animata.Core.Actuators;
-using Animata.Core.Bodies;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
-using Animata.Core.Brains.Neural;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
 using Animata.Core.Worlds;
@@ -16,11 +14,6 @@ public sealed record DemoScene(World World, IReadOnlyList<ActiveEntity> Creature
 // Katalog encji świata: wspólne klocki (cel, słupek, płyta, budowa mózgu). Stwory i sceny są w plikach WorldObjectCatalog.*.cs.
 public static partial class WorldObjectCatalog
 {
-    private static readonly string[] TargetPorts =
-    [
-        TargetSensor.FoundPort, TargetSensor.GapPort, TargetSensor.DirectionXPort, TargetSensor.DirectionYPort
-    ];
-
     public static TargetBall CreateTargetBall(Vector3 aPosition) => new()
     {
         Body = { Position = aPosition }

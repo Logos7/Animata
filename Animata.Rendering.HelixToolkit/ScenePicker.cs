@@ -167,28 +167,17 @@ internal static class ScenePicker
         return near > 0 ? near : far > 0 ? far : null;
     }
 
-    private static float? HitBall(TargetBall aBall, Vector3 aOrigin, Vector3 aDirection)
-    {
-        var scale = aBall.Body.Scale;
-        var radius = aBall.Radius * MathF.Max(scale.X, MathF.Max(scale.Y, scale.Z));
-        if (radius <= 0)
-            return null;
-        var center = aBall.Body.Position + Vector3.UnitZ * aBall.Radius * scale.Z;
-        var offset = aOrigin - center;
-        var projection = Vector3.Dot(offset, aDirection);
-        var discriminant = projection * projection - (offset.LengthSquared() - radius * radius);
-        if (discriminant < 0)
-            return null;
-        var near = -projection - MathF.Sqrt(discriminant);
-        return near > 0 ? near : null;
-    }
+    /// <summary>Kulka leży na <see cref="Body.Position"/> (środek o promień wyżej).</summary>
+    private static float? HitBall(TargetBall aBall, Vector3 aOrigin, Vector3 aDirection) => aBall.Radius <= 0
+        ? null
+        : HitSphere(aBall.Body.Position + Vector3.UnitZ * aBall.Radius, aBall.Radius, aOrigin, aDirection);
 
     /// <summary>Promień kontra pionowy walec z denkami stojący na <see cref="Body.Position"/>.</summary>
     private static float? HitCylinder(Body aBody, float aRadius, float aHeight, Vector3 aOrigin, Vector3 aDirection)
     {
-        var radius = aRadius * MathF.Max(aBody.Scale.X, aBody.Scale.Y);
+        var radius = aRadius;
         var bottom = aBody.Position.Z;
-        var top = bottom + aHeight * aBody.Scale.Z;
+        var top = bottom + aHeight;
         if (radius <= 0 || top <= bottom)
             return null;
 

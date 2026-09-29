@@ -75,9 +75,9 @@ public class SpiderTests
     public void SpiderScene_SavesAndLoads()
     {
         using var world = WorldObjectCatalog.CreateSpiderScene().World;
-        var json = WorldFile.ToJson(WorldFile.Capture(world, "t", 0));
+        var json = WorldFile.ToJson(WorldFile.Capture(world, "t"));
         using var restored = WorldFile.Restore(WorldFile.FromJson(json)).World;
-        Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "t", 0)));
+        Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "t")));
         Assert.Equal(2, restored.Entities.OfType<SpiderCreature>().Count());
         Assert.Single(restored.Entities.OfType<SpiderCreature>().SelectMany(aSpider => aSpider.Brain!.Graph.Modules.OfType<GaitModule>()));
         Assert.Same(SeekRigs.Spider, SeekRigs.For(restored.Entities.OfType<SpiderCreature>().First()));

@@ -1,12 +1,9 @@
 using System.Numerics;
 using Animata.Core.Actuators;
-using Animata.Core.Bodies;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Brains.Neural;
-using Animata.Core.Entities;
 using Animata.Core.Sensors;
-using Animata.Core.Worlds;
 
 namespace Animata.Core.WorldObjects;
 
@@ -62,7 +59,7 @@ public static partial class WorldObjectCatalog
         var outputs = JointNetworkOutputs(GaitModule.Joints);
         int[] hidden = aHidden.Length > 0 ? aHidden : [10];
         var module = new NeuralNetworkModule(new NeuralNetwork([inputs.Length, .. hidden, outputs.Length])) { Name = "Neural" };
-        module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetPorts, .. senses]);
+        module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetSensor.SteeringPorts, .. senses]);
         module.Inputs.AddRange(inputs.Select(aExpression => new NeuralInput(aExpression)));
         module.Outputs.AddRange(outputs.Select(aPort => new NeuralOutput(aPort)));
         return module;

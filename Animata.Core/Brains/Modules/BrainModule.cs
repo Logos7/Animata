@@ -46,6 +46,10 @@ public abstract class BrainModule
     public virtual void RestoreState(ModuleState aState) =>
         throw new NotSupportedException($"{GetType().Name} has no restorable state.");
 
+    /// <summary>Stan oczekiwanego typu (do <see cref="RestoreState"/>) albo <see cref="ArgumentException"/>.</summary>
+    protected static TState Expect<TState>(ModuleState aState) where TState : ModuleState =>
+        aState as TState ?? throw new ArgumentException($"Expected {typeof(TState).Name}, got {aState.GetType().Name}.", nameof(aState));
+
     public override string ToString() =>
         string.IsNullOrEmpty(Name) ? $"{GetType().Name} {Id}" : $"{Name} ({GetType().Name})";
 }

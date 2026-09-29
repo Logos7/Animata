@@ -1,13 +1,11 @@
 namespace Animata.Core.Training;
 
 /// <summary>
-/// Stan nauki po pokoleniu. Best/BestFitness to zwycięzca bieżącego pokolenia (na jego losowych próbach —
+/// Stan nauki po pokoleniu. BestFitness to wynik zwycięzcy bieżącego pokolenia (na jego losowych próbach —
 /// szum, może być gorszy od poprzedniego). Champion to najlepszy dotąd osobnik na stałym zestawie prób
 /// walidacyjnych — zmienia się tylko na lepsze; to jego warto pokazywać w scenie.
 /// </summary>
-public sealed record TrainingProgress(
-    int Generation, float BestFitness, float MeanFitness, float[] Best,
-    float[] Champion, float ChampionScore, int ChampionGeneration);
+public sealed record TrainingProgress(int Generation, float BestFitness, float[] Champion, float ChampionScore, int ChampionGeneration);
 
 /// <summary>
 /// Uruchamia <see cref="Evolution"/> na wątku w tle. Wątek UI co klatkę pyta o nowy postęp
@@ -87,8 +85,7 @@ public sealed class BackgroundTrainer : IDisposable
                         championGeneration = _evolution.Generation;
                     }
                     var progress = new TrainingProgress(
-                        _evolution.Generation, _evolution.BestFitness, _evolution.MeanFitness, best,
-                        champion, championScore, championGeneration);
+                        _evolution.Generation, _evolution.BestFitness, champion, championScore, championGeneration);
                     lock (_gate)
                     {
                         _progress = progress;

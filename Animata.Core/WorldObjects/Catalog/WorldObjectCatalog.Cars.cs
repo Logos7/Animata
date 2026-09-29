@@ -1,12 +1,11 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Animata.Core.Actuators;
-using Animata.Core.Bodies;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Brains.Neural;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
-using Animata.Core.Worlds;
 
 namespace Animata.Core.WorldObjects;
 
@@ -31,12 +30,17 @@ public static partial class WorldObjectCatalog
     /// <summary>Nieparzysta, od 1 do <see cref="MaxWhiskers"/> — środkowy wąs zawsze patrzy prosto przed maskę.</summary>
     public static bool IsValidWhiskerCount(int aCount) => aCount is >= 1 and <= MaxWhiskers && aCount % 2 == 1;
 
+    /// <summary>Rzuca <see cref="ArgumentOutOfRangeException"/>, gdy liczba wąsów nie jest nieparzysta od 1 do <see cref="MaxWhiskers"/>.</summary>
+    public static void CheckWhiskerCount(int aCount, [CallerArgumentExpression(nameof(aCount))] string? aName = null)
+    {
+        if (!IsValidWhiskerCount(aCount))
+            throw new ArgumentOutOfRangeException(aName, aCount, $"Autko ma nieparzystą liczbę wąsów od 1 do {MaxWhiskers}.");
+    }
+
     /// <summary>Kąty wąsów autka: <paramref name="aCount"/> promieni równo w wachlarzu <see cref="WhiskerSpread"/>.</summary>
     public static float[] WhiskerAnglesFor(int aCount)
     {
-        if (!IsValidWhiskerCount(aCount))
-            throw new ArgumentOutOfRangeException(nameof(aCount), aCount,
-                $"Autko ma nieparzystą liczbę wąsów od 1 do {MaxWhiskers}.");
+        CheckWhiskerCount(aCount);
         return [.. RaySensor.Fan(aCount, WhiskerSpread).Angles];
     }
 
@@ -77,7 +81,7 @@ public static partial class WorldObjectCatalog
         var rays = Enumerable.Range(0, WhiskerAnglesFor(aWhiskers).Length).Select(RaySensor.PortName).ToArray();
         int[] hidden = aHidden.Length > 0 ? aHidden : [8];
         var module = new NeuralNetworkModule(new NeuralNetwork([3 + rays.Length, .. hidden, 2])) { Name = "Neural" };
-        module.Ports.AddRange(TargetPorts);
+        module.Ports.AddRange(TargetSensor.SteeringPorts);
         module.Ports.AddRange(rays);
         module.Inputs.Add(new NeuralInput("Found * DirectionY"));
         module.Inputs.Add(new NeuralInput("Found * DirectionX"));

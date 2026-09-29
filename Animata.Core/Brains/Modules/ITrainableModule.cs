@@ -7,8 +7,6 @@ namespace Animata.Core.Brains.Modules;
 /// </summary>
 public interface ITrainableModule
 {
-    int ParameterCount { get; }
-
     float[] GetParameters();
 
     void SetParameters(ReadOnlySpan<float> aParameters);

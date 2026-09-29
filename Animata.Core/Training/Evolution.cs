@@ -54,7 +54,6 @@ public sealed class Evolution
     public int Generation { get; private set; }
     public float[] Best { get; private set; }
     public float BestFitness { get; private set; } = float.NegativeInfinity;
-    public float MeanFitness { get; private set; } = float.NegativeInfinity;
 
     /// <summary>Ocenia bieżące pokolenie i tworzy następne. Zwraca fitness najlepszego osobnika.</summary>
     public float Step(Func<float[], int, float> aFitness)
@@ -70,7 +69,6 @@ public sealed class Evolution
         var elites = order.Take(_options.EliteCount).Select(aIndex => _population[aIndex]).ToArray();
         Best = (float[])elites[0].Clone();
         BestFitness = _fitness[order[0]];
-        MeanFitness = _fitness.Where(float.IsFinite).DefaultIfEmpty(float.NegativeInfinity).Average();
 
         var next = new float[_population.Length][];
         for (var index = 0; index < elites.Length; index++)

@@ -119,8 +119,7 @@ public sealed class CompositeModule : BrainModule
 
     public override void RestoreState(ModuleState aState)
     {
-        if (aState is not CompositeState state)
-            throw new ArgumentException($"Expected {nameof(CompositeState)}, got {aState.GetType().Name}.", nameof(aState));
+        var state = Expect<CompositeState>(aState);
         foreach (var entry in state.Modules)
             Inner.FindDeep(entry.ModuleId)?.RestoreState(entry.State);
         Inner.InvalidateDeep();

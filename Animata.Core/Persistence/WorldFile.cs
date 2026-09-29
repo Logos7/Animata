@@ -129,16 +129,11 @@ public static class WorldFile
         return document;
     }
 
-    public static void Save(World aWorld, string aPath, string aName = "", double aTime = 0) =>
-        File.WriteAllText(aPath, ToJson(Capture(aWorld, aName, aTime)));
-
-    public static WorldDocument Load(string aPath) => FromJson(File.ReadAllText(aPath));
-
     // ---------- świat → dokument ----------
 
     /// <summary>Stan świata do zapisu. Rzuca <see cref="NotSupportedException"/> dla encji albo modułu, którego format nie zna.</summary>
-    public static WorldDocument Capture(World aWorld, string aName = "", double aTime = 0) =>
-        new(Format, aName, aTime, [.. aWorld.Entities.Select(CaptureEntity)]);
+    public static WorldDocument Capture(World aWorld, string aName = "") =>
+        new(Format, aName, aWorld.Time, [.. aWorld.Entities.Select(CaptureEntity)]);
 
     // ---------- schowek: kopie encji ----------
 
@@ -272,10 +267,10 @@ public static class WorldFile
 
     // ---------- dokument → świat ----------
 
-    /// <summary>Nowy świat z dokumentu. Stwory dostają zapisane mózgi (strukturę, stan i snapshoty).</summary>
+    /// <summary>Nowy świat z dokumentu (także czas symulacji). Stwory dostają zapisane mózgi (strukturę, stan i snapshoty).</summary>
     public static DemoScene Restore(WorldDocument aDocument)
     {
-        var world = new World();
+        var world = new World { Time = aDocument.Time };
         var creatures = new List<ActiveEntity>();
         try
         {

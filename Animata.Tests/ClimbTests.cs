@@ -70,9 +70,9 @@ public class ClimbTests
         for (var tick = 0; tick < 15; tick++)
             world.Update(Delta);
 
-        var json = WorldFile.ToJson(WorldFile.Capture(world, "t", 0));
+        var json = WorldFile.ToJson(WorldFile.Capture(world, "t"));
         using var restored = WorldFile.Restore(WorldFile.FromJson(json)).World;
-        Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "t", 0)));
+        Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "t")));
         Assert.Equal(2, restored.Entities.OfType<Tree>().Count());
         foreach (var snake in snakes)
         {

@@ -161,17 +161,14 @@ public sealed class SceneRenderer : IDisposable
 
             _current.Add(entity.Id);
             var body = entity.Body;
-            var state = new ModelState(body.Position, body.Rotation, body.Scale, SceneMeshes.ShapeOf(entity));
+            var state = new ModelState(body.Position, body.Rotation, SceneMeshes.ShapeOf(entity));
 
             var hasPrevious = _states.TryGetValue(entity.Id, out var previous);
             if (hasPrevious && previous.Shape != state.Shape)
                 model.Geometry = SceneMeshes.CreateGeometry(entity);
 
-            if (!hasPrevious ||
-                previous.Position != state.Position || previous.Rotation != state.Rotation || previous.Scale != state.Scale)
-                model.Transform = Matrix4x4.CreateScale(body.Scale)
-                    * Matrix4x4.CreateFromQuaternion(body.Rotation)
-                    * Matrix4x4.CreateTranslation(body.Position);
+            if (!hasPrevious || previous.Position != state.Position || previous.Rotation != state.Rotation)
+                model.Transform = Matrix4x4.CreateFromQuaternion(body.Rotation) * Matrix4x4.CreateTranslation(body.Position);
 
             _states[entity.Id] = state;
         }
@@ -425,7 +422,7 @@ public sealed class SceneRenderer : IDisposable
         else if (entity is not null)
             Select(entity);
         Vector3? ground = TryGroundPoint(aPoint, 0, out var point) ? point : null;
-        ContextRequested?.Invoke(new SceneContext(aPoint, ground, entity));
+        ContextRequested?.Invoke(new SceneContext(ground, entity));
     }
 
     private void Paint(Entity aEntity, bool aSelected)
@@ -493,8 +490,8 @@ public sealed class SceneRenderer : IDisposable
             ScenePicker.TryGroundPoint(origin, direction, aHeight, out aResult);
     }
 
-    private readonly record struct ModelState(Vector3 Position, Quaternion Rotation, Vector3 Scale, Vector3 Shape);
+    private readonly record struct ModelState(Vector3 Position, Quaternion Rotation, Vector3 Shape);
 }
 
-/// <summary>Klik prawym przyciskiem w scenie: piksel viewportu, punkt podłoża pod kursorem (null — niebo), encja pod kursorem.</summary>
-public readonly record struct SceneContext(Point Point, Vector3? Ground, Entity? Entity);
+/// <summary>Klik prawym przyciskiem w scenie: punkt podłoża pod kursorem (null — niebo), encja pod kursorem.</summary>
+public readonly record struct SceneContext(Vector3? Ground, Entity? Entity);

@@ -113,19 +113,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     public override void Place(Vector3 aPosition, Quaternion aRotation)
     {
         Body.Position = aPosition;
-        Body.Rotation = MathF.Abs(aRotation.LengthSquared() - 1) > 1e-4f ? Quaternion.Normalize(aRotation) : aRotation;
+        Body.Rotation = NormalizedIfNeeded(aRotation);
         for (var part = 0; part < Plan.Parts.Count; part++)
-        {
-            var (position, orientation) = RestPose(part);
-            _positions[part] = position;
-            _orientations[part] = orientation;
-            if (_physics is { } physics)
-            {
-                var body = physics.Body(_bodies[part]);
-                body.Pose = new RigidPose(position, orientation * FixOf(Plan.Parts[part]));
-                body.Velocity = default;
-            }
-        }
+            (_positions[part], _orientations[part]) = RestPose(part);
+        PushPoses();
         Array.Clear(_yaw);
         Array.Clear(_pitch);
         _publishedPosition = Body.Position;
@@ -180,13 +171,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             if (!progress)
                 break;
         }
-        if (_physics is { } physics)
-            for (var part = 0; part < Plan.Parts.Count; part++)
-            {
-                var body = physics.Body(_bodies[part]);
-                body.Pose = new RigidPose(_positions[part], _orientations[part] * FixOf(Plan.Parts[part]));
-                body.Velocity = default;
-            }
+        PushPoses();
     }
 
     /// <summary>
@@ -200,25 +185,13 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         for (var part = 0; part < Plan.Parts.Count; part++)
         {
             _positions[part] = aPositions[part];
-            _orientations[part] = MathF.Abs(aOrientations[part].LengthSquared() - 1) > 1e-4f ? Quaternion.Normalize(aOrientations[part]) : aOrientations[part];
-            if (_physics is { } physics)
-            {
-                var body = physics.Body(_bodies[part]);
-                body.Pose = new RigidPose(_positions[part], _orientations[part] * FixOf(Plan.Parts[part]));
-                body.Velocity = default;
-            }
+            _orientations[part] = NormalizedIfNeeded(aOrientations[part]);
         }
+        PushPoses();
         MeasureJoints();
-        for (var joint = 0; joint < Plan.Joints.Count; joint++)
-        {
-            _targetYaw[joint] = _yaw[joint];
-            _targetPitch[joint] = _pitch[joint];
-        }
-        var root = Plan.Root;
-        Body.Rotation = Quaternion.Normalize(_orientations[0] * Quaternion.Inverse(root.Orientation));
-        Body.Position = _positions[0] - Vector3.Transform(root.Position, Body.Rotation);
-        _publishedPosition = Body.Position;
-        _publishedRotation = Body.Rotation;
+        Array.Copy(_yaw, _targetYaw, _yaw.Length);
+        Array.Copy(_pitch, _targetPitch, _pitch.Length);
+        PublishFromRoot();
     }
 
     /// <summary>
@@ -243,7 +216,6 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     void IPhysicalEntity.AttachPhysics(PhysicsWorld aPhysics)
     {
         _physics = aPhysics;
-        var group = aPhysics.NewGroup();
         for (var index = 0; index < Plan.Parts.Count; index++)
         {
             var part = Plan.Parts[index];
@@ -253,10 +225,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             var pose = new RigidPose(position, orientation * FixOf(part));
             _bodies[index] = part.Shape switch
             {
-                PartShape.Capsule => aPhysics.AddBody(new Capsule(part.Size.X, part.Size.Y), part.Mass, pose, group, index, part.Friction),
-                PartShape.Sphere => aPhysics.AddBody(new Sphere(part.Size.X), part.Mass, pose, group, index, part.Friction),
-                PartShape.Cylinder => aPhysics.AddBody(new Cylinder(part.Size.X, part.Size.Y), part.Mass, pose, group, index, part.Friction),
-                _ => aPhysics.AddBody(new Box(part.Size.X, part.Size.Y, part.Size.Z), part.Mass, pose, group, index, part.Friction)
+                PartShape.Capsule => aPhysics.AddBody(new Capsule(part.Size.X, part.Size.Y), part.Mass, pose, part.Friction),
+                PartShape.Sphere => aPhysics.AddBody(new Sphere(part.Size.X), part.Mass, pose, part.Friction),
+                PartShape.Cylinder => aPhysics.AddBody(new Cylinder(part.Size.X, part.Size.Y), part.Mass, pose, part.Friction),
+                _ => aPhysics.AddBody(new Box(part.Size.X, part.Size.Y, part.Size.Z), part.Mass, pose, part.Friction)
             };
         }
 
@@ -440,17 +412,36 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         }
 
         MeasureJoints();
+        PublishFromRoot();
+    }
 
-        // Układ stwora z korzenia: poza, w której korzeń byłby w swojej pozie spoczynkowej.
+    // ---------- pomocnicze ----------
+
+    /// <summary>Bieżące pozy części do brył fizyki (jeśli stwór w niej jest), z zerowymi prędkościami.</summary>
+    private void PushPoses()
+    {
+        if (_physics is not { } physics)
+            return;
+        for (var part = 0; part < Plan.Parts.Count; part++)
+        {
+            var body = physics.Body(_bodies[part]);
+            body.Pose = new RigidPose(_positions[part], _orientations[part] * FixOf(Plan.Parts[part]));
+            body.Velocity = default;
+        }
+    }
+
+    /// <summary>Układ stwora z korzenia: poza, w której korzeń byłby w swojej pozie spoczynkowej.</summary>
+    private void PublishFromRoot()
+    {
         var root = Plan.Root;
-        var rotation = Quaternion.Normalize(_orientations[0] * Quaternion.Inverse(root.Orientation));
-        Body.Rotation = rotation;
-        Body.Position = _positions[0] - Vector3.Transform(root.Position, rotation);
+        Body.Rotation = Quaternion.Normalize(_orientations[0] * Quaternion.Inverse(root.Orientation));
+        Body.Position = _positions[0] - Vector3.Transform(root.Position, Body.Rotation);
         _publishedPosition = Body.Position;
         _publishedRotation = Body.Rotation;
     }
 
-    // ---------- pomocnicze ----------
+    private static Quaternion NormalizedIfNeeded(Quaternion aRotation) =>
+        MathF.Abs(aRotation.LengthSquared() - 1) > 1e-4f ? Quaternion.Normalize(aRotation) : aRotation;
 
     /// <summary>Kąty stawów kulowych z bieżących orientacji części.</summary>
     private void MeasureJoints()

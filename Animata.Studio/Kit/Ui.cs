@@ -52,7 +52,6 @@ public static class Icons
     public const string Save = "M3 2.5H11L13.5 5V13.5H2.5V2.5ZM5 2.5V6H10V2.5M5 13.5V9.5H11V13.5";
     public const string Open = "M2 4.5V13H13L14.5 7H4.5L2 13M2 4.5H6L7.5 6H12.5V7";
     public const string Snake = "M2 11C4 11 4 7 6 7S8 11 10 11S12 7 14 7M14 7L14.8 6.2";
-    public const string Floor = "M1.5 10.5L5 6.5H14.5L11 10.5ZM1.5 10.5V12H11V10.5M11 12L14.5 8V6.5";
     public const string Logo = "M12.5 8A4.5 4.5 0 1 1 3.5 8A4.5 4.5 0 1 1 12.5 8M12.3 6.4L15.5 4.5M13 8H15.8M12.3 9.6L15.5 11.5";
 }
 

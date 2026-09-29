@@ -23,6 +23,9 @@ public sealed class TargetSensor : Sensor
     private static readonly string[] Ports =
         [FoundPort, DistancePort, GapPort, DirectionXPort, DirectionYPort, DirectionZPort];
 
+    /// <summary>Porty, z których sterowniki jazdy do celu (CPG, chód, heurystyka walca, sieci stworów) liczą kurs i dojazd.</summary>
+    public static readonly IReadOnlyList<string> SteeringPorts = [FoundPort, GapPort, DirectionXPort, DirectionYPort];
+
     private readonly Dictionary<string, float> _readings = Ports.ToDictionary(aPort => aPort, _ => 0f);
 
     public Guid? TargetId { get; set; }

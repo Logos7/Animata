@@ -45,8 +45,7 @@ public sealed class NeuralNetworkModule : BrainModule, ITrainableModule
 
     public override void RestoreState(ModuleState aState)
     {
-        if (aState is not NeuralNetworkState state)
-            throw new ArgumentException($"Expected {nameof(NeuralNetworkState)}, got {aState.GetType().Name}.", nameof(aState));
+        var state = Expect<NeuralNetworkState>(aState);
 
         // Najpierw wszystko, co może rzucić (kompilacja wyrażeń, kształt wag), dopiero potem podmiana.
         var inputs = CompileInputs(state);

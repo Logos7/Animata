@@ -22,8 +22,8 @@ public enum CreatureKind
 
 /// <summary>
 /// Jedna scena Studia: świat, symulacja (pauza, prędkość, błąd mózgu), nauka i snapshoty. Studio ma kilka scen
-/// (demo, wąż), każdą z własną sesją; wszystkie idą naraz. Panele tylko czytają sesję i wołają jej akcje,
-/// więc symulacja i nauka idą dalej, gdy użytkownik jest w menu albo w mózgu stwora. Wszystko wołane z wątku UI.
+/// (demo, węże, pająki, wspinaczka), każdą z własną sesją; żyje tylko otwarta (<see cref="Visible"/>). Panele tylko
+/// czytają sesję i wołają jej akcje, więc w panelach stwora i mózgu scena dalej żyje. Wszystko wołane z wątku UI.
 /// </summary>
 public sealed class StudioSession : IDisposable
 {
@@ -54,7 +54,6 @@ public sealed class StudioSession : IDisposable
 
     public bool Paused { get; private set; }
     public float Speed { get; private set; } = 1;
-    public double SimTime { get; private set; }
 
     /// <summary>Ustawiane przez UI, np. w trakcie przeciągania encji — symulacja wtedy stoi.</summary>
     public bool Hold { get; set; }
@@ -168,7 +167,6 @@ public sealed class StudioSession : IDisposable
         try
         {
             World.Update(Delta);
-            SimTime += Delta;
         }
         catch (BrainException exception)
         {
@@ -283,20 +281,16 @@ public sealed class StudioSession : IDisposable
     }
 
     /// <summary>„1 segment”, „3 segmenty”, „8 segmentów”.</summary>
-    public static string Segments(int aCount)
-    {
-        var word = aCount == 1 ? "segment"
-            : aCount % 10 is >= 2 and <= 4 && aCount % 100 is not (>= 12 and <= 14) ? "segmenty"
-            : "segmentów";
-        return $"{aCount} {word}";
-    }
+    public static string Segments(int aCount) => Plural(aCount, "segment", "segmenty", "segmentów");
 
     /// <summary>„1 wąs”, „3 wąsy”, „5 wąsów”, „23 wąsy”.</summary>
-    public static string Whiskers(int aCount)
+    public static string Whiskers(int aCount) => Plural(aCount, "wąs", "wąsy", "wąsów");
+
+    private static string Plural(int aCount, string aOne, string aFew, string aMany)
     {
-        var word = aCount == 1 ? "wąs"
-            : aCount % 10 is >= 2 and <= 4 && aCount % 100 is not (>= 12 and <= 14) ? "wąsy"
-            : "wąsów";
+        var word = aCount == 1 ? aOne
+            : aCount % 10 is >= 2 and <= 4 && aCount % 100 is not (>= 12 and <= 14) ? aFew
+            : aMany;
         return $"{aCount} {word}";
     }
 
@@ -306,7 +300,7 @@ public sealed class StudioSession : IDisposable
     /// </summary>
     public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition)
     {
-        var position = aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 };
+        var position = aPosition with { Z = GroundAt(aPosition) };
         var target = NearestTarget(position);
         var yaw = target is null ? 0 : MathF.Atan2(target.Body.Position.Y - position.Y, target.Body.Position.X - position.X);
         // Każde zwierzątko dostaje sieć z dwiema warstwami ukrytymi i losowymi wagami (inny mózg — w grafie, z palety)
@@ -333,7 +327,7 @@ public sealed class StudioSession : IDisposable
     /// <summary>Nowa kulka; oczy, które nie mają celu (albo ich cel zniknął), patrzą na nią.</summary>
     public TargetBall AddTarget(Vector3 aPosition)
     {
-        var target = WorldObjectCatalog.CreateTargetBall(aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 });
+        var target = WorldObjectCatalog.CreateTargetBall(aPosition with { Z = GroundAt(aPosition) });
         target.Name = UniqueName("Kulka");
         World.Add(target);
         foreach (var eye in Creatures.SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>()))
@@ -345,7 +339,7 @@ public sealed class StudioSession : IDisposable
 
     public Obstacle AddObstacle(Vector3 aPosition)
     {
-        var obstacle = WorldObjectCatalog.CreateObstacle(aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 });
+        var obstacle = WorldObjectCatalog.CreateObstacle(aPosition with { Z = GroundAt(aPosition) });
         World.Add(obstacle);
         Status = "dodano słupek";
         return obstacle;
@@ -354,7 +348,7 @@ public sealed class StudioSession : IDisposable
     /// <summary>Drzewo (pień r 0.25 m, 3 m) na terenie.</summary>
     public Tree AddTree(Vector3 aPosition)
     {
-        var tree = new Tree { Radius = SeekRigs.ClimbTrunkRadius, Height = 3, Body = { Position = aPosition with { Z = SnapToGround ? GroundAt(aPosition) : 0 } } };
+        var tree = new Tree { Radius = SeekRigs.ClimbTrunkRadius, Height = 3, Body = { Position = aPosition with { Z = GroundAt(aPosition) } } };
         tree.Name = UniqueName("Drzewo");
         World.Add(tree);
         Status = $"dodano: {tree.Name}";
@@ -374,14 +368,12 @@ public sealed class StudioSession : IDisposable
             Status = "w scenie nie ma drzewa";
             return false;
         }
-        var brain = aSnake.Brain;
-        var training = brain is not null && Training.IsTraining(brain);
-        if (training)
-            Training.Stop(brain!);
-        aSnake.WrapAround(tree);
-        brain?.Reset();
-        if (training)
-            Training.Start(aSnake);
+        if (WithTrainingPaused(aSnake, () =>
+            {
+                aSnake.WrapAround(tree);
+                aSnake.Brain?.Reset();
+            }) is null)
+            return false;
         Status = $"{NameOf(aSnake)} owinięty wokół: {NameOf(tree)} — uczy się wspinać";
         return true;
     }
@@ -421,30 +413,15 @@ public sealed class StudioSession : IDisposable
         if (WorldObjectCatalog.WhiskerCountOf(aCreature) == aWhiskers)
             return true;
 
-        var brain = aCreature.Brain;
-        var training = brain is not null && Training.IsTraining(brain);
-        if (training)
-            Training.Stop(brain!);
-        try
+        var training = WithTrainingPaused(aCreature, () =>
         {
             WhiskerRewiring.SetCount(aCreature, aWhiskers);
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or BrainException)
-        {
-            Status = exception.Message;
-            if (training)
-                Training.Start(aCreature);
+            if (aCreature.Brain is { } brain)
+                History.Forget(brain);
+        });
+        if (training is null)
             return false;
-        }
-
-        if (brain is not null)
-        {
-            History.Forget(brain);
-            _progress.Remove(brain);
-        }
-        if (training)
-            Training.Start(aCreature);
-        Status = $"{NameOf(aCreature)}: {Whiskers(aWhiskers)}" + (training ? " — nauka wznowiona od przeliczonych wag" : string.Empty);
+        Status = $"{NameOf(aCreature)}: {Whiskers(aWhiskers)}" + (training == true ? " — nauka wznowiona od przeliczonych wag" : string.Empty);
         return true;
     }
 
@@ -462,27 +439,10 @@ public sealed class StudioSession : IDisposable
         if (aSnake.Segments == aSegments)
             return true;
 
-        var brain = aSnake.Brain;
-        var training = brain is not null && Training.IsTraining(brain);
-        if (training)
-            Training.Stop(brain!);
-        try
-        {
-            aSnake.SetSegments(aSegments);
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or BrainException)
-        {
-            Status = exception.Message;
-            if (training)
-                Training.Start(aSnake);
+        var training = WithTrainingPaused(aSnake, () => aSnake.SetSegments(aSegments));
+        if (training is null)
             return false;
-        }
-
-        if (brain is not null)
-            _progress.Remove(brain);
-        if (training)
-            Training.Start(aSnake);
-        Status = $"{NameOf(aSnake)}: {Segments(aSegments)}" + (training ? " — nauka wznowiona" : string.Empty);
+        Status = $"{NameOf(aSnake)}: {Segments(aSegments)}" + (training == true ? " — nauka wznowiona" : string.Empty);
         return true;
     }
 
@@ -493,31 +453,48 @@ public sealed class StudioSession : IDisposable
     /// </summary>
     public bool ReshapeNetwork(ActiveEntity aCreature, NeuralNetworkModule aModule, Action<NeuralNetwork> aChange)
     {
+        BrainSnapshot? before = null;
+        var training = WithTrainingPaused(aCreature, () =>
+        {
+            if (aCreature.Brain is { } brain)
+                before = History.Capture(brain, "przed zmianą sieci", aModule);
+            aChange(aModule.Network);
+            aCreature.Brain?.Graph.InvalidateDeep();
+        });
+        if (training is null)
+            return false;
+        Status = $"{NameOf(aCreature)}: sieć {string.Join(" → ", aModule.Network.Layers)}, {aModule.ParameterCount} parametrów"
+            + (training == true ? " — nauka wznowiona" : before is not null ? " — stary kształt w snapshotach" : string.Empty);
+        return true;
+    }
+
+    /// <summary>
+    /// Zmiana ciała albo mózgu stwora przy zatrzymanej nauce: trwająca nauka staje (mistrz trafia do snapshotu), po zmianie
+    /// rusza od nowa już dla nowego kształtu, a historia postępu jest czyszczona. Gdy zmiana rzuci (np. niepoprawny graf),
+    /// powód trafia do <see cref="Status"/>, nauka wraca i zwracane jest null; inaczej — czy nauka szła.
+    /// </summary>
+    private bool? WithTrainingPaused(ActiveEntity aCreature, Action aChange)
+    {
         var brain = aCreature.Brain;
         var training = brain is not null && Training.IsTraining(brain);
         if (training)
             Training.Stop(brain!);
-        var before = brain is not null ? History.Capture(brain, "przed zmianą sieci", aModule) : null;
         try
         {
-            aChange(aModule.Network);
-            brain?.Graph.InvalidateDeep();
+            aChange();
         }
-        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or BrainException)
         {
             Status = exception.Message;
             if (training)
                 Training.Start(aCreature);
-            return false;
+            return null;
         }
-
         if (brain is not null)
             _progress.Remove(brain);
         if (training)
             Training.Start(aCreature);
-        Status = $"{NameOf(aCreature)}: sieć {string.Join(" → ", aModule.Network.Layers)}, {aModule.ParameterCount} parametrów"
-            + (training ? " — nauka wznowiona" : before is not null ? " — stary kształt w snapshotach" : string.Empty);
-        return true;
+        return training;
     }
 
     private TargetBall? NearestTarget(Vector3 aPosition) => World.Entities.OfType<TargetBall>()
@@ -657,7 +634,7 @@ public sealed class StudioSession : IDisposable
     /// <summary>Scena od zera: zatrzymuje nauki, czyści historię. Nauka nie startuje sama (L ją włącza).</summary>
     public void ResetScene()
     {
-        Replace(_factory(), 0);
+        Replace(_factory());
         Status = $"{Name}: od nowa — L włącza naukę";
     }
 
@@ -671,7 +648,7 @@ public sealed class StudioSession : IDisposable
         foreach (var creature in Creatures)
             if (creature.Brain is { } brain && TrainingController.FindTrainable(creature) is { } module && brain.CurrentSnapshot() is null)
                 brain.Capture("zapis", module);
-        return WorldFile.Capture(World, Name, SimTime);
+        return WorldFile.Capture(World, Name);
     }
 
     /// <summary>
@@ -681,11 +658,11 @@ public sealed class StudioSession : IDisposable
     public void Load(WorldDocument aDocument)
     {
         var scene = WorldFile.Restore(aDocument);
-        Replace(scene, aDocument.Time);
+        Replace(scene);
         Status = $"wczytano: {aDocument.Name} ({scene.World.Entities.Count} encji) — L włącza naukę";
     }
 
-    private void Replace(DemoScene aScene, double aTime)
+    private void Replace(DemoScene aScene)
     {
         Training.Dispose();
         _progress.Clear();
@@ -694,7 +671,6 @@ public sealed class StudioSession : IDisposable
         Demo = aScene;
         Training = new TrainingController(History) { Paused = !_visible };
         old.Dispose();
-        SimTime = aTime;
         Paused = false;
         Error = null;
         ErrorModuleId = null;

@@ -1,9 +1,7 @@
-using System.Numerics;
 using Animata.Core.Bodies;
 using Animata.Core.Entities;
 using Animata.Core.Physics;
 using BepuPhysics;
-using BepuPhysics.Collidables;
 
 namespace Animata.Core.WorldObjects;
 
@@ -13,15 +11,8 @@ namespace Animata.Core.WorldObjects;
 /// a toczony zwój (skręt i pochylenie stawów w obracającej się płaszczyźnie) wkręca się w górę jak śruba.
 /// Wąsy widzą je jak słupek (kategoria <see cref="EntityCategory.Obstacle"/>).
 /// </summary>
-public sealed class Tree : StaticEntity, IPhysicalEntity
+public sealed class Tree() : PhysicalStaticEntity(new Body())
 {
-    private StaticHandle? _static;
-    private (Vector3 Position, float Radius, float Height, float Bark) _built;
-
-    public Tree() : base(new Body())
-    {
-    }
-
     public float Radius { get; set; } = 0.25f;
     public float Height { get; set; } = 4;
 
@@ -32,34 +23,8 @@ public sealed class Tree : StaticEntity, IPhysicalEntity
 
     public override EntityCategory Category => EntityCategory.Obstacle;
 
-    bool IPhysicalEntity.IsDynamic => false;
+    protected override object Shape => (Body.Position, Radius, Height, Bark);
 
-    void IPhysicalEntity.AttachPhysics(PhysicsWorld aPhysics)
-    {
-        var radius = MathF.Max(0.02f, Radius);
-        var height = MathF.Max(0.1f, Height);
-        // Walec Bepu stoi wzdłuż lokalnej osi Y — obrót o 90° wokół X stawia go pionowo.
-        var pose = new RigidPose(Body.Position + new Vector3(0, 0, height / 2), Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2));
-        _static = aPhysics.AddStatic(new Cylinder(radius, height), pose, Bark);
-        _built = (Body.Position, Radius, Height, Bark);
-    }
-
-    void IPhysicalEntity.DetachPhysics(PhysicsWorld aPhysics)
-    {
-        if (_static is { } handle)
-            aPhysics.RemoveStatic(handle);
-        _static = null;
-    }
-
-    void IPhysicalEntity.BeforePhysicsStep(PhysicsWorld aPhysics, float aDelta)
-    {
-        if (_built == (Body.Position, Radius, Height, Bark))
-            return;
-        ((IPhysicalEntity)this).DetachPhysics(aPhysics);
-        ((IPhysicalEntity)this).AttachPhysics(aPhysics);
-    }
-
-    void IPhysicalEntity.AfterPhysicsStep(PhysicsWorld aPhysics)
-    {
-    }
+    protected override StaticHandle Build(PhysicsWorld aPhysics) =>
+        AddUprightCylinder(aPhysics, Body.Position, MathF.Max(0.02f, Radius), MathF.Max(0.1f, Height), Bark);
 }

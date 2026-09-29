@@ -3,7 +3,6 @@ using System.Numerics;
 using Animata.Core.Actuators;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
-using Animata.Core.Brains.Neural;
 using Animata.Core.Entities;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
@@ -133,9 +132,7 @@ public static class SeekRigs
     /// </summary>
     public static SeekRig CarWith(int aWhiskers)
     {
-        if (!WorldObjectCatalog.IsValidWhiskerCount(aWhiskers))
-            throw new ArgumentOutOfRangeException(nameof(aWhiskers), aWhiskers,
-                $"Autko ma nieparzystą liczbę wąsów od 1 do {WorldObjectCatalog.MaxWhiskers}.");
+        WorldObjectCatalog.CheckWhiskerCount(aWhiskers);
         return CarRigs.GetOrAdd(aWhiskers, CreateCarRig);
     }
 
@@ -164,9 +161,7 @@ public static class SeekRigs
     /// </summary>
     public static SeekRig SnakeWith(int aSegments)
     {
-        if (!WorldObjectCatalog.IsValidSnakeLength(aSegments))
-            throw new ArgumentOutOfRangeException(nameof(aSegments), aSegments,
-                $"Wąż ma od {WorldObjectCatalog.MinSnakeSegments} do {WorldObjectCatalog.MaxSnakeSegments} segmentów.");
+        WorldObjectCatalog.CheckSnakeLength(aSegments);
         return SnakeRigs.GetOrAdd(aSegments, CreateSnakeRig);
     }
 
@@ -201,9 +196,7 @@ public static class SeekRigs
     /// </summary>
     public static SeekRig ClimbWith(int aSegments)
     {
-        if (!WorldObjectCatalog.IsValidSnakeLength(aSegments))
-            throw new ArgumentOutOfRangeException(nameof(aSegments), aSegments,
-                $"Wąż ma od {WorldObjectCatalog.MinSnakeSegments} do {WorldObjectCatalog.MaxSnakeSegments} segmentów.");
+        WorldObjectCatalog.CheckSnakeLength(aSegments);
         return ClimbRigs.GetOrAdd(aSegments, aCount => new SeekRig(
             $"wspinaczka ×{aCount}",
             (aTargetId, aController) => WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, aTargetId, aController, aCount),

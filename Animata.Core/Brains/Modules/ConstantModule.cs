@@ -28,8 +28,7 @@ public sealed class ConstantModule : BrainModule
 
     public override void RestoreState(ModuleState aState)
     {
-        if (aState is not ConstantState state)
-            throw new ArgumentException($"Expected {nameof(ConstantState)}, got {aState.GetType().Name}.", nameof(aState));
+        var state = Expect<ConstantState>(aState);
         Value = state.Value;
     }
 

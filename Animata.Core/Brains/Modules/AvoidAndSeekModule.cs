@@ -247,8 +247,7 @@ public sealed class AvoidAndSeekModule : BrainModule
 
     public override void RestoreState(ModuleState aState)
     {
-        if (aState is not AvoidAndSeekState state)
-            throw new ArgumentException($"Expected {nameof(AvoidAndSeekState)}, got {aState.GetType().Name}.", nameof(aState));
+        var state = Expect<AvoidAndSeekState>(aState);
         // Kąty należą do ciała (liczba wąsów), nie do parametrów sterownika: snapshot z inną liczbą wąsów
         // przywraca tylko parametry, a kąty zostają takie, jak ma teraz ciało.
         SteerGain = state.SteerGain;

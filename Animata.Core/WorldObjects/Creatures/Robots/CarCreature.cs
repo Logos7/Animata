@@ -7,8 +7,8 @@ namespace Animata.Core.WorldObjects;
 
 /// <summary>
 /// Autko w fizyce: nadwozie (pudło L × W × H) na czterech kołach-bryłach z zawieszeniem. Przednie koła skręcają,
-/// wszystkie są napędzane (<see cref="Actuators.SteeringDriveActuator"/> zadaje skręt i prędkość, resztę liczy fizyka:
-/// przyspieszenie, poślizg, zderzenia). Nie obraca się w miejscu. Dla zmysłów (wąsy, szczelina do celu) to okrąg
+/// tylne są napędzane (<see cref="Actuators.SteeringDriveActuator"/> zadaje skręt i prędkość, resztę liczy fizyka:
+/// przyspieszenie, poślizg, zderzenia; napęd na cztery koła szorował przednimi i poszerzał skręt). Nie obraca się w miejscu. Dla zmysłów (wąsy, szczelina do celu) to okrąg
 /// o promieniu połowy długości.
 /// </summary>
 public sealed class CarCreature : ArticulatedCreature
@@ -35,7 +35,7 @@ public sealed class CarCreature : ArticulatedCreature
 
     /// <summary>
     /// Nadwozie 3 kg z dołem na wysokości środków kół; koła 0.3 kg (tarcie 1.2) na zawieszeniu 4 cm,
-    /// przednie skrętne, wszystkie napędzane (moment z napędu).
+    /// przednie skrętne, tylne napędzane (moment z napędu).
     /// </summary>
     public static BodyPlan DefaultPlan()
     {

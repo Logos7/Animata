@@ -21,11 +21,6 @@ public sealed class CpgModule : BrainModule, ITrainableModule
     /// <summary>Szczelina do celu, poniżej której napęd maleje do zera.</summary>
     public const float ArrivalGap = 0.6f;
 
-    private static readonly string[] Inputs =
-    [
-        TargetSensor.FoundPort, TargetSensor.GapPort, TargetSensor.DirectionXPort, TargetSensor.DirectionYPort
-    ];
-
     private readonly Dictionary<string, float> _outputs = [];
     private string[] _ports = [];
     private float _phase;
@@ -47,10 +42,8 @@ public sealed class CpgModule : BrainModule, ITrainableModule
     /// </summary>
     public bool Grip { get; set; }
 
-    public override IReadOnlyList<string> InputPorts => Inputs;
+    public override IReadOnlyList<string> InputPorts => TargetSensor.SteeringPorts;
     public override IReadOnlyList<string> OutputPorts => _ports;
-
-    public int ParameterCount => Parameters;
 
     public void SetJointCount(int aJoints)
     {
@@ -116,8 +109,7 @@ public sealed class CpgModule : BrainModule, ITrainableModule
     /// <summary>Przywraca parametry. Liczba stawów należy do ciała, więc stan z inną liczbą stawów też pasuje.</summary>
     public override void RestoreState(ModuleState aState)
     {
-        if (aState is not CpgState state)
-            throw new ArgumentException($"Expected {nameof(CpgState)}, got {aState.GetType().Name}.", nameof(aState));
+        var state = Expect<CpgState>(aState);
         SetParameters([state.Amplitude, state.Frequency, state.PhaseLag, state.TurnGain, state.PitchAmplitude, state.PitchPhase]);
         Grip = state.Grip;
     }

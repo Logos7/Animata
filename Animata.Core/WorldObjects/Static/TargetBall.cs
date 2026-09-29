@@ -11,7 +11,7 @@ public sealed class TargetBall : StaticEntity
 
     public float Radius { get; set; } = 0.4f;
 
-    public override float BoundingRadius => Radius * MathF.Max(Body.Scale.X, Body.Scale.Y);
+    public override float BoundingRadius => Radius;
 
     public override EntityCategory Category => EntityCategory.Target;
 }

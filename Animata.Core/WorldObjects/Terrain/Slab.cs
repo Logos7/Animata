@@ -14,20 +14,14 @@ namespace Animata.Core.WorldObjects;
 /// <see cref="EntityCategory.Ground"/> — to teren, nie słupek).
 /// Da się ją przesuwać i zmieniać; w fizyce odtwarza się przed następnym krokiem.
 /// </summary>
-public sealed class Slab : StaticEntity, IPhysicalEntity
+public sealed class Slab() : PhysicalStaticEntity(new Body())
 {
     public const float MinSide = 0.1f;
     public const float MaxSide = 20;
     public const float MinHeight = 0.01f;
     public const float MaxHeight = 2;
 
-    private StaticHandle? _static;
-    private (Vector3 Position, Quaternion Rotation, Vector3 Size) _built;
     private Vector3 _size = new(1.5f, 1, 0.06f);
-
-    public Slab() : base(new Body())
-    {
-    }
 
     public Vector3 Size
     {
@@ -55,31 +49,11 @@ public sealed class Slab : StaticEntity, IPhysicalEntity
         return MathF.Abs(local.X) <= Size.X / 2 + aMargin && MathF.Abs(local.Y) <= Size.Y / 2 + aMargin;
     }
 
-    bool IPhysicalEntity.IsDynamic => false;
+    protected override object Shape => (Body.Position, Body.Rotation, Size);
 
-    void IPhysicalEntity.AttachPhysics(PhysicsWorld aPhysics)
+    protected override StaticHandle Build(PhysicsWorld aPhysics)
     {
         var center = Body.Position + Vector3.Transform(new Vector3(0, 0, Size.Z / 2), Body.Rotation);
-        _static = aPhysics.AddStatic(new Box(Size.X, Size.Y, Size.Z), new RigidPose(center, Body.Rotation));
-        _built = (Body.Position, Body.Rotation, Size);
-    }
-
-    void IPhysicalEntity.DetachPhysics(PhysicsWorld aPhysics)
-    {
-        if (_static is { } handle)
-            aPhysics.RemoveStatic(handle);
-        _static = null;
-    }
-
-    void IPhysicalEntity.BeforePhysicsStep(PhysicsWorld aPhysics, float aDelta)
-    {
-        if (_built == (Body.Position, Body.Rotation, Size))
-            return;
-        ((IPhysicalEntity)this).DetachPhysics(aPhysics);
-        ((IPhysicalEntity)this).AttachPhysics(aPhysics);
-    }
-
-    void IPhysicalEntity.AfterPhysicsStep(PhysicsWorld aPhysics)
-    {
+        return aPhysics.AddStatic(new Box(Size.X, Size.Y, Size.Z), new RigidPose(center, Body.Rotation));
     }
 }

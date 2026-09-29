@@ -16,7 +16,7 @@ public class PersistenceTests
 
     private static string RoundTrip(World aWorld, out World aRestored)
     {
-        var json = WorldFile.ToJson(WorldFile.Capture(aWorld, "test", 1.5));
+        var json = WorldFile.ToJson(WorldFile.Capture(aWorld, "test"));
         aRestored = WorldFile.Restore(WorldFile.FromJson(json)).World;
         return json;
     }
@@ -27,7 +27,7 @@ public class PersistenceTests
         using var world = WorldObjectCatalog.CreateDemo().World;
         var json = RoundTrip(world, out var restored);
         using (restored)
-            Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test", 1.5)));
+            Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test")));
     }
 
     [Fact]
@@ -53,6 +53,23 @@ public class PersistenceTests
     }
 
     [Fact]
+    public void SimulationTime_SurvivesSaveAndLoad_SoTheClockContinues()
+    {
+        using var world = WorldObjectCatalog.CreateSnakeScene().World;
+        for (var tick = 0; tick < 45; tick++)
+            world.Update(Delta);
+        RoundTrip(world, out var restored);
+        using (restored)
+        {
+            Assert.Equal(world.Time, restored.Time);
+            var snake = world.Entities.OfType<SnakeCreature>().First();
+            var clock = snake.Body.Sensors.OfType<ClockSensor>().Single();
+            var twinClock = restored.Find(snake.Id)!.Body.Sensors.OfType<ClockSensor>().Single();
+            Assert.Equal(clock.Read(snake, world)[ClockSensor.SinPort], twinClock.Read(restored.Find(snake.Id)!, restored)[ClockSensor.SinPort]);
+        }
+    }
+
+    [Fact]
     public void SnakeScene_SavesAndLoads_WithCpgAndSnapshots()
     {
         using var world = WorldObjectCatalog.CreateSnakeScene().World;
@@ -63,7 +80,7 @@ public class PersistenceTests
         var json = RoundTrip(world, out var restored);
         using (restored)
         {
-            Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test", 1.5)));
+            Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test")));
             Assert.Equal(5, restored.Entities.OfType<Slab>().Count());
             var neuralTwin = (SnakeCreature)restored.Find(neural.Id)!;
             Assert.Equal(5, neuralTwin.Segments);
@@ -98,7 +115,7 @@ public class PersistenceTests
         var json = RoundTrip(world, out var restored);
         using (restored)
         {
-            Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test", 1.5)));
+            Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test")));
             var twin = (CarCreature)restored.Find(car.Id)!;
             Assert.Equal(9, WorldObjectCatalog.WhiskerCountOf(twin));
             var twinGroup = twin.Brain!.Graph.Modules.OfType<CompositeModule>().Single();
@@ -146,7 +163,7 @@ public class PersistenceTests
         Assert.Same(manual, snake.Brain.CurrentSnapshot());
 
         // Plik wskazuje „ręczne parametry”, choć zapisany stan modułu podmieniamy na losowy — wygrywa snapshot.
-        var document = WorldFile.Capture(world, "test", 0);
+        var document = WorldFile.Capture(world, "test");
         var snakeDocument = document.Entities.OfType<SnakeDocument>().Single(aDocument => aDocument.Id == snake.Id);
         Assert.Equal(manual.Id, snakeDocument.Brain.Current);
         var randomState = random.Modules.Single().State;

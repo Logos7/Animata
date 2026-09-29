@@ -30,11 +30,6 @@ public sealed class GaitModule : BrainModule, ITrainableModule
     /// <summary>Przesunięcie fazy nogi — kłus: przekątne razem.</summary>
     public static readonly float[] Offset = [0, MathF.PI, MathF.PI, 0];
 
-    private static readonly string[] Inputs =
-    [
-        TargetSensor.FoundPort, TargetSensor.GapPort, TargetSensor.DirectionXPort, TargetSensor.DirectionYPort
-    ];
-
     private static readonly string[] Outputs = SpineActuator.PortsFor(Joints);
     private readonly Dictionary<string, float> _outputs = Outputs.ToDictionary(aPort => aPort, _ => 0f);
     private float _phase;
@@ -46,10 +41,8 @@ public sealed class GaitModule : BrainModule, ITrainableModule
     public float Frequency { get; set; } = 2.5f;
     public float TurnGain { get; set; } = 1.5f;
 
-    public override IReadOnlyList<string> InputPorts => Inputs;
+    public override IReadOnlyList<string> InputPorts => TargetSensor.SteeringPorts;
     public override IReadOnlyList<string> OutputPorts => Outputs;
-
-    public int ParameterCount => Parameters;
 
     public override IReadOnlyDictionary<string, float> Evaluate(IReadOnlyDictionary<string, float> aInputs, BrainContext aContext)
     {
@@ -102,8 +95,7 @@ public sealed class GaitModule : BrainModule, ITrainableModule
 
     public override void RestoreState(ModuleState aState)
     {
-        if (aState is not GaitState state)
-            throw new ArgumentException($"Expected {nameof(GaitState)}, got {aState.GetType().Name}.", nameof(aState));
+        var state = Expect<GaitState>(aState);
         SetParameters([state.Stride, state.Lift, state.Knee, state.KneeSwing, state.Frequency, state.TurnGain]);
     }
 

@@ -10,11 +10,6 @@ namespace Animata.Core.Brains.Modules;
 /// </summary>
 public sealed class ApproachTargetModule : BrainModule
 {
-    private static readonly string[] Inputs =
-    [
-        TargetSensor.FoundPort, TargetSensor.GapPort, TargetSensor.DirectionXPort, TargetSensor.DirectionYPort
-    ];
-
     private static readonly string[] Outputs = [DiskDriveActuator.TurnPort, DiskDriveActuator.StepPort];
 
     private readonly Dictionary<string, float> _command = new()
@@ -32,15 +27,14 @@ public sealed class ApproachTargetModule : BrainModule
     /// <summary>Szczelina, poniżej której stwór zaczyna zwalniać.</summary>
     public float SlowdownGap { get; set; } = 1;
 
-    public override IReadOnlyList<string> InputPorts => Inputs;
+    public override IReadOnlyList<string> InputPorts => TargetSensor.SteeringPorts;
     public override IReadOnlyList<string> OutputPorts => Outputs;
 
     public override ModuleState CaptureState() => new ApproachTargetState(TurnGain, StopGap, SlowdownGap);
 
     public override void RestoreState(ModuleState aState)
     {
-        if (aState is not ApproachTargetState state)
-            throw new ArgumentException($"Expected {nameof(ApproachTargetState)}, got {aState.GetType().Name}.", nameof(aState));
+        var state = Expect<ApproachTargetState>(aState);
         TurnGain = state.TurnGain;
         StopGap = state.StopGap;
         SlowdownGap = state.SlowdownGap;

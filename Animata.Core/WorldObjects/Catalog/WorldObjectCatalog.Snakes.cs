@@ -1,12 +1,11 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Animata.Core.Actuators;
 using Animata.Core.Bodies;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Brains.Neural;
-using Animata.Core.Entities;
 using Animata.Core.Sensors;
-using Animata.Core.Worlds;
 
 namespace Animata.Core.WorldObjects;
 
@@ -39,16 +38,22 @@ public static partial class WorldObjectCatalog
 
     public static bool IsValidSnakeLength(int aSegments) => aSegments is >= MinSnakeSegments and <= MaxSnakeSegments;
 
+    /// <summary>Rzuca <see cref="ArgumentOutOfRangeException"/>, gdy wąż miałby za mało albo za dużo segmentów.</summary>
+    public static void CheckSnakeLength(int aSegments, [CallerArgumentExpression(nameof(aSegments))] string? aName = null)
+    {
+        if (!IsValidSnakeLength(aSegments))
+            throw new ArgumentOutOfRangeException(aName, aSegments, $"Wąż ma od {MinSnakeSegments} do {MaxSnakeSegments} segmentów.");
+    }
+
     /// <summary>
     /// Plan węża: Seg0 (głowa, korzeń) … Seg{n−1} wzdłuż −X, leżące na ziemi; staw J{k} między Seg{k} a Seg{k+1}
-    /// w połowie odstępu. Stawy kulowe: skręt i pochylenie ±69°, moment 8 N·m. Każdy segment ma łuski
-    /// (tarcie w bok 0.8 na krok 1/30 s, do przodu 0.02, do tyłu 0.3).
+    /// w połowie odstępu. Stawy kulowe: skręt i pochylenie ±1.2 rad (±69°), moment 8 N·m. Każdy segment ma łuski:
+    /// małe tarcie zwykłe <see cref="SnakeFriction"/>, duże w bok <see cref="SnakeLateralFriction"/> i średnie do tyłu
+    /// <see cref="SnakeBackwardFriction"/> (współczynniki Coulomba, patrz <see cref="PartPlan"/>).
     /// </summary>
     public static BodyPlan SnakePlan(int aSegments)
     {
-        if (!IsValidSnakeLength(aSegments))
-            throw new ArgumentOutOfRangeException(nameof(aSegments), aSegments,
-                $"Wąż ma od {MinSnakeSegments} do {MaxSnakeSegments} segmentów.");
+        CheckSnakeLength(aSegments);
         var height = SnakeRadius + 0.005f;
         var builder = new BodyPlanBuilder();
         for (var segment = 0; segment < aSegments; segment++)
@@ -130,9 +135,7 @@ public static partial class WorldObjectCatalog
     /// </summary>
     public static NeuralNetworkModule CreateSnakeNeuralModule(int aSegments = DefaultSnakeSegments, params int[] aHidden)
     {
-        if (!IsValidSnakeLength(aSegments))
-            throw new ArgumentOutOfRangeException(nameof(aSegments), aSegments,
-                $"Wąż ma od {MinSnakeSegments} do {MaxSnakeSegments} segmentów.");
+        CheckSnakeLength(aSegments);
         string[] inputs =
         [
             ClockSensor.SinPort, ClockSensor.CosPort,
@@ -142,7 +145,7 @@ public static partial class WorldObjectCatalog
         var outputs = JointNetworkOutputs(aSegments - 1);
         var hidden = aHidden.Length > 0 ? aHidden : SnakeHiddenLayers;
         var module = new NeuralNetworkModule(new NeuralNetwork([inputs.Length, .. hidden, outputs.Length])) { Name = "Neural" };
-        module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetPorts, TargetSensor.DirectionZPort,
+        module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetSensor.SteeringPorts, TargetSensor.DirectionZPort,
             FeelSensor.AheadPort, FeelSensor.HeadPitchPort]);
         module.Inputs.AddRange(inputs.Select(aExpression => new NeuralInput(aExpression)));
         module.Outputs.AddRange(outputs.Select(aPort => new NeuralOutput(aPort)));

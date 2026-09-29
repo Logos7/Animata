@@ -12,6 +12,5 @@ public enum EntityCategory
     Obstacle = 2,
     Target = 4,
     /// <summary>Podłoże (podłoga). Zmysły go nie widzą, chyba że o to poproszą.</summary>
-    Ground = 8,
-    All = Creature | Obstacle | Target
+    Ground = 8
 }

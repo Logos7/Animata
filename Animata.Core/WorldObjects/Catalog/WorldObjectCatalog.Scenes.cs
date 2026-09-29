@@ -1,11 +1,8 @@
 using System.Numerics;
-using Animata.Core.Actuators;
 using Animata.Core.Bodies;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
-using Animata.Core.Brains.Neural;
 using Animata.Core.Entities;
-using Animata.Core.Sensors;
 using Animata.Core.Worlds;
 
 namespace Animata.Core.WorldObjects;
@@ -21,19 +18,14 @@ public static partial class WorldObjectCatalog
     {
         var world = new World();
         world.Add(Floor.At(30, 30));
-        Slab[] slabs =
+        AddSlabs(world,
         [
             CreateSlab(new Vector3(0.5f, 0.8f, 0), new Vector3(2.2f, 1.6f, 0.06f), 0.3f),
             CreateSlab(new Vector3(-1.2f, 3.6f, 0), new Vector3(1.4f, 2.4f, 0.04f), -0.5f),
             CreateSlab(new Vector3(2.6f, -1.6f, 0), new Vector3(1.8f, 1.2f, 0.08f), 0.9f),
             CreateSlab(new Vector3(4.2f, 3.2f, 0), new Vector3(2, 2, 0.1f)),
             CreateSlab(new Vector3(-3.4f, 0.6f, 0), new Vector3(1.2f, 1.2f, 0.05f), 0.2f)
-        ];
-        for (var index = 0; index < slabs.Length; index++)
-        {
-            slabs[index].Name = $"Płyta {index + 1}";
-            world.Add(slabs[index]);
-        }
+        ]);
 
         var target = CreateTargetBall(new Vector3(4.2f, 3.2f, 0));
         target.Name = "Kulka";
@@ -53,17 +45,12 @@ public static partial class WorldObjectCatalog
     {
         var world = new World();
         world.Add(Floor.At(30, 30));
-        Slab[] slabs =
+        AddSlabs(world,
         [
             CreateSlab(new Vector3(0, 0.5f, 0), new Vector3(1.6f, 2.4f, 0.04f), 0.2f),
             CreateSlab(new Vector3(2.8f, -1.5f, 0), new Vector3(1.4f, 1.4f, 0.06f), -0.4f),
             CreateSlab(new Vector3(-2.2f, 2.8f, 0), new Vector3(2, 1, 0.05f), 0.8f)
-        ];
-        for (var index = 0; index < slabs.Length; index++)
-        {
-            slabs[index].Name = $"Płyta {index + 1}";
-            world.Add(slabs[index]);
-        }
+        ]);
         var target = CreateTargetBall(new Vector3(4, 2, 0));
         target.Name = "Kulka";
         world.Add(target);
@@ -75,6 +62,16 @@ public static partial class WorldObjectCatalog
         neural.Name = "Pająk NN";
         world.Add(neural);
         return new DemoScene(world, [gait, neural]);
+    }
+
+    /// <summary>Dodaje płyty do świata z nazwami „Płyta 1”, „Płyta 2”, …</summary>
+    private static void AddSlabs(World aWorld, Slab[] aSlabs)
+    {
+        for (var index = 0; index < aSlabs.Length; index++)
+        {
+            aSlabs[index].Name = $"Płyta {index + 1}";
+            aWorld.Add(aSlabs[index]);
+        }
     }
 
     /// <summary>

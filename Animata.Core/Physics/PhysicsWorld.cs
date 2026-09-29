@@ -11,12 +11,11 @@ namespace Animata.Core.Physics;
 
 /// <summary>
 /// Fizyka brył (BepuPhysics 2) dla jednego świata. Układ jak w reszcie Animaty: Z w górę, grawitacja −Z.
-/// Świat tworzy ją dopiero wtedy, gdy pojawi się pierwsza encja dynamiczna (<see cref="IPhysicalEntity.IsDynamic"/>),
-/// więc sceny z samymi autkami i walcami w ogóle jej nie mają. Każdy świat (także każda ukryta próba w nauce)
-/// ma własną symulację i własną pulę pamięci, a krok idzie na jednym wątku — wynik jest powtarzalny.
-/// Grupy: części jednego stwora dostają wspólną grupę i nie zderzają się ze sobą (stawy i tak trzymają je razem;
-/// wąż, który zwinie się na sobie, przenika — do poprawy, gdy będzie potrzebne). Po każdym kroku wiadomo, które ciała dotykały czegokolwiek (<see cref="IsTouching"/>).
-/// Pula pamięci jest natywna — świat z fizyką trzeba zwolnić (<see cref="Dispose"/>, robi to World.Dispose).
+/// Świat tworzy ją dopiero wtedy, gdy pojawi się pierwsza encja dynamiczna (<see cref="IPhysicalEntity.IsDynamic"/>).
+/// Każdy świat (także każda ukryta próba w nauce) ma własną symulację i własną pulę pamięci, a krok idzie na jednym
+/// wątku — wynik jest powtarzalny. Części stwora zderzają się ze sobą, z wyjątkiem par wskazanych przez
+/// <see cref="IgnoreCollision"/> (sąsiedzi w drzewie stawów). Po każdym kroku wiadomo, które ciała dotykały czegokolwiek
+/// (<see cref="IsTouching"/>). Pula pamięci jest natywna — świat z fizyką trzeba zwolnić (<see cref="Dispose"/>, robi to World.Dispose).
 /// </summary>
 public sealed class PhysicsWorld : IDisposable
 {
@@ -29,7 +28,6 @@ public sealed class PhysicsWorld : IDisposable
     private readonly PhysicsTags _tags = new();
     private readonly Dictionary<BodyHandle, TypedIndex> _bodyShapes = [];
     private readonly Dictionary<StaticHandle, TypedIndex> _staticShapes = [];
-    private int _groups;
     private bool _disposed;
 
     /// <param name="aSubsteps">Podkroki solvera na jeden krok świata (stawy i kontakty są sztywniejsze przy większej liczbie).</param>
@@ -41,18 +39,15 @@ public sealed class PhysicsWorld : IDisposable
 
     public Simulation Simulation { get; }
 
-    /// <summary>Nowa grupa kolizyjna (jedna na stwora).</summary>
-    public int NewGroup() => ++_groups;
-
     /// <summary>Ciało dynamiczne, które nigdy nie zasypia (stwory ruszają się same, a uśpione nie reagowałyby na silniki).</summary>
     /// <param name="aFriction">Tarcie kontaktu tego ciała (izotropowe, jak w Bepu).</param>
-    public BodyHandle AddBody<TShape>(TShape aShape, float aMass, RigidPose aPose, int aGroup, int aIndex, float aFriction = DefaultFriction)
+    public BodyHandle AddBody<TShape>(TShape aShape, float aMass, RigidPose aPose, float aFriction = DefaultFriction)
         where TShape : unmanaged, IConvexShape
     {
         var shape = Simulation.Shapes.Add(aShape);
         var handle = Simulation.Bodies.Add(BodyDescription.CreateDynamic(aPose, aShape.ComputeInertia(aMass), shape, -1f));
         _bodyShapes[handle] = shape;
-        _tags.Set(handle.Value, aGroup, aIndex, aFriction);
+        _tags.Set(handle.Value, aFriction);
         return handle;
     }
 
@@ -62,7 +57,7 @@ public sealed class PhysicsWorld : IDisposable
         if (!Simulation.Bodies.BodyExists(aHandle))
             return;
         Simulation.Bodies.Remove(aHandle);
-        _tags.Set(aHandle.Value, 0, 0, DefaultFriction);
+        _tags.Set(aHandle.Value, DefaultFriction);
         _tags.ForgetPairs(aHandle.Value);
         if (_bodyShapes.Remove(aHandle, out var shape))
             Simulation.Shapes.Remove(shape);
@@ -101,8 +96,8 @@ public sealed class PhysicsWorld : IDisposable
     public BodyReference Body(BodyHandle aHandle) => Simulation.Bodies[aHandle];
 
     /// <summary>
-    /// Te dwa ciała (zwykle sąsiednie części stwora) nie zderzają się ze sobą. Pozostałe części tej samej grupy się
-    /// zderzają — wąż nie przenika sam przez siebie, noga pająka nie wchodzi w drugą.
+    /// Te dwa ciała (zwykle sąsiednie części stwora) nie zderzają się ze sobą. Pozostałe pary się zderzają —
+    /// wąż nie przenika sam przez siebie, noga pająka nie wchodzi w drugą.
     /// </summary>
     public void IgnoreCollision(BodyHandle aA, BodyHandle aB) => _tags.Ignore(aA.Value, aB.Value);
 
@@ -129,19 +124,15 @@ public sealed class PhysicsWorld : IDisposable
 
     // ---------- dane dla callbacków ----------
 
-    /// <summary>Grupa, indeks i dotyk ciał, po wartości uchwytu. Callbacki są strukturami, więc dzielą je przez referencję.</summary>
+    /// <summary>Tarcie, dotyk i ignorowane pary ciał, po wartości uchwytu. Callbacki są strukturami, więc dzielą je przez referencję.</summary>
     private sealed class PhysicsTags
     {
-        private int[] _group = new int[64];
-        private int[] _index = new int[64];
         private int[] _touching = new int[64];
         private float[] _friction = new float[64];
 
-        public void Set(int aBody, int aGroup, int aIndex, float aFriction)
+        public void Set(int aBody, float aFriction)
         {
             Ensure(aBody);
-            _group[aBody] = aGroup;
-            _index[aBody] = aIndex;
             _touching[aBody] = 0;
             _friction[aBody] = aFriction;
         }
@@ -171,9 +162,6 @@ public sealed class PhysicsWorld : IDisposable
                 ? _friction[aCollidable.BodyHandle.Value]
                 : DefaultFriction;
 
-        public bool SameGroup(int aA, int aB) =>
-            aA < _group.Length && aB < _group.Length && _group[aA] != 0 && _group[aA] == _group[aB];
-
         private readonly HashSet<long> _ignored = [];
         private readonly Dictionary<int, List<int>> _partners = [];
 
@@ -202,8 +190,6 @@ public sealed class PhysicsWorld : IDisposable
             }
         }
 
-        public int IndexOf(int aBody) => aBody < _index.Length ? _index[aBody] : -1;
-
         public void MarkTouching(int aBody)
         {
             if (aBody < _touching.Length)
@@ -216,11 +202,9 @@ public sealed class PhysicsWorld : IDisposable
 
         private void Ensure(int aBody)
         {
-            if (aBody < _group.Length)
+            if (aBody < _friction.Length)
                 return;
-            var size = Math.Max(aBody + 1, _group.Length * 2);
-            Array.Resize(ref _group, size);
-            Array.Resize(ref _index, size);
+            var size = Math.Max(aBody + 1, _friction.Length * 2);
             Array.Resize(ref _touching, size);
             Array.Resize(ref _friction, size);
         }
@@ -241,9 +225,7 @@ public sealed class PhysicsWorld : IDisposable
                 return false;
             if (aA.Mobility == CollidableMobility.Static || aB.Mobility == CollidableMobility.Static)
                 return true;
-            var a = aA.BodyHandle.Value;
-            var b = aB.BodyHandle.Value;
-            return !_tags.SameGroup(a, b) || !_tags.Ignored(a, b);
+            return !_tags.Ignored(aA.BodyHandle.Value, aB.BodyHandle.Value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
