@@ -155,27 +155,28 @@ public static class PanelParts
     }
 
     /// <summary>
-    /// Wybór celu oka: „brak” albo jedna z kul sceny. Lista odświeża się przy każdym otwarciu (kule mogą przybyć lub zniknąć).
+    /// Wybór celu oka: „brak” albo dowolna encja sceny poza właścicielem oka — kula, inny stwór (pościg, ucieczka),
+    /// cylinder, klocek. Lista odświeża się przy najechaniu i fokusie (encje mogą przybyć, zniknąć albo zmienić nazwę).
     /// </summary>
-    public static Control TargetPicker(StudioSession aSession, TargetSensor aEye, Action? aChanged = null)
+    public static Control TargetPicker(StudioSession aSession, ActiveEntity aOwner, TargetSensor aEye, Action? aChanged = null)
     {
         var picker = new ComboBox { MinWidth = 150 };
-        ToolTip.SetTip(picker, "Na co patrzy oko. Nauka i tak ćwiczy na własnych celach — to zmienia tylko cel w scenie.");
+        ToolTip.SetTip(picker, "Na co patrzy oko: kula, inny stwór albo dowolna bryła. Nauka i tak ćwiczy na własnych celach — to zmienia tylko cel w scenie.");
         var updating = false;
         var shown = string.Empty;
         void Fill()
         {
             var current = aEye.TargetId is { } id ? aSession.World.Find(id) : null;
-            var key = string.Join("|", aSession.World.Entities.OfType<Sphere>().Select(aSphere => $"{aSphere.Id}:{StudioSession.NameOf(aSphere)}")) +
-                $"#{current?.Id}";
+            var candidates = aSession.World.Entities.Where(aEntity => !ReferenceEquals(aEntity, aOwner))
+                .OrderBy(aEntity => aEntity switch { Sphere => 0, ActiveEntity => 1, Cylinder => 2, _ => 3 })
+                .ToList();
+            var key = string.Join("|", candidates.Select(aEntity => $"{aEntity.Id}:{StudioSession.NameOf(aEntity)}")) + $"#{current?.Id}";
             if (key == shown)
                 return;
             shown = key;
             updating = true;
             var choices = new List<TargetChoice> { new(null, "brak") };
-            choices.AddRange(aSession.World.Entities.OfType<Sphere>().Select(aSphere => new TargetChoice(aSphere, StudioSession.NameOf(aSphere))));
-            if (current is not null and not Sphere)
-                choices.Add(new TargetChoice(current, StudioSession.NameOf(current)));
+            choices.AddRange(candidates.Select(aEntity => new TargetChoice(aEntity, StudioSession.NameOf(aEntity))));
             picker.ItemsSource = choices;
             picker.SelectedItem = choices.FirstOrDefault(aChoice => ReferenceEquals(aChoice.Target, current)) ?? choices[0];
             updating = false;

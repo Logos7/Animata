@@ -385,10 +385,11 @@ public sealed class StudioSession : IDisposable
         return slab;
     }
 
-    /// <summary>Wszystkie oczy patrzą na podaną kulę.</summary>
-    public void AimAllEyes(Sphere aTarget)
+    /// <summary>Wszystkie oczy patrzą na podaną encję (kulę, stwora, bryłę); stwór-cel nie patrzy sam na siebie.</summary>
+    public void AimAllEyes(Entity aTarget)
     {
-        foreach (var eye in Creatures.SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>()))
+        foreach (var eye in Creatures.Where(aCreature => !ReferenceEquals(aCreature, aTarget))
+                     .SelectMany(aCreature => aCreature.Body.Sensors.OfType<TargetSensor>()))
             eye.TargetId = aTarget.Id;
         Status = $"wszystkie oczy patrzą na: {NameOf(aTarget)}";
     }

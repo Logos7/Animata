@@ -468,7 +468,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             details.Children.Add(Ui.Row("Mózg", controllers.Count > 0 ? string.Join(", ", controllers) : "—"));
             details.Children.Add(Ui.Row("Zmysły", string.Join(", ", active.Body.Sensors.Select(SensorName))));
             if (active.Body.Sensors.OfType<TargetSensor>().FirstOrDefault() is { } eye)
-                details.Children.Add(Ui.Row("Cel oka", PanelParts.TargetPicker(Session, eye), 34));
+                details.Children.Add(Ui.Row("Cel oka", PanelParts.TargetPicker(Session, active, eye), 34));
             if (active is CarCreature car)
                 details.Children.Add(Ui.Row("Wąsy", PanelParts.WhiskerPicker(Session, car, () => _propertiesBuilt = false)));
             if (active is SnakeCreature snake)
@@ -686,7 +686,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             case Key.G:
                 Session.ToggleSnap();
                 return true;
-            case Key.T when _renderer.SelectedEntity is Sphere chosen:
+            case Key.T when _renderer.SelectedEntity is { } chosen:
                 Session.AimAllEyes(chosen);
                 return true;
             case Key.L:
@@ -739,8 +739,9 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             {
                 if (!many && entity is ActiveEntity { Brain: not null } creature)
                     menu.Items.Add(Item("Wejdź do stwora", Icons.Enter, () => EnterCreature(creature), Key.Enter));
-                if (!many && entity is Sphere ball)
-                    menu.Items.Add(Item("Wszystkie oczy na tę kulę", Icons.Eye, () => Session.AimAllEyes(ball), Key.T));
+                if (!many)
+                    menu.Items.Add(Item(entity is ActiveEntity ? "Oczy innych stworów na niego" : "Wszystkie oczy na to",
+                        Icons.Eye, () => Session.AimAllEyes(entity), Key.T));
                 if (!many && entity is SnakeCreature snake && Session.World.Entities.OfType<Cylinder>().Any())
                     menu.Items.Add(Item("Owiń wokół cylindra · wspinaczka", Icons.Tree, () =>
                     {

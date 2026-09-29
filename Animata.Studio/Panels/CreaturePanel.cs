@@ -185,7 +185,7 @@ public sealed class CreaturePanel : StudioPanel
                 Grid.SetColumn(rows, 1);
                 grid.Children.Add(rows);
                 content.Children.Add(grid);
-                content.Children.Add(Ui.Row("Cel", PanelParts.TargetPicker(Session, eye), 34));
+                content.Children.Add(Ui.Row("Cel", PanelParts.TargetPicker(Session, _creature, eye), 34));
                 _updaters.Add(() =>
                 {
                     var readings = Read();
