@@ -28,8 +28,10 @@ public sealed class CreaturePanel : StudioPanel
     private readonly List<Action> _updaters = [];
     private readonly StackPanel _snapshots = new() { Spacing = 2 };
     private BodyDiagram? _body;
-    private GraphCanvas? _preview;
+    private StackPanel _brainContents = new();
     private TextBlock? _brainInfo;
+    private string _brainShape = string.Empty;
+    private float _brainCheck;
     private int _snapshotCount = -1;
     private float _snapshotCheck;
     private int _builtWhiskers;
@@ -79,7 +81,7 @@ public sealed class CreaturePanel : StudioPanel
         bodyDock.Children.Add(_body);
         center.Children.Add(Ui.Card(bodyDock, 0));
 
-        _preview = new GraphCanvas(_brain.Graph, aReadOnly: true) { IsHitTestVisible = false };
+        _brainShape = string.Empty;
         _brainInfo = Ui.Text(string.Empty, 12.5, "Studio.Text3");
         var brainHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 10, Margin = new Thickness(18, 12) };
         brainHead.Children.Add(Ui.HStack(10, Ui.Icon(Icons.Brain, 18, "Studio.Accent"), Ui.Text("Mózg", 16, "Studio.Text", FontWeight.SemiBold)));
@@ -91,7 +93,8 @@ public sealed class CreaturePanel : StudioPanel
         var brainDock = new DockPanel();
         DockPanel.SetDock(brainHead, Dock.Top);
         brainDock.Children.Add(brainHead);
-        brainDock.Children.Add(new Border { Child = _preview, ClipToBounds = true, CornerRadius = new CornerRadius(0, 0, 8, 8) });
+        _brainContents = new StackPanel { Spacing = 2, Margin = new Thickness(10, 0, 10, 10) };
+        brainDock.Children.Add(Ui.Scroll(_brainContents));
         var brainCard = Clickable(Ui.Card(brainDock, 0), aCard => EnterBrain(null, aCard));
         Grid.SetRow(brainCard, 1);
         center.Children.Add(brainCard);
@@ -378,7 +381,12 @@ public sealed class CreaturePanel : StudioPanel
         foreach (var update in _updaters)
             update();
         _body?.InvalidateVisual();
-        _preview?.Tick(aDelta);
+        _brainCheck += aDelta;
+        if (_brainCheck > 1 || BrainShape() != _brainShape)
+        {
+            _brainCheck = 0;
+            RebuildBrainContents();
+        }
         if (_brainInfo is not null)
         {
             var modules = _brain.Graph.Descendants().Count(aModule => aModule is not SubgraphInputModule and not SubgraphOutputModule);
@@ -396,7 +404,110 @@ public sealed class CreaturePanel : StudioPanel
         }
     }
 
-    public override void OnShown() => _snapshotCount = -1;
+    public override void OnShown()
+    {
+        _snapshotCount = -1;
+        _brainShape = string.Empty;
+    }
+
+    // ---------- co jest w mózgu ----------
+
+    /// <summary>Struktura mózgu (moduły, połączenia, kształty sieci) — zmiana oznacza przebudowę listy.</summary>
+    private string BrainShape() => string.Join("|", _brain.Graph.Modules.Select(aModule =>
+        $"{aModule.Id:N}{aModule.Name}{(aModule as NeuralNetworkModule)?.Network.Layers.Sum()}")) + "#" + _brain.Graph.Connections.Count;
+
+    /// <summary>
+    /// Zawartość mózgu jako lista modułów najwyższego poziomu: czym jest każdy moduł (sieć — warstwy i parametry, CPG,
+    /// chód, sterownik, podgraf), skąd bierze dane i dokąd je wysyła. Klik w wiersz wjeżdża do grafu z tym modułem.
+    /// </summary>
+    private void RebuildBrainContents()
+    {
+        _brainShape = BrainShape();
+        _brainContents.Children.Clear();
+        var graph = _brain.Graph;
+        var trainable = Core.Training.TrainingController.FindTrainable(_creature);
+        var progress = Session.Training.ProgressOf(_brain);
+        var ordered = graph.Modules.OrderBy(aModule => aModule switch { SensorModule => 0, ActuatorModule => 2, _ => 1 });
+        foreach (var module in ordered)
+        {
+            var sources = graph.Connections.Where(aLink => aLink.TargetId == module.Id).Select(aLink => aLink.SourceId).Distinct()
+                .Select(graph.Find).OfType<BrainModule>().Select(GraphCanvas.TitleOf).ToList();
+            var targets = graph.Connections.Where(aLink => aLink.SourceId == module.Id).Select(aLink => aLink.TargetId).Distinct()
+                .Select(graph.Find).OfType<BrainModule>().Select(GraphCanvas.TitleOf).ToList();
+            var flow = module switch
+            {
+                SensorModule => targets.Count > 0 ? $"→ {string.Join(", ", targets)}" : "nic go nie czyta",
+                ActuatorModule => sources.Count > 0 ? $"← {string.Join(", ", sources)}" : "nic nim nie steruje",
+                _ => $"{(sources.Count > 0 ? string.Join(", ", sources) : "—")} → {(targets.Count > 0 ? string.Join(", ", targets) : "—")}"
+            };
+            var detail = Describe(module);
+            if (module == trainable)
+                detail += progress is { } last
+                    ? $" · uczy się: pokolenie {last.Generation}, mistrz z {last.ChampionGeneration} ({last.ChampionScore:F2})"
+                    : Session.IsTraining(_creature) ? " · uczy się" : " · uczony moduł (L — nauka)";
+
+            var icon = Ui.Icon(GraphCanvas.IconOf(module), 16);
+            icon.VerticalAlignment = VerticalAlignment.Top;
+            icon.Margin = new Thickness(0, 2, 0, 0);
+            var title = Ui.Text(GraphCanvas.TitleOf(module), 13, "Studio.Text", FontWeight.SemiBold);
+            var kind = Ui.MonoText(module.GetType().Name.Replace("Module", string.Empty), 11, "Studio.Text3");
+            var text = Ui.VStack(1, Ui.HStack(8, title, kind), Wrapped(detail, 12, "Studio.Text2"), Wrapped(flow, 11.5, "Studio.Text3"));
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
+            row.Children.Add(icon);
+            Grid.SetColumn(text, 1);
+            row.Children.Add(text);
+            var item = new Border
+            {
+                Child = row,
+                Padding = new Thickness(8, 6),
+                CornerRadius = new CornerRadius(6),
+                Background = Brushes.Transparent,
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+            ToolTip.SetTip(item, "Wejdź do mózgu z tym modułem zaznaczonym");
+            var focus = module;
+            item.PointerEntered += (_, _) => item.Res(Border.BackgroundProperty, "Studio.Card2");
+            item.PointerExited += (_, _) => item.Background = Brushes.Transparent;
+            item.Tapped += (_, aEvent) =>
+            {
+                EnterBrain(focus, item);
+                aEvent.Handled = true;
+            };
+            _brainContents.Children.Add(item);
+        }
+        if (graph.Modules.Count == 0)
+            _brainContents.Children.Add(Ui.Text("Mózg jest pusty — wejdź i dodaj moduły z palety.", 12.5, "Studio.Text3"));
+    }
+
+    private static TextBlock Wrapped(string aText, double aSize, string aBrush)
+    {
+        var text = Ui.Text(aText, aSize, aBrush);
+        text.TextWrapping = TextWrapping.Wrap;
+        text.TextTrimming = TextTrimming.None;
+        return text;
+    }
+
+    /// <summary>Czym jest moduł, po ludzku.</summary>
+    private static string Describe(BrainModule aModule) => aModule switch
+    {
+        SensorModule sensor => $"zmysł „{sensor.Slot}” · {Ports(sensor.OutputPorts)}",
+        ActuatorModule actuator => $"napęd „{actuator.Slot}” · {Ports(actuator.InputPorts)}",
+        NeuralNetworkModule network => $"sieć neuronowa {string.Join("-", network.Network.Layers)} · {network.ParameterCount} parametrów · " +
+            $"{network.Inputs.Count} wejść, {network.Outputs.Count} wyjść",
+        CpgModule cpg => $"generator fali{(cpg.Grip ? " (toczenie, chwyt)" : string.Empty)} · {cpg.Joints} stawów · " +
+            $"A {cpg.Amplitude:0.##}, f {cpg.Frequency:0.##} Hz, λ {cpg.PhaseLag:0.##}, skręt {cpg.TurnGain:0.##}",
+        GaitModule gait => $"generator kłusa · krok {gait.Stride:0.##}, uniesienie {gait.Lift:0.##}, f {gait.Frequency:0.##} Hz, skręt {gait.TurnGain:0.##}",
+        AvoidAndSeekModule avoid => $"sterownik: jazda do celu z omijaniem przeszkód · {avoid.RayAngles.Count} wąsów",
+        ApproachTargetModule => "sterownik: jazda prosto do celu i zatrzymanie przy nim",
+        CompositeModule composite => $"podgraf · {composite.Children.Count()} modułów · wejścia {Ports(composite.InputPorts)} · wyjścia {Ports(composite.OutputPorts)}",
+        RouterModule router => $"przełącznik {router.Channels} kanałów · teraz kanał {router.ActiveChannel}",
+        ConstantModule constant => $"stała {constant.Port} = {constant.Value:0.###}",
+        _ => GraphCanvas.SubtitleOf(aModule)
+    };
+
+    private static string Ports(IReadOnlyList<string> aPorts) => aPorts.Count == 0 ? "bez portów"
+        : aPorts.Count <= 4 ? string.Join(", ", aPorts)
+        : $"{string.Join(", ", aPorts.Take(3))} … (+{aPorts.Count - 3})";
 
     public override bool HandleKey(KeyEventArgs aEvent)
     {
