@@ -56,16 +56,17 @@ public sealed class CreaturePanel : StudioPanel
             Ui.MonoText(controllers.Count > 0 ? string.Join(", ", controllers) : "bez sterownika", 12, "Studio.Text3"));
         titleExtra.Margin = new Thickness(6, 0, 0, 0);
         _builtRevision = Session.BrainRevision;
-        var brainButton = Ui.Button("Mózg", () => { }, Icons.Brain);
-        ToolTip.SetTip(brainButton, "Wymień mózg tego ciała: gotowy (sieć, CPG, sterownik) albo z pliku; zapisz mózg do pliku.");
-        var brainMenu = new MenuFlyout();
-        brainMenu.Opening += (_, _) =>
+        // Menu budowane przy każdym kliknięciu (gotowe mózgi zależą od bieżącego ciała) i otwierane przy przycisku —
+        // MenuFlyout z pozycjami dopisywanymi w Opening się nie otwierał (w chwili otwarcia był pusty).
+        Button? brainButton = null;
+        brainButton = Ui.Button("Mózg", () =>
         {
-            brainMenu.Items.Clear();
+            var menu = new ContextMenu { Placement = PlacementMode.Bottom };
             foreach (var item in PanelParts.BrainMenuItems(Session, _creature, this, () => Child = Build()))
-                brainMenu.Items.Add(item);
-        };
-        brainButton.Flyout = brainMenu;
+                menu.Items.Add(item);
+            menu.Open(brainButton!);
+        }, Icons.Brain);
+        ToolTip.SetTip(brainButton, "Wymień mózg tego ciała: gotowy (sieć, CPG, sterownik) albo z pliku; zapisz mózg do pliku.");
         var right = Ui.HStack(6,
             brainButton,
             Ui.Button("Snapshot", () => Session.SaveSnapshot(_brain), Icons.Camera, aShortcut: "Ctrl+S"),
