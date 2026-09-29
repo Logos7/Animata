@@ -110,7 +110,7 @@ public static partial class WorldObjectCatalog
         snake.Body.Sensors.Add(clock);
         snake.Body.Sensors.Add(feel);
         snake.Body.Actuators.Add(spine);
-        BuildBrain(brain, [("Eye", eye), ("Joints", joints), ("Clock", clock), ("Feel", feel)], aController, spine);
+        BuildBrain(brain, aController);
         snake.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
         return snake;
     }

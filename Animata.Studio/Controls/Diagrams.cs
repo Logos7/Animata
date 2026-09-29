@@ -132,7 +132,7 @@ public sealed class BodyDiagram : ThemedControl
     public override void Render(DrawingContext aContext)
     {
         var size = Bounds.Size;
-        var center = new Point(size.Width * 0.4, size.Height / 2);
+        var center = new Point(size.Width / 2, size.Height / 2);
         var span = Math.Min(size.Width, size.Height);
         var skin = Math.Max(0.1f, _creature.BoundingRadius);
         var scale = span * 0.2 / skin;
@@ -195,7 +195,6 @@ public sealed class BodyDiagram : ThemedControl
                     }
                 aContext.DrawRectangle(Ui.Brush(bodyColor), outline, new Rect(center.X - length / 2, center.Y - width / 2, length, width), 12, 12);
                 aContext.DrawEllipse(Ui.Brush(P.Text), null, center + new Vector(length / 2, 0), 7, 7);
-                Callout(aContext, center + new Vector(-0.32 * length, width / 2 + wheelWidth), new Point(16, size.Height - 22), "Koła · SteeringDrive");
                 break;
             }
             case CylinderCreature cylinder:
@@ -206,7 +205,6 @@ public sealed class BodyDiagram : ThemedControl
                         new Rect(center.X - radius * 0.2, center.Y + side * radius - 6, radius * 0.4, 12), 4, 4);
                 aContext.DrawEllipse(Ui.Brush(bodyColor), outline, center, radius, radius);
                 aContext.DrawEllipse(Ui.Brush(P.Text), null, center + new Vector(radius * 1.08, 0), radius * 0.2, radius * 0.2);
-                Callout(aContext, center + new Vector(0, radius + 6), new Point(16, size.Height - 22), "Koła · DiskDrive");
                 break;
             }
             case SpiderCreature spider when spider.PartPositions.Count > 2 * SpiderCreature.Legs:
@@ -228,7 +226,6 @@ public sealed class BodyDiagram : ThemedControl
                 }
                 var half = new Vector(SpiderCreature.BodyLength / 2 * fit, SpiderCreature.BodyWidth / 2 * fit);
                 aContext.DrawRectangle(Ui.Brush(bodyColor), outline, new Rect(ToScreen(local[0]) - half, ToScreen(local[0]) + half), 6, 6);
-                Callout(aContext, ToScreen(local[4]), new Point(16, size.Height - 22), "Nogi · 4 × (biodro + kolano) · stopa na ziemi = akcent");
                 break;
             }
             case ArticulatedCreature body when body.PartPositions.Count > 0:
@@ -246,27 +243,11 @@ public sealed class BodyDiagram : ThemedControl
                 for (var index = 0; index < local.Count; index++)
                     aContext.DrawEllipse(Ui.Brush(index == 0 ? P.Accent : StudioPalette.WithAlpha(P.Text, 0.35)), null,
                         ToScreen(local[index]), index == 0 ? thickness * 0.45 : 2.5, index == 0 ? thickness * 0.45 : 2.5);
-                Callout(aContext, ToScreen(local[^1]), new Point(16, size.Height - 22),
-                    $"Kręgosłup · {body.JointCount} stawów (skręt + pochylenie)");
                 break;
             }
             default:
                 aContext.DrawEllipse(Ui.Brush(bodyColor), outline, center, skin * scale, skin * scale);
                 break;
         }
-
-        if (eye is not null)
-            Callout(aContext, center + new Vector(skin * scale, 0), new Point(size.Width - 16, 26), "Oko · TargetSensor", TextAnchor.Right);
-        if (whiskers is not null)
-            Callout(aContext, center + new Vector(Math.Cos(0.5) * (skin * scale + reach * 0.7), -Math.Sin(0.5) * (skin * scale + reach * 0.7)),
-                new Point(size.Width - 16, 56), $"Wąsy · RaySensor ×{whiskers.Angles.Count}", TextAnchor.Right);
-    }
-
-    private static void Callout(DrawingContext aContext, Point aFrom, Point aLabel, string aText, TextAnchor aAnchor = TextAnchor.Left)
-    {
-        var width = Draw.Format(aText, 12.5, P.Text, true).Width;
-        var lineEnd = aAnchor == TextAnchor.Right ? new Point(aLabel.X - width - 6, aLabel.Y) : new Point(aLabel.X + width + 6, aLabel.Y);
-        aContext.DrawLine(Draw.Pen(P.Text3, 1), aFrom, lineEnd);
-        Draw.Text(aContext, aText, aLabel, 12.5, P.Text, aAnchor, true);
     }
 }

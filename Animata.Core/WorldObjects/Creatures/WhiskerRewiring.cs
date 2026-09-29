@@ -9,7 +9,7 @@ namespace Animata.Core.WorldObjects;
 /// <summary>
 /// Zmiana liczby wąsów stwora w miejscu: ten sam stwór, ten sam <see cref="RaySensor"/> (ten sam slot) i ten sam mózg.
 /// - sensor dostaje nowe kąty (wachlarz <see cref="WorldObjectCatalog.WhiskerSpread"/>), porty Ray0…Ray{n−1};
-/// - węzły tego sensora w grafie (także w podgrafach) dostają nowe porty;
+/// - węzeł tego sensora w grafie ma porty sensora na żywo, więc od razu widzi nowe;
 /// - AvoidAndSeek dostaje nowe kąty (parametry zostają);
 /// - sieć, której wejście to dokładnie port wąsa („Ray3”), dostaje po jednym wejściu na nowy wąs; waga nowego wąsa
 ///   to waga starego wąsa o najbliższym kącie × (stara liczba / nowa liczba), więc sieć zachowuje się podobnie
@@ -46,15 +46,8 @@ public static class WhiskerRewiring
         // 2. Ciało i moduły.
         sensor.SetAngles(angles);
         foreach (var module in graphs.SelectMany(aGraph => aGraph.Modules))
-            switch (module)
-            {
-                case SensorModule source when source.Slot == sensor.Slot:
-                    source.SetPorts(sensor.OutputPorts);
-                    break;
-                case AvoidAndSeekModule avoid:
-                    avoid.SetRayAngles(angles);
-                    break;
-            }
+            if (module is AvoidAndSeekModule avoid)
+                avoid.SetRayAngles(angles);
         for (var index = 0; index < networks.Count; index++)
             networks[index].RestoreState(networkStates[index]);
 

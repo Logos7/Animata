@@ -64,18 +64,8 @@ public sealed class SnakeCreature : ArticulatedCreature
             sensor.SetJointCount(joints);
 
         foreach (var module in graphs.SelectMany(aGraph => aGraph.Modules))
-            switch (module)
-            {
-                case ActuatorModule output when Body.FindActuator(output.Slot) is SpineActuator spine:
-                    output.SetPorts(spine.InputPorts);
-                    break;
-                case SensorModule input when Body.FindSensor(input.Slot) is JointSensor sense:
-                    input.SetPorts(sense.OutputPorts);
-                    break;
-                case CpgModule cpg:
-                    cpg.SetJointCount(joints);
-                    break;
-            }
+            if (module is CpgModule cpg)
+                cpg.SetJointCount(joints);
 
         for (var index = 0; index < networks.Count; index++)
             networks[index].RestoreState(networkStates[index]);

@@ -107,15 +107,14 @@ public class SnakeTests
         using var world = FloorWorld();
         var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg(4), 4);
         world.Add(snake);
-        // Bez węzła kręgosłupa mózg nie nadpisuje komend — stawy zadaje test.
-        snake.Brain!.Graph.Remove(snake.Brain.Graph.Modules.OfType<ActuatorModule>().Single());
-        var spine = snake.Body.Actuators.OfType<SpineActuator>().Single();
+        // Zamiast CPG stała: staw 0 skręcony o połowę zakresu, reszta prosto.
+        var graph = snake.Brain!.Graph;
+        graph.Remove(graph.Modules.OfType<CpgModule>().Single());
+        var yaw = graph.Add(new ConstantModule(SpineActuator.YawPort(0), 0.5f));
+        graph.Connect(yaw, yaw.Port, graph.Modules.OfType<ActuatorModule>().Single(), yaw.Port);
 
         for (var tick = 0; tick < 60; tick++)
-        {
-            spine.Apply(snake, new Dictionary<string, float> { [SpineActuator.YawPort(0)] = 0.5f }, Delta);
             world.Update(Delta);
-        }
 
         var expected = 0.5f * snake.Plan.Joints[0].MaxYaw;
         Assert.InRange(MathF.Abs(snake.JointYaw(0)), expected * 0.7f, expected * 1.3f);

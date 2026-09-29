@@ -33,14 +33,15 @@ public class BrainGraphEditingTests
         var network = graph.Modules.OfType<NeuralNetworkModule>().Single();
         var wheels = graph.Modules.OfType<ActuatorModule>().Single();
 
-        var composite = BrainGraphEditing.Group(graph, [network, wheels], "Napęd");
+        Assert.Throws<ArgumentException>(() => BrainGraphEditing.Group(graph, [network, wheels], "Napęd"));
+        var composite = BrainGraphEditing.Group(graph, [network], "Sieć");
 
-        // Każde wyjście sensora wchodzi raz; aktuator w środku, więc wyjść nie ma.
+        // Każde wyjście sensora wchodzi raz, każde wyjście sieci wychodzi raz do kół (zostają na wierzchu, jak zmysły).
         Assert.Equal(network.InputPorts.Count, composite.InputPorts.Count);
-        Assert.Empty(composite.OutputPorts);
-        Assert.Equal(network.InputPorts.Count, graph.Connections.Count);
-        Assert.All(graph.Connections, aLink => Assert.Equal(composite.Id, aLink.TargetId));
-        Assert.Equal(3, graph.Modules.Count);
+        Assert.Equal(network.OutputPorts.Count, composite.OutputPorts.Count);
+        Assert.Equal(network.InputPorts.Count + network.OutputPorts.Count, graph.Connections.Count);
+        Assert.All(graph.Connections, aLink => Assert.True(aLink.TargetId == composite.Id || aLink.SourceId == composite.Id));
+        Assert.Equal(4, graph.Modules.Count);
     }
 
     [Fact]
@@ -73,12 +74,11 @@ public class BrainGraphEditingTests
         var modules = graph.Modules.ToHashSet();
         var links = Links(graph);
         var controller = graph.Modules.OfType<AvoidAndSeekModule>().Single();
-        var wheels = graph.Modules.OfType<ActuatorModule>().Single();
 
-        var composite = BrainGraphEditing.Group(graph, [controller, wheels]);
+        var composite = BrainGraphEditing.Group(graph, [controller]);
         var moved = BrainGraphEditing.Ungroup(graph, composite);
 
-        Assert.Equal(2, moved.Count);
+        Assert.Single(moved);
         Assert.Equal(modules, graph.Modules.ToHashSet());
         Assert.Equal(links, Links(graph));
         Assert.All(graph.Modules, aModule => Assert.True(graph.Positions.ContainsKey(aModule.Id)));

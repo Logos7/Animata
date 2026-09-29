@@ -31,7 +31,7 @@ public static partial class WorldObjectCatalog
         spider.Body.Sensors.Add(feel);
         spider.Body.Sensors.Add(touch);
         spider.Body.Actuators.Add(legs);
-        BuildBrain(brain, [("Eye", eye), ("Joints", joints), ("Clock", clock), ("Feel", feel), ("Touch", touch)], aController, legs);
+        BuildBrain(brain, aController);
         spider.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
         return spider;
     }

@@ -3,39 +3,34 @@ using Animata.Core.Actuators;
 namespace Animata.Core.Brains.Modules;
 
 /// <summary>
-/// Ujście: zbiera komendy w fazie Think, a w fazie Act wysyła je do aktuatora ciała (po nazwie slotu).
-/// Jedyny standardowy węzeł, który zmienia świat. Nieprzyłączone porty nie trafiają do aktuatora
-/// (aktuator traktuje je jak 0).
+/// Węzeł napędu w grafie mózgu: ujście, które zbiera komendy w fazie Think, a w fazie Act wysyła je do aktuatora ciała.
+/// Jedyny standardowy węzeł, który zmienia świat. Jak <see cref="SensorModule"/> — tworzony z ciała przez
+/// <see cref="Brain.SyncBody"/> (jeden na aktuator, więc jeden aktuator ma jedno sterowanie), porty na żywo, Id ze slotu.
+/// Nieprzyłączone porty nie trafiają do aktuatora (aktuator traktuje je jak 0).
 /// </summary>
 public sealed class ActuatorModule : BrainModule
 {
     private static readonly Dictionary<string, float> NoOutputs = [];
 
-    private string[] _ports;
     private readonly Dictionary<string, float> _command = [];
 
-    public ActuatorModule(Actuator aActuator) : this(aActuator.Slot, aActuator.InputPorts)
+    public ActuatorModule(Actuator aActuator)
     {
+        Actuator = aActuator;
+        Id = SensorModule.BodyNodeId("actuator", aActuator.Slot);
+        Name = aActuator.Slot;
     }
 
-    public ActuatorModule(string aSlot, IEnumerable<string> aPorts)
-    {
-        if (string.IsNullOrWhiteSpace(aSlot))
-            throw new ArgumentException("Actuator slot must not be empty.", nameof(aSlot));
-        Slot = aSlot;
-        _ports = aPorts.ToArray();
-    }
+    /// <summary>Aktuator ciała, do którego idą komendy.</summary>
+    public Actuator Actuator { get; internal set; }
 
-    /// <summary>Slot aktuatora w ciele. Jeden slot — jedno sterowanie (graf to waliduje).</summary>
-    public string Slot { get; }
-
-    /// <summary>Kopiuje porty z aktuatora na nowo (np. po zmianie liczby segmentów). Połączenia poprawia wołający.</summary>
-    public void SetPorts(IEnumerable<string> aPorts) => _ports = aPorts.ToArray();
+    /// <summary>Slot aktuatora w ciele.</summary>
+    public string Slot => Actuator.Slot;
 
     /// <summary>Ostatnia zebrana komenda (do podglądu).</summary>
     public IReadOnlyDictionary<string, float> LastCommand => _command;
 
-    public override IReadOnlyList<string> InputPorts => _ports;
+    public override IReadOnlyList<string> InputPorts => Actuator.InputPorts;
     public override IReadOnlyList<string> OutputPorts => [];
 
     public override IReadOnlyDictionary<string, float> Evaluate(
@@ -47,10 +42,5 @@ public sealed class ActuatorModule : BrainModule
         return NoOutputs;
     }
 
-    public override void Commit(BrainContext aContext)
-    {
-        var actuator = aContext.Owner.Body.FindActuator(Slot)
-            ?? throw new InvalidOperationException($"This body has no actuator in slot \"{Slot}\".");
-        actuator.Apply(aContext.Owner, _command, aContext.Delta);
-    }
+    public override void Commit(BrainContext aContext) => Actuator.Apply(aContext.Owner, _command, aContext.Delta);
 }

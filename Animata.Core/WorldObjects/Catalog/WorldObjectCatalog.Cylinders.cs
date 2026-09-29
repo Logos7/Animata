@@ -60,7 +60,7 @@ public static partial class WorldObjectCatalog
         var wheels = new DiskDriveActuator { Slot = "Wheels" };
         creature.Body.Sensors.Add(eye);
         creature.Body.Actuators.Add(wheels);
-        BuildBrain(brain, [("Eye", eye)], aController, wheels);
+        BuildBrain(brain, aController);
         return creature;
     }
 

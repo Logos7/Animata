@@ -701,11 +701,13 @@ public sealed class GraphCanvas : ThemedControl
             InvalidateVisual();
             return;
         }
-        var doomed = _selection.Where(aModule => !IsBoundary(aModule)).ToList();
+        var doomed = _selection.Where(aModule => !IsBoundary(aModule) && aModule is not SensorModule and not ActuatorModule).ToList();
         if (doomed.Count == 0)
         {
             if (_selection.Count > 0)
-                Message?.Invoke("Granic podgrafu nie da się usunąć — zmieniaj jego porty w inspektorze.");
+                Message?.Invoke(_selection.Any(aModule => aModule is SensorModule or ActuatorModule)
+                    ? "Zmysłów i napędów nie usuwa się z mózgu — to części ciała; odłącz tylko ich druty."
+                    : "Granic podgrafu nie da się usunąć — zmieniaj jego porty w inspektorze.");
             return;
         }
         Removing?.Invoke(doomed);

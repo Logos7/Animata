@@ -65,7 +65,7 @@ public static partial class WorldObjectCatalog
         car.Body.Sensors.Add(eye);
         car.Body.Sensors.Add(whiskers);
         car.Body.Actuators.Add(wheels);
-        BuildBrain(brain, [("Eye", eye), ("Whiskers", whiskers)], aController, wheels);
+        BuildBrain(brain, aController);
         return car;
     }
 

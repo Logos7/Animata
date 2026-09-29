@@ -53,6 +53,24 @@ public class PersistenceTests
     }
 
     [Fact]
+    public void BodyNodes_AreNotSaved_ButComeBackWiredFromTheBody()
+    {
+        using var world = WorldObjectCatalog.CreateDemo().World;
+        var car = world.Entities.OfType<CarCreature>().First();
+        var json = RoundTrip(world, out var restored);
+        using (restored)
+        {
+            Assert.DoesNotContain("\"Slot\"", json);
+            var twin = (CarCreature)restored.Find(car.Id)!;
+            var graph = twin.Brain!.Graph;
+            Assert.Equal(twin.Body.Sensors.Select(aSensor => aSensor.Slot), graph.Modules.OfType<SensorModule>().Select(aNode => aNode.Slot));
+            Assert.Same(twin.Body.Actuators.Single(), graph.Modules.OfType<ActuatorModule>().Single().Actuator);
+            Assert.Equal(car.Brain!.Graph.Connections, graph.Connections);
+            graph.Validate();
+        }
+    }
+
+    [Fact]
     public void SimulationTime_SurvivesSaveAndLoad_SoTheClockContinues()
     {
         using var world = WorldObjectCatalog.CreateSnakeScene().World;

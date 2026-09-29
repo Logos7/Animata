@@ -86,7 +86,9 @@ and let it run on.
   undo walks back through them.
 - **Saving worlds.** A whole world goes to JSON and back: entities, bodies, target links and complete brains
   (modules, wiring, subgraphs, node positions, parameters and snapshots). Brains connect to bodies by slot name
-  (`Eye`, `Whiskers`, `Spine`), not by id.
+  (`Eye`, `Whiskers`, `Spine`), not by id. Sense and actuator nodes in the brain graph are not stored — they are a
+  live view of the body (one node per sensor and actuator, ports straight from the body), so only the logic and the
+  wires are saved.
 - **Studio.** A desktop app with four scenes (demo; snakes on terrain; spiders on terrain; climbing) which you *zoom into*: double-click a creature and the window turns into its panel (senses, body,
   actuators, brain). Click the brain and you are in a live graph editor; double-click a subgraph and you go one level
   deeper; double-click a neural network and you see its layers — neurons lit by their live activations, weights as

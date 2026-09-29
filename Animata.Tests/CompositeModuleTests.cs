@@ -102,15 +102,15 @@ public class CompositeModuleTests
     }
 
     [Fact]
-    public void ActuatorDrivenFromTwoLevels_FailsValidation()
+    public void BodyNodes_StayOnTop_AndCannotBeGrouped()
     {
-        var (_, owner) = Stage();
+        var owner = WorldObjectCatalog.CreateControllerSeeker(Vector3.Zero, null);
         var graph = owner.Brain!.Graph;
-        graph.Add(new ActuatorModule("Drive", ["Turn"]));
-        var composite = graph.Add(new CompositeModule());
-        composite.Inner.Add(new ActuatorModule("Drive", ["Turn"]));
+        var eye = graph.Modules.OfType<SensorModule>().Single();
+        var count = graph.Modules.Count;
 
-        Assert.Throws<BrainException>(() => graph.Validate());
+        Assert.Throws<ArgumentException>(() => BrainGraphEditing.Group(graph, [eye]));
+        Assert.Equal(count, graph.Modules.Count);
     }
 
     [Fact]

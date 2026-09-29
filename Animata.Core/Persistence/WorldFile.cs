@@ -72,18 +72,11 @@ public sealed record BrainDocument(
     Guid? Current = null);
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(SensorNode), "sensor")]
-[JsonDerivedType(typeof(ActuatorNode), "actuator")]
 [JsonDerivedType(typeof(StateNode), "state")]
 [JsonDerivedType(typeof(ConstantNode), "constant")]
 [JsonDerivedType(typeof(RouterNode), "router")]
 [JsonDerivedType(typeof(CompositeNode), "composite")]
 public abstract record ModuleDocument(Guid Id, string Name);
-
-/// <summary>Węzeł sensora: slot w ciele i porty.</summary>
-public sealed record SensorNode(Guid Id, string Name, string Slot, string[] Ports) : ModuleDocument(Id, Name);
-
-public sealed record ActuatorNode(Guid Id, string Name, string Slot, string[] Ports) : ModuleDocument(Id, Name);
 
 /// <summary>Moduł opisany w całości swoim stanem: sieć, CPG, AvoidAndSeek, ApproachTarget.</summary>
 public sealed record StateNode(Guid Id, string Name, ModuleState State) : ModuleDocument(Id, Name);
@@ -101,8 +94,11 @@ public sealed record CompositeNode(Guid Id, string Name, Guid InputId, Guid Outp
 /// <summary>Zapis i odczyt świata: <see cref="Capture"/> → <see cref="ToJson"/> / <see cref="FromJson"/> → <see cref="Restore"/>.</summary>
 public static class WorldFile
 {
-    /// <summary>Format 2: bryły geometryczne (box, cylinder, sphere) zamiast floor/slab/obstacle/tree/target; format 1 nie jest czytany.</summary>
-    public const int Format = 2;
+    /// <summary>
+    /// Format 3: bryły geometryczne (box, cylinder, sphere); w mózgu bez węzłów zmysłów i napędów (to widok ciała).
+    /// Starsze formaty nie są czytane.
+    /// </summary>
+    public const int Format = 3;
 
     /// <summary>Sugerowane rozszerzenie pliku.</summary>
     public const string Extension = ".animata.json";
@@ -240,15 +236,15 @@ public static class WorldFile
     private static BrainDocument CaptureBrain(BrainGraph aGraph, IReadOnlyList<BrainSnapshot> aSnapshots, IEnumerable<BrainModule>? aSkip = null)
     {
         var skip = aSkip?.ToHashSet() ?? [];
-        var modules = aGraph.Modules.Where(aModule => !skip.Contains(aModule)).Select(CaptureModule).ToList();
+        // Węzły zmysłów i napędów to widok ciała (Brain.SyncBody) — nie zapisuje się ich, tylko połączenia do nich.
+        var modules = aGraph.Modules.Where(aModule => !skip.Contains(aModule) && aModule is not SensorModule and not ActuatorModule)
+            .Select(CaptureModule).ToList();
         var positions = aGraph.Positions.ToDictionary(aEntry => aEntry.Key, aEntry => new[] { aEntry.Value.X, aEntry.Value.Y });
         return new BrainDocument(modules, [.. aGraph.Connections], positions, [.. aSnapshots]);
     }
 
     private static ModuleDocument CaptureModule(BrainModule aModule) => aModule switch
     {
-        SensorModule sensor => new SensorNode(sensor.Id, sensor.Name, sensor.Slot, [.. sensor.OutputPorts]),
-        ActuatorModule actuator => new ActuatorNode(actuator.Id, actuator.Name, actuator.Slot, [.. actuator.InputPorts]),
         ConstantModule constant => new ConstantNode(constant.Id, constant.Name, constant.Port, constant.Value),
         RouterModule router => new RouterNode(router.Id, router.Name, router.Channels, [.. router.Ports]),
         CompositeModule composite => new CompositeNode(composite.Id, composite.Name, composite.Input.Id, composite.Output.Id,
@@ -366,6 +362,7 @@ public static class WorldFile
     private static void RestoreBrain(Brain aBrain, BrainDocument aDocument)
     {
         FillGraph(aBrain.Graph, aDocument);
+        aBrain.SyncBody();
         foreach (var snapshot in aBrain.Snapshots.ToArray())
             aBrain.RemoveSnapshot(snapshot);
         foreach (var snapshot in aDocument.Snapshots)
@@ -399,8 +396,6 @@ public static class WorldFile
     {
         BrainModule module = aDocument switch
         {
-            SensorNode sensor => new SensorModule(sensor.Slot, sensor.Ports) { Id = sensor.Id },
-            ActuatorNode actuator => new ActuatorModule(actuator.Slot, actuator.Ports) { Id = actuator.Id },
             ConstantNode constant => new ConstantModule(constant.Port, constant.Value) { Id = constant.Id },
             RouterNode router => new RouterModule(router.Channels, router.Ports) { Id = router.Id },
             CompositeNode composite => RestoreComposite(composite),

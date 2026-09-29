@@ -23,16 +23,18 @@ public static partial class WorldObjectCatalog
 
 
     /// <summary>
-    /// Mózg: sensory → controller → napęd. Każde wejście controllera musi pochodzić z któregoś sensora
-    /// (literówka w nazwie portu to błąd, a nie ciche zero), a controller musi mieć wszystkie wyjścia napędu.
+    /// Mózg: sensory ciała → controller → jedyny napęd ciała (węzły ciała daje <see cref="Brain.SyncBody"/>). Każde wejście
+    /// controllera musi pochodzić z któregoś sensora (literówka w nazwie portu to błąd, a nie ciche zero), a controller
+    /// musi mieć wszystkie wyjścia napędu.
     /// </summary>
-    public static void BuildBrain(Brain aBrain, IReadOnlyList<(string Name, Sensor Sensor)> aSensors,
-        BrainModule aController, Actuator aWheels)
+    public static void BuildBrain(Brain aBrain, BrainModule aController)
     {
+        aBrain.SyncBody();
         var graph = aBrain.Graph;
-        var sources = aSensors.Select(aEntry => graph.Add(new SensorModule(aEntry.Sensor) { Name = aEntry.Name })).ToArray();
-        var controller = graph.Add(aController);
-        var wheels = graph.Add(new ActuatorModule(aWheels) { Name = aWheels.Slot });
+        var sources = graph.Modules.OfType<SensorModule>().ToList();
+        var wheels = graph.Modules.OfType<ActuatorModule>().Single();
+        graph.Modules.Insert(sources.Count, aController);
+        var controller = aController;
 
         var missing = new List<string>();
         foreach (var port in controller.InputPorts)

@@ -18,7 +18,7 @@ using Animata.Studio.Theme;
 namespace Animata.Studio.Panels;
 
 /// <summary>
-/// Wnętrze stwora: zmysły (z lewej), ciało i mózg (w środku), aktuatory, nauka i snapshoty (z prawej).
+/// Wnętrze stwora: zmysły (z lewej), mózg i ciało (w środku), aktuatory, nauka i snapshoty (z prawej).
 /// Klik w kartę zmysłu, aktuatora albo mózgu wjeżdża do grafu mózgu z tym węzłem zaznaczonym.
 /// </summary>
 public sealed class CreaturePanel : StudioPanel
@@ -64,8 +64,8 @@ public sealed class CreaturePanel : StudioPanel
             senses.Children.Add(Ui.Text("Ten stwór nie ma zmysłów.", 13, "Studio.Text3"));
         body.Children.Add(Ui.Scroll(senses));
 
-        // ---------- ciało i mózg ----------
-        var center = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 20 };
+        // ---------- mózg (u góry) i ciało ----------
+        var center = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 20 };
         _body = new BodyDiagram(_creature, Session.World);
         var bodyHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(16, 12) };
         bodyHead.Children.Add(Ui.Header("Ciało"));
@@ -76,7 +76,9 @@ public sealed class CreaturePanel : StudioPanel
         DockPanel.SetDock(bodyHead, Dock.Top);
         bodyDock.Children.Add(bodyHead);
         bodyDock.Children.Add(_body);
-        center.Children.Add(Ui.Card(bodyDock, 0));
+        var bodyCard = Ui.Card(bodyDock, 0);
+        Grid.SetRow(bodyCard, 1);
+        center.Children.Add(bodyCard);
 
         // Mózg: tylko krótki opis — graf jest po wejściu.
         _brainInfo = Ui.Text(string.Empty, 12.5, "Studio.Text3");
@@ -89,7 +91,6 @@ public sealed class CreaturePanel : StudioPanel
         Grid.SetColumn(enterChip, 2);
         brainHead.Children.Add(enterChip);
         var brainCard = Clickable(Ui.Card(brainHead), aCard => EnterBrain(null, aCard));
-        Grid.SetRow(brainCard, 1);
         center.Children.Add(brainCard);
         Grid.SetColumn(center, 1);
         body.Children.Add(center);

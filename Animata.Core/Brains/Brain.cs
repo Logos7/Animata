@@ -1,3 +1,4 @@
+using Animata.Core.Bodies;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
 using Animata.Core.Worlds;
@@ -13,9 +14,62 @@ public class Brain
     /// <summary>Zapisane snapshoty, od najstarszego.</summary>
     public IReadOnlyList<BrainSnapshot> Snapshots => _snapshots;
 
+    /// <summary>Ciało, którego zmysły i napędy są węzłami grafu (ustawia je stwór przy tworzeniu) albo null.</summary>
+    public Body? Body { get; internal set; }
+
+    /// <summary>
+    /// Węzły ciała w grafie: po jednym <see cref="SensorModule"/> na sensor (na początku listy modułów) i jednym
+    /// <see cref="ActuatorModule"/> na aktuator (na końcu), na najwyższym poziomie grafu. Węzły sensorów i aktuatorów, których
+    /// ciało już nie ma, znikają razem z połączeniami; połączenia z portów, których sensor albo aktuator już nie ma, też.
+    /// Węzły nie są przechowywane (ani w pliku) — to widok ciała; Id ze slotu, więc połączenia do nich przeżywają odtworzenie.
+    /// Woła się po zmianie zestawu sensorów/aktuatorów (budowa stwora, wczytanie); samo Think robi to, gdy liczby się nie zgadzają.
+    /// </summary>
+    public void SyncBody()
+    {
+        if (Body is not { } body)
+            return;
+        var graph = Graph;
+        foreach (var module in graph.Modules.ToList())
+            switch (module)
+            {
+                case SensorModule sensor when body.FindSensor(sensor.Slot) is { } current:
+                    sensor.Sensor = current;
+                    break;
+                case ActuatorModule actuator when body.FindActuator(actuator.Slot) is { } current:
+                    actuator.Actuator = current;
+                    break;
+                case SensorModule or ActuatorModule:
+                    graph.Remove(module);
+                    break;
+            }
+        var index = 0;
+        foreach (var sensor in body.Sensors)
+        {
+            if (graph.Modules.OfType<SensorModule>().All(aModule => aModule.Slot != sensor.Slot))
+                graph.Modules.Insert(index, new SensorModule(sensor));
+            index++;
+        }
+        foreach (var actuator in body.Actuators)
+            if (graph.Modules.OfType<ActuatorModule>().All(aModule => aModule.Slot != actuator.Slot))
+                graph.Modules.Add(new ActuatorModule(actuator));
+        graph.Connections.RemoveAll(aLink =>
+            (graph.Find(aLink.SourceId) is SensorModule source && !source.OutputPorts.Contains(aLink.SourcePort)) ||
+            (graph.Find(aLink.TargetId) is ActuatorModule target && !target.InputPorts.Contains(aLink.TargetPort)));
+        graph.Invalidate();
+    }
+
     /// <summary>Sensory → logika. Świat nie jest zmieniany.</summary>
-    public void Think(ActiveEntity aOwner, World aWorld, float aDelta) =>
+    public void Think(ActiveEntity aOwner, World aWorld, float aDelta)
+    {
+        if (Body is { } body && _synced != (body.Sensors.Count, body.Actuators.Count))
+        {
+            SyncBody();
+            _synced = (body.Sensors.Count, body.Actuators.Count);
+        }
         Graph.Think(new BrainContext(aOwner, aWorld, aDelta));
+    }
+
+    private (int Sensors, int Actuators) _synced = (-1, -1);
 
     /// <summary>Komendy → aktuatory.</summary>
     public void Act(ActiveEntity aOwner, World aWorld, float aDelta) =>

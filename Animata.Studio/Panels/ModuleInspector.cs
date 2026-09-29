@@ -131,6 +131,8 @@ public sealed class ModuleInspector
             return true;
         }, aMono: false);
         name.FontSize = 16;
+        // Węzły zmysłów i napędów to widok ciała — ich nazwą jest slot, nie zmienia się jej tutaj.
+        name.IsReadOnly = aModule is SensorModule or ActuatorModule;
         aPanel.Children.Add(Ui.VStack(6,
             Ui.HStack(8, Ui.IconColored(GraphCanvas.IconOf(aModule), GraphCanvas.ColorOf(aModule), 16), Ui.Header("Inspektor")),
             name,
@@ -478,14 +480,6 @@ public sealed class ModuleInspector
     /// <summary>Nowe moduły z palety dla danego stwora.</summary>
     public static IEnumerable<(string Group, string Name, string Icon, Func<BrainModule> Create, string? Disabled)> Palette(ActiveEntity aCreature, Brain aBrain)
     {
-        foreach (var sensor in aCreature.Body.Sensors)
-        {
-            var name = sensor switch { TargetSensor => "Oko", RaySensor => "Wąsy", JointSensor => "Stawy", _ => sensor.GetType().Name };
-            var source = sensor;
-            yield return ("Zmysły", $"{name} · {sensor.GetType().Name}", sensor is RaySensor ? Icons.Whiskers : Icons.Eye,
-                () => new SensorModule(source) { Name = name }, null);
-        }
-
         var actuatorPorts = aCreature.Body.Actuators.FirstOrDefault()?.InputPorts.ToArray() ?? ["V"];
         yield return ("Logika", "Sieć neuronowa", Icons.Neural, NewNetwork, null);
         yield return ("Logika", "Router", Icons.Router, () => new RouterModule(2, actuatorPorts) { Name = "Router" }, null);
@@ -501,16 +495,6 @@ public sealed class ModuleInspector
             yield return ("Logika", "Chód · kłus", Icons.Spider, () => new GaitModule { Name = "Chód" }, null);
 
         yield return ("Struktura", "Podgraf", Icons.Composite, () => new CompositeModule { Name = "Podgraf" }, null);
-
-        var driven = aBrain.Graph.Descendants().OfType<ActuatorModule>().Select(aModule => aModule.Slot).ToHashSet();
-        foreach (var actuator in aCreature.Body.Actuators)
-        {
-            var target = actuator;
-            var label = actuator is SpineActuator ? aCreature is SpiderCreature ? "Nogi" : "Kręgosłup" : "Koła";
-            yield return ("Ciało", $"{label} · {actuator.GetType().Name.Replace("Actuator", string.Empty)}", actuator is SpineActuator ? Icons.Snake : Icons.Wheel,
-                () => new ActuatorModule(target) { Name = label },
-                driven.Contains(actuator.Slot) ? "Tym aktuatorem steruje już inny moduł (jeden aktuator — jedno sterowanie)." : null);
-        }
     }
 
     /// <summary>Mała sieć 2-4-2 z losowymi wagami; porty i wyrażenia zmienia się w inspektorze.</summary>

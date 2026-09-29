@@ -86,6 +86,8 @@ public static class BrainGraphEditing
             throw new ArgumentException("All grouped modules must belong to this graph.", nameof(aModules));
         if (group.Any(aModule => aModule is SubgraphInputModule or SubgraphOutputModule))
             throw new ArgumentException("Subgraph boundaries cannot be grouped.", nameof(aModules));
+        if (group.Any(aModule => aModule is SensorModule or ActuatorModule))
+            throw new ArgumentException("Zmysły i napędy należą do ciała i zostają na wierzchu mózgu — zgrupuj tylko logikę.", nameof(aModules));
 
         var ids = group.Select(aModule => aModule.Id).ToHashSet();
         var savedModules = aGraph.Modules.ToList();
