@@ -769,31 +769,18 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
     // ---------- zapis i odczyt ----------
 
-    private static readonly FilePickerFileType WorldFileType = new("Świat Animaty")
-    {
-        Patterns = ["*" + WorldFile.Extension, "*.json"]
-    };
-
     private async Task SaveWorldAsync()
     {
-        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
-            return;
         try
         {
             var document = Session.Save();
-            var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = "Zapisz świat",
-                SuggestedFileName = Session.Name + WorldFile.Extension,
-                DefaultExtension = WorldFile.Extension,
-                FileTypeChoices = [WorldFileType],
-                ShowOverwritePrompt = true
-            });
-            if (file is null)
+            if (await WorldFiles.PickSaveAsync(this, Session.Name) is not { } file)
                 return;
-            await using var stream = await file.OpenWriteAsync();
-            await using var writer = new StreamWriter(stream);
-            await writer.WriteAsync(WorldFile.ToJson(document));
+            await using (var stream = await file.OpenWriteAsync())
+            await using (var writer = new StreamWriter(stream))
+                await writer.WriteAsync(WorldFile.ToJson(document));
+            if (file.TryGetLocalPath() is { } path)
+                RecentFiles.Add(path);
             Session.Status = $"zapisano: {file.Name}";
         }
         catch (Exception exception) when (exception is IOException or NotSupportedException or UnauthorizedAccessException)
@@ -804,23 +791,17 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
     private async Task LoadWorldAsync()
     {
-        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
-            return;
-        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Wczytaj świat",
-            AllowMultiple = false,
-            FileTypeFilter = [WorldFileType]
-        });
-        if (files.Count == 0)
+        if (await WorldFiles.PickOpenAsync(this) is not { } file)
             return;
         try
         {
-            await using var stream = await files[0].OpenReadAsync();
+            await using var stream = await file.OpenReadAsync();
             using var reader = new StreamReader(stream);
             var document = WorldFile.FromJson(await reader.ReadToEndAsync());
             _renderer.Select(null);
             Session.Load(document);
+            if (file.TryGetLocalPath() is { } path)
+                RecentFiles.Add(path);
             _listKey = string.Empty;
             _propertiesBuilt = false;
         }

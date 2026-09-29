@@ -21,6 +21,7 @@ public sealed class StudioWindow : Window
     private readonly PanelNavigator _navigator = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     private readonly Stopwatch _clock = new();
+    private int _demoScenes;
 
     public StudioWindow()
     {
@@ -31,10 +32,23 @@ public sealed class StudioWindow : Window
         MinHeight = 700;
         Content = _navigator;
 
-        AddScene(new StudioSession("Scena demo", WorldObjectCatalog.CreateDemo));
-        AddScene(new StudioSession("Węże", WorldObjectCatalog.CreateSnakeScene));
-        AddScene(new StudioSession("Pająki", WorldObjectCatalog.CreateSpiderScene));
-        AddScene(new StudioSession("Wspinaczka", WorldObjectCatalog.CreateClimbScene));
+        AddScene(new StudioSession("Scena demo", WorldObjectCatalog.CreateDemo)
+        {
+            Description = "Dwa autka omijają cylindry w drodze do kuli, dwa walce jadą po wolnym torze. W każdej parze jeden ma gotowy sterownik, drugi sieć do nauczenia."
+        });
+        AddScene(new StudioSession("Węże", WorldObjectCatalog.CreateSnakeScene)
+        {
+            Description = "Wąż z generatorem fali i wąż z siecią pełzną przez niskie klocki do kuli leżącej na najwyższym."
+        });
+        AddScene(new StudioSession("Pająki", WorldObjectCatalog.CreateSpiderScene)
+        {
+            Description = "Pająk z generatorem kłusa i pająk z siecią idą do kuli przez niskie klocki — trzeba nie upaść na brzuch."
+        });
+        AddScene(new StudioSession("Wspinaczka", WorldObjectCatalog.CreateClimbScene)
+        {
+            Description = "Dwa węże owinięte wokół pni: jeden toczy się w górę ręcznym ruchem, drugi ma sieć, która musi się tego nauczyć."
+        });
+        _demoScenes = _scenes.Count;
 
         _navigator.Navigated += UpdateTitle;
         KeyDown += OnKeyDown;
@@ -42,7 +56,8 @@ public sealed class StudioWindow : Window
 
         Opened += (_, _) =>
         {
-            _navigator.Push(new MenuPanel(_scenes.Select(aScene => new MenuScene(aScene.Session, aScene.Panel)).ToList()));
+            _navigator.Push(new MenuPanel(
+                _scenes.Take(_demoScenes).Select(aScene => new MenuScene(aScene.Session, aScene.Panel)).ToList(), OpenFile));
             // Nauka nie startuje sama: stwory z uczonym modułem (fioletowe) mają losowe parametry, uczą się po L / „Ucz”.
             _clock.Start();
             _timer.Start();
@@ -56,6 +71,37 @@ public sealed class StudioWindow : Window
                 panel.Dispose();
         };
     }
+
+    /// <summary>
+    /// Otwiera plik świata jako scenę (nazwa = nazwa pliku) i wchodzi do niej. Plik otwarty już wcześniej w tej sesji
+    /// programu otwiera tę samą scenę. Błąd odczytu — komunikat w oknie z pliku, scena nie powstaje.
+    /// </summary>
+    private void OpenFile(string aPath)
+    {
+        var path = Path.GetFullPath(aPath);
+        if (!_files.TryGetValue(path, out var session))
+        {
+            try
+            {
+                var document = Core.Persistence.WorldFile.FromJson(File.ReadAllText(path));
+                session = new StudioSession(Kit.WorldFiles.SceneName(path), () => Core.Persistence.WorldFile.Restore(document));
+            }
+            catch (Exception exception) when (exception is IOException or NotSupportedException or System.Text.Json.JsonException
+                or InvalidOperationException or ArgumentException or UnauthorizedAccessException)
+            {
+                _ = Kit.Dialogs.ShowAsync(this, "Nie udało się otworzyć pliku", $"{path}\n\n{exception.Message}");
+                return;
+            }
+            _files[path] = session;
+            AddScene(session);
+        }
+        RecentFiles.Add(path);
+        var panel = _scenes.First(aScene => aScene.Session == session).Panel();
+        _navigator.PopTo(0);
+        _navigator.Push(panel, null);
+    }
+
+    private readonly Dictionary<string, StudioSession> _files = new(StringComparer.OrdinalIgnoreCase);
 
     private void AddScene(StudioSession aSession)
     {

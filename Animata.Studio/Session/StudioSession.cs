@@ -47,6 +47,9 @@ public sealed class StudioSession : IDisposable
 
     public string Name { get; }
 
+    /// <summary>Krótki opis sceny do kafla w menu (pusty — bez opisu).</summary>
+    public string Description { get; init; } = string.Empty;
+
     public DemoScene Demo { get; private set; }
     public World World => Demo.World;
     public SnapshotHistory History { get; private set; } = new();
