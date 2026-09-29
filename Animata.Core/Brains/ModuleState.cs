@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Animata.Core.Brains.Modules;
 using Animata.Core.Brains.Neural;
 
 namespace Animata.Core.Brains;
@@ -31,9 +32,19 @@ public abstract record ModuleState
     /// <summary>Czy stan ma tę samą treść (także zawartość tablic). Porównuje zapis JSON — floaty są w nim dokładne.</summary>
     public bool SameAs(ModuleState? aOther) =>
         aOther is not null && (ReferenceEquals(this, aOther) || (GetType() == aOther.GetType() && ToJson() == aOther.ToJson()));
+
+    /// <summary>
+    /// Nowy moduł o kształcie tego stanu (z podanym Id), gotowy na <see cref="BrainModule.RestoreState"/> — dzięki temu
+    /// zapis świata i mózgu odtwarza każdy moduł opisany stanem bez listy typów. Null — stan nie opisuje całego modułu
+    /// (stała, podgraf: zapisuje się je inaczej). Nowy typ modułu: rekord stanu z tą metodą i wpis JsonDerivedType wyżej.
+    /// </summary>
+    public virtual BrainModule? CreateModule(Guid aId) => null;
 }
 
-public sealed record ApproachTargetState(float TurnGain, float StopGap, float SlowdownGap) : ModuleState;
+public sealed record ApproachTargetState(float TurnGain, float StopGap, float SlowdownGap) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new ApproachTargetModule { Id = aId };
+}
 
 public sealed record ConstantState(float Value) : ModuleState;
 
@@ -53,7 +64,10 @@ public sealed record AvoidAndSeekState(
     float SlowdownGap,
     float MinThrottle,
     float TurnAroundGap,
-    float TurnAroundAngle) : ModuleState;
+    float TurnAroundAngle) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new AvoidAndSeekModule(RayAngles) { Id = aId };
+}
 
 /// <summary>Pełny stan sieci: kształt, wagi, biasy oraz powiązania portów (głęboka kopia).</summary>
 public sealed record NeuralNetworkState(
@@ -67,13 +81,18 @@ public sealed record NeuralNetworkState(
     /// <summary>Liczba uczonych parametrów (wagi + biasy).</summary>
     [JsonIgnore]
     public int ParameterCount => Weights.Sum(aLayer => aLayer.Sum(aNeuron => aNeuron.Length)) + Biases.Sum(aLayer => aLayer.Length);
+
+    public override BrainModule CreateModule(Guid aId) => new NeuralNetworkModule(new NeuralNetwork([.. Layers])) { Id = aId };
 }
 
 /// <summary>Stan podgrafu: stany modułów wnętrza (po Id), rekurencyjnie. Struktury grafu nie zapisuje.</summary>
 public sealed record CompositeState(ModuleSnapshot[] Modules) : ModuleState;
 
 /// <summary>Stan generatora chodu czworonoga: 6 uczonych parametrów.</summary>
-public sealed record GaitState(float Stride, float Lift, float Knee, float KneeSwing, float Frequency, float TurnGain) : ModuleState;
+public sealed record GaitState(float Stride, float Lift, float Knee, float KneeSwing, float Frequency, float TurnGain) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new GaitModule { Id = aId };
+}
 
 /// <summary>Stan CPG węża: liczba stawów (kształt, należy do ciała) i 6 uczonych parametrów.</summary>
 public sealed record CpgState(
@@ -84,4 +103,7 @@ public sealed record CpgState(
     float TurnGain,
     float PitchAmplitude,
     float PitchPhase,
-    bool Grip = false) : ModuleState;
+    bool Grip = false) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new CpgModule(Joints) { Id = aId };
+}

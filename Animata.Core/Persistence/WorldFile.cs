@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
@@ -15,53 +16,31 @@ namespace Animata.Core.Persistence;
 
 /// <summary>
 /// Zapisany świat (JSON). Format w <see cref="WorldFile.Format"/> — przy zmianie formatu podbić.
-/// Zapisuje się: encje (z Id, żeby oko mogło wskazywać kulę), ich pozy i wymiary, parametry ciał (liczba wąsów,
-/// segmentów), cel oka i pełny mózg: strukturę (moduły, porty, połączenia, podgrafy, położenia węzłów w edytorze),
-/// stan modułów (wagi, parametry) i snapshoty. Nie zapisuje się stanu chwilowego (pamięć sterowników, faza CPG,
-/// prędkości w fizyce) ani nauki w toku — po wczytaniu nauka startuje od zapisanych parametrów.
+/// Zapisuje się: obiekty (z Id, żeby oko mogło wskazywać inny obiekt) w jednym kształcie dla każdego rodzaju — rodzaj
+/// z rejestru (<see cref="EntityTypes"/>), poza, ustawienia (<see cref="SettingAttribute"/>) obiektu, jego zmysłów
+/// i napędów (po slotach), pozy części wygiętego stwora i pełny mózg: strukturę (moduły, porty, połączenia, podgrafy,
+/// położenia węzłów w edytorze), stan modułów (wagi, parametry) i snapshoty. Nie zapisuje się stanu chwilowego
+/// (pamięć sterowników, faza CPG, prędkości w fizyce) ani nauki w toku — po wczytaniu nauka startuje od zapisanych parametrów.
 /// </summary>
 public sealed record WorldDocument(int Format, string Name, double Time, IReadOnlyList<EntityDocument> Entities);
 
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(BoxDocument), "box")]
-[JsonDerivedType(typeof(CylinderDocument), "cylinder")]
-[JsonDerivedType(typeof(SphereDocument), "sphere")]
-[JsonDerivedType(typeof(CarDocument), "car")]
-[JsonDerivedType(typeof(CylinderCreatureDocument), "cylinderCreature")]
-[JsonDerivedType(typeof(SnakeDocument), "snake")]
-[JsonDerivedType(typeof(SpiderDocument), "spider")]
-public abstract record EntityDocument(Guid Id, string Name, float[] Position, float[] Rotation);
-
-/// <summary>Klocek: środek spodu, obrót, wymiary (X, Y, wysokość), kolor, blokada (podłoga).</summary>
-public sealed record BoxDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Size, float[] Color, bool Locked)
-    : EntityDocument(Id, Name, Position, Rotation);
-
-/// <summary>Cylinder: podstawa, promień, wysokość, tarcie chwytne (0 — brak), kolor, blokada.</summary>
-public sealed record CylinderDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius, float Height, float Grip,
-    float[] Color, bool Locked) : EntityDocument(Id, Name, Position, Rotation);
-
-/// <summary>Kula (cel oka): spód, promień, blokada.</summary>
-public sealed record SphereDocument(Guid Id, string Name, float[] Position, float[] Rotation, float Radius, bool Locked)
-    : EntityDocument(Id, Name, Position, Rotation);
-
-public sealed record CarDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Whiskers,
-    float WhiskerRange, Guid? Target, BrainDocument Brain, DriveDocument? Drive = null) : EntityDocument(Id, Name, Position, Rotation);
-
-public sealed record CylinderCreatureDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, Guid? Target,
-    BrainDocument Brain, DriveDocument? Drive = null) : EntityDocument(Id, Name, Position, Rotation);
-
-/// <summary>Ustawienia napędu (autko: prędkości, skręt, moment; walec: prędkość, obrót, moment). Brak = domyślne.</summary>
-public sealed record DriveDocument(float MaxSpeed, float MaxReverseSpeed, float MaxSteerAngle, float MaxTurnSpeed, float DriveTorque);
-
 /// <summary>
-/// Wąż; Parts — pozy części (x, y, z, qx, qy, qz, qw na część), gdy wąż nie leży prosto (np. owinięty wokół pnia),
-/// żeby wczytał się w tej samej pozie.
+/// Obiekt świata — ten sam kształt dla każdego rodzaju. <paramref name="Type"/> — identyfikator z <see cref="EntityTypes"/>;
+/// <paramref name="Settings"/> — ustawienia obiektu; <paramref name="Sensors"/> / <paramref name="Actuators"/> — ustawienia
+/// zmysłów i napędów po slotach (tylko te, które mają ustawienia); <paramref name="Parts"/> — pozy części (x, y, z, qx, qy, qz, qw
+/// na część), gdy stwór nie stoi w pozie spoczynkowej (np. wąż owinięty wokół pnia); <paramref name="Brain"/> — mózg stwora.
 /// </summary>
-public sealed record SnakeDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color, int Segments,
-    Guid? Target, BrainDocument Brain, bool Climber = false, float[]? Parts = null) : EntityDocument(Id, Name, Position, Rotation);
-
-public sealed record SpiderDocument(Guid Id, string Name, float[] Position, float[] Rotation, float[] Color,
-    Guid? Target, BrainDocument Brain) : EntityDocument(Id, Name, Position, Rotation);
+public sealed record EntityDocument(
+    Guid Id,
+    string Type,
+    string Name,
+    float[] Position,
+    float[] Rotation,
+    IReadOnlyDictionary<string, JsonElement> Settings,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>>? Sensors = null,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>>? Actuators = null,
+    float[]? Parts = null,
+    BrainDocument? Brain = null);
 
 /// <summary>Mózg: moduły, połączenia, położenia węzłów w edytorze (Id → x, y) i snapshoty.</summary>
 public sealed record BrainDocument(
@@ -95,10 +74,10 @@ public sealed record CompositeNode(Guid Id, string Name, Guid InputId, Guid Outp
 public static class WorldFile
 {
     /// <summary>
-    /// Format 3: bryły geometryczne (box, cylinder, sphere); w mózgu bez węzłów zmysłów i napędów (to widok ciała).
-    /// Starsze formaty nie są czytane.
+    /// Format 4: każdy obiekt w jednym kształcie (<see cref="EntityDocument"/>: rodzaj, ustawienia, sloty, części, mózg).
+    /// Format 3 (osobny rekord na rodzaj stwora) jest czytany i przepisywany na 4 (<see cref="WorldFileMigration"/>); starsze nie.
     /// </summary>
-    public const int Format = 3;
+    public const int Format = 4;
 
     /// <summary>Sugerowane rozszerzenie pliku.</summary>
     public const string Extension = ".animata.json";
@@ -113,15 +92,18 @@ public static class WorldFile
 
     public static WorldDocument FromJson(string aJson)
     {
-        var document = JsonSerializer.Deserialize<WorldDocument>(aJson, Options) ?? throw new JsonException("Pusty plik świata.");
-        if (document.Format != Format)
-            throw new NotSupportedException($"Plik świata ma format {document.Format}, a ta wersja czyta tylko format {Format}.");
-        return document;
+        var node = JsonNode.Parse(aJson) as JsonObject ?? throw new JsonException("Pusty plik świata.");
+        var format = node["Format"]?.GetValue<int>() ?? 0;
+        if (format == WorldFileMigration.From)
+            node = WorldFileMigration.Migrate(node);
+        else if (format != Format)
+            throw new NotSupportedException($"Plik świata ma format {format}, a ta wersja czyta formaty {WorldFileMigration.From} i {Format}.");
+        return node.Deserialize<WorldDocument>(Options) ?? throw new JsonException("Pusty plik świata.");
     }
 
     // ---------- świat → dokument ----------
 
-    /// <summary>Stan świata do zapisu. Rzuca <see cref="NotSupportedException"/> dla encji albo modułu, którego format nie zna.</summary>
+    /// <summary>Stan świata do zapisu. Rzuca <see cref="NotSupportedException"/> dla obiektu spoza rejestru albo nieznanego modułu.</summary>
     public static WorldDocument Capture(World aWorld, string aName = "") =>
         new(Format, aName, aWorld.Time, [.. aWorld.Entities.Select(CaptureEntity)]);
 
@@ -133,101 +115,73 @@ public static class WorldFile
 
     /// <summary>
     /// Nowe encje z dokumentów (wklej): każda dostaje nowe Id i pozycję przesuniętą o <paramref name="aOffset"/>; mózgi,
-    /// snapshoty i ustawienia są kopiami. Cel oka wskazujący na encję wklejaną razem z nim przechodzi na jej kopię,
-    /// inny cel zostaje (kopia stwora poluje na tę samą kulkę co oryginał). Nic nie trafia do świata — to robi wołający.
+    /// snapshoty i ustawienia są kopiami. Ustawienie zmysłu wskazujące encję wklejaną razem z nim (np. cel oka) przechodzi
+    /// na jej kopię, inne zostaje (kopia stwora poluje na tę samą kulę co oryginał). Nic nie trafia do świata — to robi wołający.
     /// </summary>
     public static IReadOnlyList<Entity> RestoreCopies(IReadOnlyList<EntityDocument> aDocuments, Vector3 aOffset)
     {
         var ids = aDocuments.ToDictionary(aDocument => aDocument.Id, _ => Guid.NewGuid());
-        Guid? Remap(Guid? aTarget) => aTarget is { } target && ids.TryGetValue(target, out var copy) ? copy : aTarget;
+        JsonElement Remap(JsonElement aValue) =>
+            aValue.ValueKind == JsonValueKind.String && Guid.TryParse(aValue.GetString(), out var id) && ids.TryGetValue(id, out var copy)
+                ? JsonSerializer.SerializeToElement(copy)
+                : aValue;
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>>? RemapSlots(
+            IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>>? aSlots) =>
+            aSlots?.ToDictionary(aSlot => aSlot.Key,
+                aSlot => (IReadOnlyDictionary<string, JsonElement>)aSlot.Value.ToDictionary(aValue => aValue.Key, aValue => Remap(aValue.Value)));
 
-        var copies = new List<Entity>(aDocuments.Count);
-        foreach (var document in aDocuments)
-        {
-            var position = ToVector(document.Position) + aOffset;
-            EntityDocument moved = document switch
+        return
+        [
+            .. aDocuments.Select(aDocument => RestoreEntity(aDocument with
             {
-                CarDocument car => car with { Target = Remap(car.Target) },
-                CylinderCreatureDocument cylinder => cylinder with { Target = Remap(cylinder.Target) },
-                SnakeDocument snake => snake with { Target = Remap(snake.Target) },
-                SpiderDocument spider => spider with { Target = Remap(spider.Target) },
-                _ => document
-            };
-            copies.Add(RestoreEntity(moved with { Id = ids[document.Id], Position = Vector(position) }));
-        }
-        return copies;
+                Id = ids[aDocument.Id],
+                Position = Vector(ToVector(aDocument.Position) + aOffset),
+                Sensors = RemapSlots(aDocument.Sensors),
+                Actuators = RemapSlots(aDocument.Actuators)
+            }))
+        ];
     }
 
     private static EntityDocument CaptureEntity(Entity aEntity)
     {
-        var position = Vector(aEntity.Body.Position);
-        var rotation = Rotation(aEntity.Body.Rotation);
-        return aEntity switch
-        {
-            Box box => new BoxDocument(box.Id, box.Name, position, rotation, Vector(box.Size), Vector(box.Color), box.Locked),
-            Cylinder cylinder => new CylinderDocument(cylinder.Id, cylinder.Name, position, rotation, cylinder.Radius, cylinder.Height,
-                cylinder.Grip, Vector(cylinder.Color), cylinder.Locked),
-            Sphere sphere => new SphereDocument(sphere.Id, sphere.Name, position, rotation, sphere.Radius, sphere.Locked),
-            CarCreature car => new CarDocument(car.Id, car.Name, position, rotation, Vector(car.Color),
-                WorldObjectCatalog.WhiskerCountOf(car), car.Body.Sensors.OfType<RaySensor>().FirstOrDefault()?.Range ?? WorldObjectCatalog.WhiskerRange,
-                TargetOf(car), CaptureBrain(car.Brain!), DriveOf(car)),
-            CylinderCreature cylinder => new CylinderCreatureDocument(cylinder.Id, cylinder.Name, position, rotation, Vector(cylinder.Color),
-                TargetOf(cylinder), CaptureBrain(cylinder.Brain!), DriveOf(cylinder)),
-            SnakeCreature snake => new SnakeDocument(snake.Id, snake.Name, position, rotation, Vector(snake.Color), snake.Segments,
-                TargetOf(snake), CaptureBrain(snake.Brain!), snake.Climber, PartsOf(snake)),
-            SpiderCreature spider => new SpiderDocument(spider.Id, spider.Name, position, rotation, Vector(spider.Color),
-                TargetOf(spider), CaptureBrain(spider.Brain!)),
-            _ => throw new NotSupportedException($"Zapis nie zna encji {aEntity.GetType().Name}.")
-        };
+        var type = EntityTypes.Of(aEntity) ?? throw new NotSupportedException($"Zapis nie zna encji {aEntity.GetType().Name}.");
+        var creature = aEntity as ActiveEntity;
+        return new EntityDocument(aEntity.Id, type.Id, aEntity.Name, Vector(aEntity.Body.Position), Rotation(aEntity.Body.Rotation),
+            Settings.Capture(aEntity),
+            creature is null ? null : SlotSettings(creature.Body.Sensors.Select(aSensor => (aSensor.Slot, (object)aSensor))),
+            creature is null ? null : SlotSettings(creature.Body.Actuators.Select(aActuator => (aActuator.Slot, (object)aActuator))),
+            aEntity is ArticulatedCreature articulated ? PartsOf(articulated) : null,
+            creature?.Brain is { } brain ? CaptureBrain(brain) : null);
     }
 
-    /// <summary>Pozy części węża albo null, gdy leży prosto (wystarczy poza korzenia).</summary>
-    private static float[]? PartsOf(SnakeCreature aSnake)
+    /// <summary>Ustawienia slotów (tylko tych, które je mają) albo null, gdy żaden nie ma.</summary>
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>>? SlotSettings(IEnumerable<(string Slot, object Item)> aSlots)
     {
-        var straight = true;
-        for (var joint = 0; joint < aSnake.JointCount && straight; joint++)
-            straight = MathF.Abs(aSnake.JointYaw(joint)) < 1e-3f && MathF.Abs(aSnake.JointPitch(joint)) < 1e-3f;
-        if (straight)
+        var slots = new Dictionary<string, IReadOnlyDictionary<string, JsonElement>>();
+        foreach (var (slot, item) in aSlots)
+            if (Settings.Capture(item) is { Count: > 0 } values)
+                slots[slot] = values;
+        return slots.Count > 0 ? slots : null;
+    }
+
+    /// <summary>Pozy części albo null, gdy stawy kulowe stwora są proste (wystarczy poza korzenia i poza spoczynkowa).</summary>
+    private static float[]? PartsOf(ArticulatedCreature aCreature)
+    {
+        var bent = false;
+        for (var joint = 0; joint < aCreature.JointCount && !bent; joint++)
+            bent = aCreature.Plan.Joints[joint].Kind == Bodies.JointKind.Ball &&
+                   (MathF.Abs(aCreature.JointYaw(joint)) >= 1e-3f || MathF.Abs(aCreature.JointPitch(joint)) >= 1e-3f);
+        if (!bent)
             return null;
-        var parts = new float[7 * aSnake.PartPositions.Count];
-        for (var part = 0; part < aSnake.PartPositions.Count; part++)
+        var parts = new float[7 * aCreature.PartPositions.Count];
+        for (var part = 0; part < aCreature.PartPositions.Count; part++)
         {
-            var position = aSnake.PartPositions[part];
-            var orientation = aSnake.PartOrientations[part];
+            var position = aCreature.PartPositions[part];
+            var orientation = aCreature.PartOrientations[part];
             new[] { position.X, position.Y, position.Z, orientation.X, orientation.Y, orientation.Z, orientation.W }.CopyTo(parts, 7 * part);
         }
         return parts;
     }
-
-    private static DriveDocument? DriveOf(Entity aCreature) => aCreature.Body.Actuators.FirstOrDefault() switch
-    {
-        Actuators.SteeringDriveActuator steering => new DriveDocument(steering.MaxSpeed, steering.MaxReverseSpeed, steering.MaxSteerAngle, 0, steering.DriveTorque),
-        Actuators.DiskDriveActuator disk => new DriveDocument(disk.MaxSpeed, 0, 0, disk.MaxTurnSpeed, disk.DriveTorque),
-        _ => null
-    };
-
-    private static void ApplyDrive(Entity aCreature, DriveDocument? aDrive)
-    {
-        if (aDrive is null)
-            return;
-        foreach (var actuator in aCreature.Body.Actuators)
-            switch (actuator)
-            {
-                case Actuators.SteeringDriveActuator steering:
-                    steering.MaxSpeed = aDrive.MaxSpeed;
-                    steering.MaxReverseSpeed = aDrive.MaxReverseSpeed;
-                    steering.MaxSteerAngle = aDrive.MaxSteerAngle;
-                    steering.DriveTorque = aDrive.DriveTorque;
-                    break;
-                case Actuators.DiskDriveActuator disk:
-                    disk.MaxSpeed = aDrive.MaxSpeed;
-                    disk.MaxTurnSpeed = aDrive.MaxTurnSpeed;
-                    disk.DriveTorque = aDrive.DriveTorque;
-                    break;
-            }
-    }
-
-    private static Guid? TargetOf(Entity aCreature) => aCreature.Body.Sensors.OfType<TargetSensor>().FirstOrDefault()?.TargetId;
 
     /// <summary>Mózg stwora: graf, snapshoty i wskazanie bieżącego snapshotu (<see cref="Brain.CurrentSnapshot"/>).</summary>
     internal static BrainDocument CaptureBrain(Brain aBrain) =>
@@ -249,8 +203,8 @@ public static class WorldFile
         RouterModule router => new RouterNode(router.Id, router.Name, router.Channels, [.. router.Ports]),
         CompositeModule composite => new CompositeNode(composite.Id, composite.Name, composite.Input.Id, composite.Output.Id,
             [.. composite.InputPorts], [.. composite.OutputPorts], CaptureBrain(composite.Inner, [], [composite.Input, composite.Output])),
-        NeuralNetworkModule or CpgModule or GaitModule or AvoidAndSeekModule or ApproachTargetModule =>
-            new StateNode(aModule.Id, aModule.Name, aModule.CaptureState()!),
+        _ when aModule.CaptureState() is { } state && state.CreateModule(aModule.Id) is not null =>
+            new StateNode(aModule.Id, aModule.Name, state),
         _ => throw new NotSupportedException($"Zapis nie zna modułu {aModule.GetType().Name}.")
     };
 
@@ -281,80 +235,45 @@ public static class WorldFile
 
     private static Entity RestoreEntity(EntityDocument aDocument)
     {
-        var position = ToVector(aDocument.Position);
-        var rotation = ToRotation(aDocument.Rotation);
-        Entity entity;
-        switch (aDocument)
+        var type = EntityTypes.Find(aDocument.Type) ?? throw new NotSupportedException($"Nieznany rodzaj obiektu w pliku: {aDocument.Type}.");
+        var entity = type.Create();
+        // Kolejność: ustawienia obiektu (mogą przebudować ciało — segmenty), ustawienia slotów, mózg, na końcu poza.
+        Settings.Apply(entity, aDocument.Settings);
+        if (entity is ActiveEntity creature)
         {
-            case BoxDocument box:
-                entity = new Box
-                {
-                    Id = box.Id, Size = ToVector(box.Size), Color = ToVector(box.Color), Locked = box.Locked,
-                    Body = { Position = position, Rotation = rotation }
-                };
-                break;
-            case CylinderDocument cylinder:
-                entity = new Cylinder
-                {
-                    Id = cylinder.Id, Radius = cylinder.Radius, Height = cylinder.Height, Grip = cylinder.Grip, Color = ToVector(cylinder.Color),
-                    Locked = cylinder.Locked, Body = { Position = position, Rotation = rotation }
-                };
-                break;
-            case SphereDocument sphere:
-                entity = new Sphere { Id = sphere.Id, Radius = sphere.Radius, Locked = sphere.Locked, Body = { Position = position, Rotation = rotation } };
-                break;
-            case CarDocument car:
-            {
-                var creature = WorldObjectCatalog.CreateCar(position, 0, ToVector(car.Color), car.Target,
-                    WorldObjectCatalog.CreateAvoidController(car.Whiskers), car.Whiskers);
-                if (creature.Body.Sensors.OfType<RaySensor>().FirstOrDefault() is { } whiskers)
-                    whiskers.Range = car.WhiskerRange;
-                RestoreBrain(creature.Brain!, car.Brain);
-                ApplyDrive(creature, car.Drive);
-                entity = creature;
-                break;
-            }
-            case CylinderCreatureDocument cylinder:
-            {
-                var creature = WorldObjectCatalog.CreateSeeker(position, ToVector(cylinder.Color), cylinder.Target, new ApproachTargetModule());
-                RestoreBrain(creature.Brain!, cylinder.Brain);
-                ApplyDrive(creature, cylinder.Drive);
-                entity = creature;
-                break;
-            }
-            case SnakeDocument snake:
-            {
-                var creature = WorldObjectCatalog.CreateSnake(position, 0, ToVector(snake.Color), snake.Target,
-                    WorldObjectCatalog.CreateCpg(snake.Segments), snake.Segments);
-                RestoreBrain(creature.Brain!, snake.Brain);
-                creature.Climber = snake.Climber;
-                entity = creature;
-                break;
-            }
-            case SpiderDocument spider:
-            {
-                var creature = WorldObjectCatalog.CreateSpider(position, 0, ToVector(spider.Color), spider.Target, new GaitModule());
-                RestoreBrain(creature.Brain!, spider.Brain);
-                entity = creature;
-                break;
-            }
-            default:
-                throw new NotSupportedException($"Nieznany rodzaj encji w pliku: {aDocument.GetType().Name}.");
+            foreach (var (slot, values) in aDocument.Sensors ?? Empty)
+                if (creature.Body.FindSensor(slot) is { } sensor)
+                    Settings.Apply(sensor, values);
+            foreach (var (slot, values) in aDocument.Actuators ?? Empty)
+                if (creature.Body.FindActuator(slot) is { } actuator)
+                    Settings.Apply(actuator, values);
+            if (aDocument.Brain is { } brain && creature.Brain is { } target)
+                RestoreBrain(target, brain);
         }
 
         entity.AssignId(aDocument.Id);
         entity.Name = aDocument.Name;
-        if (aDocument is SnakeDocument { Parts: { } parts } && entity is SnakeCreature bent && parts.Length == 7 * bent.PartPositions.Count)
+        var position = ToVector(aDocument.Position);
+        var rotation = ToRotation(aDocument.Rotation);
+        if (aDocument.Parts is { } parts && entity is ArticulatedCreature bent && parts.Length == 7 * bent.PartPositions.Count)
         {
             var count = bent.PartPositions.Count;
             bent.PlaceParts(
                 [.. Enumerable.Range(0, count).Select(aPart => new Vector3(parts[7 * aPart], parts[7 * aPart + 1], parts[7 * aPart + 2]))],
                 [.. Enumerable.Range(0, count).Select(aPart => new Quaternion(parts[7 * aPart + 3], parts[7 * aPart + 4], parts[7 * aPart + 5], parts[7 * aPart + 6]))]);
         }
-        else if (!entity.Locked)
+        else if (entity.Locked)
+        {
+            entity.Body.Position = position;
+            entity.Body.Rotation = rotation;
+        }
+        else
             entity.Place(position, rotation);
         return entity;
     }
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>> Empty =
+        new Dictionary<string, IReadOnlyDictionary<string, JsonElement>>();
 
     /// <summary>
     /// Zastępuje graf mózgu zapisanym (moduły, połączenia, położenia), dokłada zapisane snapshoty i przywraca bieżący.
@@ -415,22 +334,15 @@ public static class WorldFile
 
     private static BrainModule RestoreStateModule(StateNode aDocument)
     {
-        BrainModule module = aDocument.State switch
-        {
-            NeuralNetworkState network => new NeuralNetworkModule(new NeuralNetwork([.. network.Layers])) { Id = aDocument.Id },
-            CpgState cpg => new CpgModule(cpg.Joints) { Id = aDocument.Id },
-            GaitState => new GaitModule { Id = aDocument.Id },
-            AvoidAndSeekState avoid => new AvoidAndSeekModule(avoid.RayAngles) { Id = aDocument.Id },
-            ApproachTargetState => new ApproachTargetModule { Id = aDocument.Id },
-            _ => throw new NotSupportedException($"Nieznany stan modułu w pliku: {aDocument.State.GetType().Name}.")
-        };
+        var module = aDocument.State.CreateModule(aDocument.Id)
+            ?? throw new NotSupportedException($"Nieznany stan modułu w pliku: {aDocument.State.GetType().Name}.");
         module.RestoreState(aDocument.State);
         return module;
     }
 
     // ---------- liczby ----------
 
-    private static float[] Vector(Vector3 aVector) => [aVector.X, aVector.Y, aVector.Z];
+    internal static float[] Vector(Vector3 aVector) => [aVector.X, aVector.Y, aVector.Z];
 
     private static float[] Rotation(Quaternion aRotation) => [aRotation.X, aRotation.Y, aRotation.Z, aRotation.W];
 

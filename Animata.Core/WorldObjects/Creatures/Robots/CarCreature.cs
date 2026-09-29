@@ -1,7 +1,10 @@
 using System.Numerics;
 using Animata.Core.Bodies;
 using Animata.Core.Brains;
+using Animata.Core.Actuators;
 using Animata.Core.Entities;
+using Animata.Core.Sensors;
+using Animata.Core.Training;
 
 namespace Animata.Core.WorldObjects;
 
@@ -32,6 +35,33 @@ public sealed class CarCreature : ArticulatedCreature
     public float Height => DefaultHeight;
 
     public override float BoundingRadius => 0.5f * MathF.Max(Length, Width);
+
+    /// <summary>
+    /// Oko „Eye”, wąsy „Whiskers” (<see cref="WorldObjectCatalog.DefaultWhiskers"/> w wachlarzu 120°, zasięg 3 m — liczbę
+    /// zmienia się ustawieniem kątów albo <see cref="WhiskerRewiring.SetCount"/>), kierownica „Wheels”.
+    /// </summary>
+    public override void Equip()
+    {
+        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
+        Body.Sensors.Add(new RaySensor(WorldObjectCatalog.WhiskerAnglesFor(WorldObjectCatalog.DefaultWhiskers), WorldObjectCatalog.WhiskerRange)
+            { Slot = "Whiskers" });
+        Body.Actuators.Add(new SteeringDriveActuator { Slot = "Wheels" });
+        base.Equip();
+    }
+
+    public override IReadOnlyList<BrainPreset> BrainPresets =>
+    [
+        new("Sieć neuronowa", "wejścia: cel i wąsy, 2 warstwy ukryte, losowe wagi",
+            () => WorldObjectCatalog.CreateCarNeuralModule(WorldObjectCatalog.WhiskerCountOf(this), WorldObjectCatalog.DefaultCarHidden)),
+        new("Sterownik omijania", "AvoidAndSeek: omija przeszkody wąsami i jedzie do celu",
+            () => WorldObjectCatalog.CreateAvoidController(WorldObjectCatalog.WhiskerCountOf(this)), true)
+    ];
+
+    public override SeekRig TrainingRig => WorldObjectCatalog.IsValidWhiskerCount(WorldObjectCatalog.WhiskerCountOf(this))
+        ? SeekRigs.CarWith(WorldObjectCatalog.WhiskerCountOf(this))
+        : SeekRigs.Car;
+
+    public override string Describe() => $"CarCreature · {Length:0.##} × {Width:0.##} × {Height:0.##} m · obrys r {BoundingRadius:0.##}";
 
     /// <summary>
     /// Nadwozie 3 kg z dołem na wysokości środków kół; koła 0.3 kg (tarcie 1.2) na zawieszeniu 4 cm,

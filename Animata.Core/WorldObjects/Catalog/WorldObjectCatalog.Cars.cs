@@ -56,15 +56,13 @@ public static partial class WorldObjectCatalog
     public static CarCreature CreateCar(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController,
         int aWhiskers = DefaultWhiskers)
     {
+        var angles = WhiskerAnglesFor(aWhiskers);
         var brain = new Brain();
         var car = new CarCreature(brain) { Color = aColor };
         car.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
-        var eye = new TargetSensor { Slot = "Eye", TargetId = aTargetId };
-        var whiskers = new RaySensor(WhiskerAnglesFor(aWhiskers), WhiskerRange) { Slot = "Whiskers" };
-        var wheels = new SteeringDriveActuator { Slot = "Wheels" };
-        car.Body.Sensors.Add(eye);
-        car.Body.Sensors.Add(whiskers);
-        car.Body.Actuators.Add(wheels);
+        car.Equip();
+        car.Body.Sensors.OfType<RaySensor>().Single().SetAngles(angles);
+        Aim(car, aTargetId);
         BuildBrain(brain, aController);
         return car;
     }

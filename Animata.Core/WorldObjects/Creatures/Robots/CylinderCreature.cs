@@ -1,7 +1,11 @@
 using System.Numerics;
 using Animata.Core.Bodies;
 using Animata.Core.Brains;
+using Animata.Core.Actuators;
+using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
+using Animata.Core.Sensors;
+using Animata.Core.Training;
 
 namespace Animata.Core.WorldObjects;
 
@@ -28,6 +32,26 @@ public sealed class CylinderCreature : ArticulatedCreature
     public float Height => DefaultHeight;
 
     public override float BoundingRadius => Radius;
+
+    /// <summary>Oko „Eye” i napęd różnicowy „Wheels”.</summary>
+    public override void Equip()
+    {
+        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
+        Body.Actuators.Add(new DiskDriveActuator { Slot = "Wheels" });
+        base.Equip();
+    }
+
+    public override IReadOnlyList<BrainPreset> BrainPresets =>
+    [
+        new("Sieć neuronowa", "wejścia: cel, 2 warstwy ukryte, losowe wagi",
+            () => WorldObjectCatalog.CreateCylinderNeuralModule(WorldObjectCatalog.DefaultCylinderHidden)),
+        new("Sieć z ręcznymi wagami", "3-6-2 ustawiona ręcznie tak, że jedzie do celu", WorldObjectCatalog.CreateCylinderNeuralModule, true),
+        new("Sterownik celu", "ApproachTarget: skręca do celu i jedzie", () => new ApproachTargetModule { Name = "Approach" }, true)
+    ];
+
+    public override SeekRig TrainingRig => SeekRigs.Disk;
+
+    public override string Describe() => $"CylinderCreature · r {Radius:0.##} · h {Height:0.##} m";
 
     public static BodyPlan DefaultPlan()
     {

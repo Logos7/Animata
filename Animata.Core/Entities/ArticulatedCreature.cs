@@ -63,6 +63,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
 
     public BodyPlan Plan { get; private set; }
 
+    [Setting]
     public Vector3 Color { get; set; } = new(0.36f, 0.72f, 0.42f);
 
     public override float BoundingRadius => Plan.Root.Radius;

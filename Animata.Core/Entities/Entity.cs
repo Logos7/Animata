@@ -36,6 +36,7 @@ public abstract class Entity
     /// Zablokowana (np. klocek-podłoga): nie przesuwa jej mysz, panel, <see cref="Place"/> ani przyciąganie do terenu,
     /// UI jej nie usuwa ani nie kopiuje. Da się ją zaznaczyć i zmienić we właściwościach (tam też się ją odblokowuje).
     /// </summary>
+    [Setting]
     public bool Locked { get; set; }
 
     /// <summary>

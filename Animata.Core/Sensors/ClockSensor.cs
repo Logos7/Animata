@@ -17,6 +17,7 @@ public sealed class ClockSensor : Sensor
     private readonly Dictionary<string, float> _readings = new() { [SinPort] = 0, [CosPort] = 1 };
 
     /// <summary>Częstotliwość w Hz (domyślnie jak ręczne CPG węża).</summary>
+    [Setting]
     public float Frequency { get; set; } = 1.2f;
 
     public override IReadOnlyList<string> OutputPorts => Ports;

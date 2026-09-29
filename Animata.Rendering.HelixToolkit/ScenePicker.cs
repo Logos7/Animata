@@ -10,13 +10,10 @@ namespace Animata.Rendering.HelixToolkit;
 
 /// <summary>
 /// Picking myszą: promień z kamery przez piksel i trafienia w uproszczone bryły encji
-/// (kula, pionowe walce: walec, autko, cylinder; klocki — także zablokowane, np. podłoga). Obrót ciał jest tylko wokół Z, więc walce zostają pionowe.
+/// (kula, pionowy cylinder, klocek — także zablokowany, np. podłoga; stwory — części jako kule). Obrót brył jest tylko wokół Z, więc cylindry zostają pionowe.
 /// </summary>
 internal static class ScenePicker
 {
-    /// <summary>Nadwozie autka wisi na kołach: dół na wysokości promienia koła (hitbox autka to walec od ziemi).</summary>
-    private const float CarClearance = 0.13f;
-
     /// <summary>
     /// Promień przez punkt ekranu. Układ prawoskrętny (LookAtRH): prawo = przód × góra, jak w FlyCameraController —
     /// odwrotna kolejność (góra × przód) daje lustro w poziomie i przeciąganie po skosie „obraca się” o 90°.
@@ -91,9 +88,6 @@ internal static class ScenePicker
             var hit = entity switch
             {
                 Sphere sphere => HitBall(sphere, aOrigin, aDirection),
-                CylinderCreature cylinder => HitCylinder(cylinder.Body, cylinder.Radius, cylinder.Height, aOrigin, aDirection),
-                CarCreature car => HitCylinder(car.Body, 0.5f * MathF.Max(car.Length, car.Width),
-                    CarClearance + car.Height, aOrigin, aDirection),
                 Cylinder cylinder => HitCylinder(cylinder.Body, cylinder.Radius, cylinder.Height, aOrigin, aDirection),
                 Box box => HitBox(box, aOrigin, aDirection),
                 ArticulatedCreature body => HitParts(body, aOrigin, aDirection),
@@ -108,14 +102,21 @@ internal static class ScenePicker
         return nearest;
     }
 
-    /// <summary>Części stwora jako kule (kapsuła — kula obejmująca całą kapsułę).</summary>
+    /// <summary>Części stwora jako kule obejmujące (ten sam test dla każdego stwora z części).</summary>
     private static float? HitParts(ArticulatedCreature aCreature, Vector3 aOrigin, Vector3 aDirection)
     {
         float? best = null;
         for (var index = 0; index < aCreature.PartPositions.Count; index++)
         {
             var part = aCreature.Plan.Parts[index];
-            var radius = part.Shape == PartShape.Capsule ? part.Size.X + part.Size.Y / 2 : part.Radius;
+            // Kula obejmująca część: kapsuła — cała długość, klocek — pół przekątnej, walec — promień i pół szerokości.
+            var radius = part.Shape switch
+            {
+                PartShape.Capsule => part.Size.X + part.Size.Y / 2,
+                PartShape.Box => part.Size.Length() / 2,
+                PartShape.Cylinder => new Vector2(part.Size.X, part.Size.Y / 2).Length(),
+                _ => part.Size.X
+            };
             if (HitSphere(aCreature.PartPositions[index], radius, aOrigin, aDirection) is float distance && (best is null || distance < best))
                 best = distance;
         }

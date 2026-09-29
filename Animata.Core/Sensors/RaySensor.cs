@@ -57,8 +57,18 @@ public sealed class RaySensor : Sensor
     /// <summary>Kąty promieni w radianach, w układzie ciała.</summary>
     public IReadOnlyList<float> Angles => _angles;
 
+    /// <summary>Kąty promieni jako ustawienie (zapis, kopiowanie); zmiana = <see cref="SetAngles"/>, porty idą za nią.</summary>
+    [Setting]
+    public float[] RayAngles
+    {
+        get => [.. _angles];
+        set => SetAngles(value);
+    }
+
+    [Setting]
     public float Range { get; set; }
 
+    [Setting]
     public EntityCategory Detects { get; set; } = EntityCategory.Obstacle | EntityCategory.Creature;
 
     /// <summary>Odległości trafień od obrysu z ostatniego odczytu (Range = brak trafienia) — do rysowania.</summary>

@@ -11,15 +11,6 @@ using Animata.Core.Worlds;
 
 namespace Animata.Studio.Session;
 
-/// <summary>Zwierzątka, które da się wstawić do sceny — każde z uczonym mózgiem (sieć albo CPG) z losowymi parametrami; uczy się dopiero po starcie przez użytkownika.</summary>
-public enum CreatureKind
-{
-    Car,
-    Cylinder,
-    Snake,
-    Spider
-}
-
 /// <summary>
 /// Jedna scena Studia: świat, symulacja (pauza, prędkość, błąd mózgu), nauka i snapshoty. Studio ma kilka scen
 /// (demo, węże, pająki, wspinaczka), każdą z własną sesją; żyje tylko otwarta (<see cref="Visible"/>). Panele tylko
@@ -92,14 +83,10 @@ public sealed class StudioSession : IDisposable
 
     public static string NameOf(Entity aEntity) => !string.IsNullOrWhiteSpace(aEntity.Name) ? aEntity.Name : aEntity switch
     {
-        SnakeCreature => "Wąż",
-        SpiderCreature => "Pająk",
-        CarCreature => "Autko",
-        CylinderCreature => "Walec",
         Box box => $"Klocek {box.Size.X:0.##} × {box.Size.Y:0.##} × {box.Size.Z:0.##} m",
         Cylinder cylinder => $"Cylinder r {cylinder.Radius:0.0#}",
         Sphere => "Kula",
-        _ => aEntity.GetType().Name
+        _ => EntityTypes.Of(aEntity)?.Name ?? aEntity.GetType().Name
     };
 
     /// <summary>Wywoływane co klatkę UI: przenosi mistrzów z nauki, notuje postęp i przesuwa symulację.</summary>
@@ -317,14 +304,6 @@ public sealed class StudioSession : IDisposable
 
     // ---------- świat ----------
 
-    public static string KindName(CreatureKind aKind) => aKind switch
-    {
-        CreatureKind.Car => "Autko",
-        CreatureKind.Cylinder => "Walec",
-        CreatureKind.Snake => "Wąż",
-        _ => "Pająk"
-    };
-
     /// <summary>
     /// Przyciąganie do terenu (domyślnie włączone): kule i cylindry stoją na najwyższym klocku pod nimi, klocki — na klocku
     /// zablokowanym (podłodze); nowe i przeciągane encje (także stwory) lądują na tej wysokości. Wyłączone — wysokość się nie zmienia.
@@ -371,27 +350,23 @@ public sealed class StudioSession : IDisposable
     /// Wstawia zwierzątko w punkcie podłoża: patrzy na najbliższą kulę i na nią poluje; ma losowe parametry i nie uczy się, dopóki użytkownik nie włączy nauki
     /// (autko i walec — sieć neuronowa, wąż — CPG). Liczbę wąsów i segmentów zmienia się potem we właściwościach.
     /// </summary>
-    public ActiveEntity AddCreature(CreatureKind aKind, Vector3 aPosition)
+    /// <summary>
+    /// Nowy stwór danego rodzaju w punkcie: patrzy na najbliższą kulę, dostaje pierwszy z gotowych mózgów swojego ciała
+    /// (sieć z losowymi wagami — uczy się dopiero po L), losowy kolor i unikalną nazwę.
+    /// </summary>
+    public ActiveEntity AddCreature(EntityType aType, Vector3 aPosition)
     {
         var position = aPosition with { Z = GroundAt(aPosition) };
         var target = NearestTarget(position);
         var yaw = target is null ? 0 : MathF.Atan2(target.Body.Position.Y - position.Y, target.Body.Position.X - position.X);
-        // Każde zwierzątko dostaje sieć z dwiema warstwami ukrytymi i losowymi wagami (inny mózg — w grafie, z palety)
-        // oraz losowy kolor (zmienia się go we właściwościach).
-        var color = WorldObjectCatalog.RandomColor();
-        ActiveEntity creature = aKind switch
-        {
-            CreatureKind.Car => WorldObjectCatalog.CreateCar(position, yaw, color, target?.Id,
-                WorldObjectCatalog.CreateCarNeuralModule(WorldObjectCatalog.DefaultWhiskers, WorldObjectCatalog.DefaultCarHidden)),
-            CreatureKind.Cylinder => WorldObjectCatalog.CreateSeeker(position, color, target?.Id,
-                WorldObjectCatalog.CreateCylinderNeuralModule(WorldObjectCatalog.DefaultCylinderHidden)),
-            CreatureKind.Snake => WorldObjectCatalog.CreateSnake(position, yaw, color, target?.Id,
-                WorldObjectCatalog.CreateSnakeNeuralModule(WorldObjectCatalog.DefaultSnakeSegments, WorldObjectCatalog.SnakeHiddenLayers)),
-            _ => WorldObjectCatalog.CreateSpider(position, yaw, color, target?.Id,
-                WorldObjectCatalog.CreateSpiderNeuralModule(false, WorldObjectCatalog.DefaultSpiderHidden))
-        };
+        var creature = (ActiveEntity)aType.Create();
+        if (creature is ArticulatedCreature body)
+            body.Color = WorldObjectCatalog.RandomColor();
+        if (creature.BrainPresets.Count > 0)
+            WorldObjectCatalog.InstallBrain(creature, creature.BrainPresets[0]);
+        WorldObjectCatalog.Aim(creature, target?.Id);
         creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));
-        creature.Name = UniqueName(KindName(aKind));
+        creature.Name = UniqueName(aType.Name);
         World.Add(creature);
         Status = target is null ? $"dodano: {creature.Name} (brak kuli — dodaj cel)" : $"dodano: {creature.Name}";
         return creature;

@@ -774,10 +774,11 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             menu.Items.Add(new Separator());
         }
 
-        menu.Items.Add(Item("Autko", Icons.Wheel, () => SelectNew(Session.AddCreature(CreatureKind.Car, at))));
-        menu.Items.Add(Item("Walec", Icons.Target, () => SelectNew(Session.AddCreature(CreatureKind.Cylinder, at))));
-        menu.Items.Add(Item("Wąż", Icons.Snake, () => SelectNew(Session.AddCreature(CreatureKind.Snake, at))));
-        menu.Items.Add(Item("Pająk", Icons.Spider, () => SelectNew(Session.AddCreature(CreatureKind.Spider, at))));
+        foreach (var type in EntityTypes.Creatures)
+        {
+            var kind = type;
+            menu.Items.Add(Item(type.Name, Icons.For(type.Icon), () => SelectNew(Session.AddCreature(kind, at))));
+        }
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Kula", Icons.Target, () => SelectNew(Session.AddSphere(at)), Key.Insert));
         menu.Items.Add(Item("Cylinder", Icons.Pillar, () => SelectNew(Session.AddCylinder(at)), Key.O));

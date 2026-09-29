@@ -73,38 +73,9 @@ public sealed class SceneMiniMap : ThemedControl
             var color = Ui.ColorOf(entity);
             switch (entity)
             {
-                case CarCreature car:
-                    var heading = Vector3.Transform(Vector3.UnitX, car.Body.Rotation);
-                    var yaw = Math.Atan2(heading.Y, heading.X);
-                    using (aContext.PushTransform(Matrix.CreateRotation(-yaw) * Matrix.CreateTranslation(center.X, center.Y)))
-                        aContext.DrawRectangle(Ui.Brush(color), null,
-                            new Rect(-car.Length / 2 * scale, -car.Width / 2 * scale, car.Length * scale, car.Width * scale), 3, 3);
+                case ArticulatedCreature body when body.PartPositions.Count > 0:
+                    PartSketch.Draw(aContext, body, Map, scale, color, StudioPalette.WithAlpha(color, 0.55), null);
                     break;
-                case CylinderCreature:
-                    aContext.DrawEllipse(Ui.Brush(color), null, center, radius, radius);
-                    break;
-                case SpiderCreature spider when spider.PartPositions.Count > 2 * SpiderCreature.Legs:
-                {
-                    var legPen = new Pen(Ui.Brush(color), 1.5, lineCap: PenLineCap.Round);
-                    var trunk = Map(spider.PartPositions[0]);
-                    for (var leg = 0; leg < SpiderCreature.Legs; leg++)
-                    {
-                        var knee = Map(spider.PartPositions[1 + 2 * leg]);
-                        aContext.DrawLine(legPen, trunk, knee);
-                        aContext.DrawLine(legPen, knee, Map(spider.PartPositions[2 + 2 * leg]));
-                    }
-                    aContext.DrawEllipse(Ui.Brush(color), null, trunk, Math.Max(3, 0.2 * scale), Math.Max(2, 0.14 * scale));
-                    break;
-                }
-                case ArticulatedCreature body:
-                {
-                    var pen = new Pen(Ui.Brush(color), Math.Max(3, body.BoundingRadius * 2 * scale), lineCap: PenLineCap.Round);
-                    for (var index = 1; index < body.PartPositions.Count; index++)
-                        aContext.DrawLine(pen, Map(body.PartPositions[index - 1]), Map(body.PartPositions[index]));
-                    if (body.PartPositions.Count > 0)
-                        aContext.DrawEllipse(Ui.Brush(color), null, Map(body.PartPositions[0]), pen.Thickness * 0.8, pen.Thickness * 0.8);
-                    break;
-                }
                 default:
                     aContext.DrawEllipse(Ui.Brush(color), null, center, radius, radius);
                     break;
@@ -135,7 +106,9 @@ public sealed class BodyDiagram : ThemedControl
         var center = new Point(size.Width / 2, size.Height / 2);
         var span = Math.Min(size.Width, size.Height);
         var skin = Math.Max(0.1f, _creature.BoundingRadius);
-        var scale = span * 0.2 / skin;
+        // Skala: obrys zajmuje ~20% planszy, a długie ciało (wąż) mieści się w ~75% — wąsy i kierunek oka dochodzą za obrys.
+        var extent = _creature is ArticulatedCreature { PartPositions.Count: > 0 } parts ? LocalExtent(parts) : skin;
+        var scale = span * 0.2 / Math.Max(skin, extent * 0.55f);
         var reach = span * 0.3;
         var mono = P.Text3;
 
@@ -175,79 +148,111 @@ public sealed class BodyDiagram : ThemedControl
 
         var bodyColor = Ui.ColorOf(_creature);
         var outline = Draw.Pen(StudioPalette.WithAlpha(P.Text, 0.25), 1.2);
-        switch (_creature)
+        if (_creature is ArticulatedCreature body && body.PartPositions.Count > 0)
         {
-            case CarCreature car:
+            // Części w układzie stwora (przód w prawo), w tej samej skali co wąsy i oko.
+            var inverse = Quaternion.Inverse(body.Body.Rotation);
+            Point ToScreen(Vector3 aPoint)
             {
-                var length = car.Length * scale;
-                var width = car.Width * scale;
-                var wheelLength = 0.26 * scale;
-                var wheelWidth = 0.1 * scale + 4;
-                var steer = _creature.Body.Actuators.OfType<SteeringDriveActuator>().FirstOrDefault()?.SteerAngle ?? 0;
-                foreach (var along in new[] { -0.32, 0.32 })
-                    foreach (var side in new[] { -1.0, 1.0 })
-                    {
-                        var wheelCenter = center + new Vector(along * length, side * (width / 2 + wheelWidth / 2));
-                        var rotation = along > 0 ? -steer : 0;
-                        using (aContext.PushTransform(Matrix.CreateRotation(rotation) * Matrix.CreateTranslation(wheelCenter.X, wheelCenter.Y)))
-                            aContext.DrawRectangle(Ui.Brush(along > 0 ? P.Accent : mono), null,
-                                new Rect(-wheelLength / 2, -wheelWidth / 2, wheelLength, wheelWidth), 3, 3);
-                    }
-                aContext.DrawRectangle(Ui.Brush(bodyColor), outline, new Rect(center.X - length / 2, center.Y - width / 2, length, width), 12, 12);
-                aContext.DrawEllipse(Ui.Brush(P.Text), null, center + new Vector(length / 2, 0), 7, 7);
-                break;
+                var local = Vector3.Transform(aPoint - body.Body.Position, inverse);
+                return center + new Vector(local.X * scale, -local.Y * scale);
             }
-            case CylinderCreature cylinder:
-            {
-                var radius = cylinder.Radius * scale;
-                foreach (var side in new[] { -1.0, 1.0 })
-                    aContext.DrawRectangle(Ui.Brush(P.Accent), null,
-                        new Rect(center.X - radius * 0.2, center.Y + side * radius - 6, radius * 0.4, 12), 4, 4);
-                aContext.DrawEllipse(Ui.Brush(bodyColor), outline, center, radius, radius);
-                aContext.DrawEllipse(Ui.Brush(P.Text), null, center + new Vector(radius * 1.08, 0), radius * 0.2, radius * 0.2);
-                break;
-            }
-            case SpiderCreature spider when spider.PartPositions.Count > 2 * SpiderCreature.Legs:
-            {
-                // Pająk z góry w swoim układzie: tułów i nogi (udo → kolano → stopa).
-                var inverse = Quaternion.Inverse(spider.Body.Rotation);
-                var local = spider.PartPositions.Select(aPosition => Vector3.Transform(aPosition - spider.Body.Position, inverse)).ToList();
-                var fit = Math.Min(size.Width, size.Height) * 0.38 / 0.55;
-                Point ToScreen(Vector3 aPoint) => center + new Vector(aPoint.X * fit, -aPoint.Y * fit);
-                var legPen = new Pen(Ui.Brush(bodyColor), Math.Max(3, SpiderCreature.LegRadius * 2 * fit), lineCap: PenLineCap.Round);
-                for (var leg = 0; leg < SpiderCreature.Legs; leg++)
-                {
-                    var thigh = local[1 + 2 * leg];
-                    var shin = local[2 + 2 * leg];
-                    aContext.DrawLine(legPen, ToScreen(local[0]), ToScreen(thigh));
-                    aContext.DrawLine(legPen, ToScreen(thigh), ToScreen(shin));
-                    aContext.DrawEllipse(Ui.Brush(spider.IsPartTouching(2 + 2 * leg) ? P.Accent : StudioPalette.WithAlpha(P.Text, 0.35)), null,
-                        ToScreen(shin), 4, 4);
-                }
-                var half = new Vector(SpiderCreature.BodyLength / 2 * fit, SpiderCreature.BodyWidth / 2 * fit);
-                aContext.DrawRectangle(Ui.Brush(bodyColor), outline, new Rect(ToScreen(local[0]) - half, ToScreen(local[0]) + half), 6, 6);
-                break;
-            }
-            case ArticulatedCreature body when body.PartPositions.Count > 0:
-            {
-                // Części w układzie stwora (przód w prawo), skala dopasowana do długości ciała.
-                var inverse = Quaternion.Inverse(body.Body.Rotation);
-                var local = body.PartPositions.Select(aPosition => Vector3.Transform(aPosition - body.Body.Position, inverse)).ToList();
-                var extent = local.Max(aPoint => MathF.Max(MathF.Abs(aPoint.X), MathF.Abs(aPoint.Y))) + body.BoundingRadius * 2;
-                var fit = Math.Min(size.Width, size.Height) * 0.38 / Math.Max(0.1f, extent);
-                Point ToScreen(Vector3 aPoint) => center + new Vector(aPoint.X * fit, -aPoint.Y * fit);
-                var thickness = Math.Max(6, body.BoundingRadius * 2 * fit);
-                var pen = new Pen(Ui.Brush(bodyColor), thickness, lineCap: PenLineCap.Round);
-                for (var index = 1; index < local.Count; index++)
-                    aContext.DrawLine(pen, ToScreen(local[index - 1]), ToScreen(local[index]));
-                for (var index = 0; index < local.Count; index++)
-                    aContext.DrawEllipse(Ui.Brush(index == 0 ? P.Accent : StudioPalette.WithAlpha(P.Text, 0.35)), null,
-                        ToScreen(local[index]), index == 0 ? thickness * 0.45 : 2.5, index == 0 ? thickness * 0.45 : 2.5);
-                break;
-            }
-            default:
-                aContext.DrawEllipse(Ui.Brush(bodyColor), outline, center, skin * scale, skin * scale);
-                break;
+            PartSketch.Draw(aContext, body, ToScreen, scale, bodyColor, mono, outline);
         }
+        else
+            aContext.DrawEllipse(Ui.Brush(bodyColor), outline, center, skin * scale, skin * scale);
+    }
+
+    /// <summary>Największy zasięg części od środka stwora w jego płaszczyźnie (z grubością części).</summary>
+    private static float LocalExtent(ArticulatedCreature aCreature)
+    {
+        var inverse = Quaternion.Inverse(aCreature.Body.Rotation);
+        var extent = 0f;
+        for (var part = 0; part < aCreature.PartPositions.Count && part < aCreature.Plan.Parts.Count; part++)
+        {
+            var local = Vector3.Transform(aCreature.PartPositions[part] - aCreature.Body.Position, inverse);
+            var plan = aCreature.Plan.Parts[part];
+            var reach = plan.Shape switch
+            {
+                Core.Bodies.PartShape.Box => new Vector2(plan.Size.X, plan.Size.Y).Length() / 2,
+                Core.Bodies.PartShape.Capsule => plan.Size.X + plan.Size.Y / 2,
+                _ => plan.Size.X
+            };
+            extent = MathF.Max(extent, new Vector2(local.X, local.Y).Length() + reach);
+        }
+        return extent;
+    }
+}
+
+/// <summary>
+/// Stwór z góry, część po części, w kształtach z planu ciała: klocek — prostokąt, kapsuła — gruba linia, walec — koło (oś
+/// pionowa) albo prostokąt (oś pozioma, np. koło pojazdu — z prawdziwym skrętem), kula — koło. Najpierw części najniższe.
+/// Koła pojazdu (dzieci stawów kół) mają osobny kolor. Ten sam rysunek dla każdego stwora z części — nowy nie potrzebuje kodu.
+/// </summary>
+public static class PartSketch
+{
+    /// <param name="aMap">Punkt świata → punkt na ekranie.</param>
+    /// <param name="aScale">Pikseli na metr.</param>
+    public static void Draw(DrawingContext aContext, ArticulatedCreature aCreature, Func<Vector3, Point> aMap, double aScale,
+        Color aBody, Color aWheel, IPen? aOutline)
+    {
+        var plan = aCreature.Plan;
+        var count = Math.Min(plan.Parts.Count, aCreature.PartPositions.Count);
+        var wheels = plan.Joints.Where(aJoint => aJoint.Kind == Core.Bodies.JointKind.Wheel).Select(aJoint => aJoint.Child).ToHashSet();
+        var bodyBrush = Ui.Brush(aBody);
+        var wheelBrush = Ui.Brush(aWheel);
+        foreach (var index in Enumerable.Range(0, count).OrderBy(aIndex => aCreature.PartPositions[aIndex].Z))
+        {
+            var part = plan.Parts[index];
+            var position = aCreature.PartPositions[index];
+            var orientation = aCreature.PartOrientations[index];
+            var brush = wheels.Contains(part.Name) ? wheelBrush : bodyBrush;
+            var radius = part.Size.X * aScale;
+            switch (part.Shape)
+            {
+                case Core.Bodies.PartShape.Capsule:
+                {
+                    var axis = Vector3.Transform(Vector3.UnitX, orientation) * (part.Size.Y / 2);
+                    var pen = new Pen(brush, Math.Max(2, 2 * radius), lineCap: PenLineCap.Round);
+                    aContext.DrawLine(pen, aMap(position - axis), aMap(position + axis));
+                    break;
+                }
+                case Core.Bodies.PartShape.Box:
+                    Quad(aContext, brush, aOutline, aMap, position,
+                        Vector3.Transform(Vector3.UnitX, orientation) * (part.Size.X / 2),
+                        Vector3.Transform(Vector3.UnitY, orientation) * (part.Size.Y / 2));
+                    break;
+                case Core.Bodies.PartShape.Cylinder:
+                {
+                    var axis = Vector3.Transform(Vector3.UnitY, orientation);
+                    if (new Vector2(axis.X, axis.Y).Length() < 0.3f)
+                    {
+                        aContext.DrawEllipse(brush, aOutline, aMap(position), radius, radius);
+                        break;
+                    }
+                    var across = Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitZ)) * part.Size.X;
+                    Quad(aContext, brush, null, aMap, position, axis * (part.Size.Y / 2), across);
+                    break;
+                }
+                default:
+                    aContext.DrawEllipse(brush, aOutline, aMap(position), radius, radius);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Równoległobok pozycja ± a ± b (w świecie), zrzutowany na ekran.</summary>
+    private static void Quad(DrawingContext aContext, IBrush aBrush, IPen? aOutline, Func<Vector3, Point> aMap, Vector3 aCenter, Vector3 aA, Vector3 aB)
+    {
+        var geometry = new StreamGeometry();
+        using (var figure = geometry.Open())
+        {
+            figure.BeginFigure(aMap(aCenter + aA + aB), true);
+            figure.LineTo(aMap(aCenter + aA - aB));
+            figure.LineTo(aMap(aCenter - aA - aB));
+            figure.LineTo(aMap(aCenter - aA + aB));
+            figure.EndFigure(true);
+        }
+        aContext.DrawGeometry(aBrush, aOutline, geometry);
     }
 }

@@ -19,18 +19,8 @@ public static partial class WorldObjectCatalog
     {
         var brain = new Brain();
         var spider = new SpiderCreature(brain) { Color = aColor };
-        var eye = new TargetSensor { Slot = "Eye", TargetId = aTargetId };
-        var joints = new JointSensor(GaitModule.Joints) { Slot = "Joints" };
-        var clock = new ClockSensor { Slot = "Clock", Frequency = 2.5f };
-        var feel = new FeelSensor { Slot = "Feel" };
-        var touch = CreateSpiderTouch();
-        var legs = new SpineActuator(GaitModule.Joints) { Slot = "Legs" };
-        spider.Body.Sensors.Add(eye);
-        spider.Body.Sensors.Add(joints);
-        spider.Body.Sensors.Add(clock);
-        spider.Body.Sensors.Add(feel);
-        spider.Body.Sensors.Add(touch);
-        spider.Body.Actuators.Add(legs);
+        spider.Equip();
+        Aim(spider, aTargetId);
         BuildBrain(brain, aController);
         spider.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
         return spider;

@@ -1,7 +1,11 @@
 using System.Numerics;
 using Animata.Core.Bodies;
 using Animata.Core.Brains;
+using Animata.Core.Actuators;
+using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
+using Animata.Core.Sensors;
+using Animata.Core.Training;
 
 namespace Animata.Core.WorldObjects;
 
@@ -39,6 +43,32 @@ public sealed class SpiderCreature : ArticulatedCreature
 
     /// <summary>Obrys do zmysłów i szczeliny do celu: pół rozstawu nóg.</summary>
     public override float BoundingRadius => 0.3f;
+
+    /// <summary>
+    /// Oko „Eye” (tułów), czucie stawów „Joints” (8: biodro, kolano × 4), zegar „Clock” (2.5 Hz), czucie terenu „Feel”,
+    /// dotyk „Touch” (stopy i brzuch), nogi „Legs”.
+    /// </summary>
+    public override void Equip()
+    {
+        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
+        Body.Sensors.Add(new JointSensor(GaitModule.Joints) { Slot = "Joints" });
+        Body.Sensors.Add(new ClockSensor { Slot = "Clock", Frequency = 2.5f });
+        Body.Sensors.Add(new FeelSensor { Slot = "Feel" });
+        Body.Sensors.Add(WorldObjectCatalog.CreateSpiderTouch());
+        Body.Actuators.Add(new SpineActuator(GaitModule.Joints) { Slot = "Legs" });
+        base.Equip();
+    }
+
+    public override IReadOnlyList<BrainPreset> BrainPresets =>
+    [
+        new("Sieć neuronowa", "zegar rytmu i cel, 2 warstwy ukryte, losowe wagi",
+            () => WorldObjectCatalog.CreateSpiderNeuralModule(false, WorldObjectCatalog.DefaultSpiderHidden)),
+        new("Generator chodu (kłus)", "6 parametrów: krok, uniesienie, kolano, częstotliwość, skręt", () => new GaitModule { Name = "Chód" }, true)
+    ];
+
+    public override SeekRig TrainingRig => SeekRigs.Spider;
+
+    public override string Describe() => $"SpiderCreature · {Legs} nogi · {JointCount} stawów · fizyka Bepu";
 
     public static BodyPlan DefaultPlan()
     {

@@ -182,15 +182,16 @@ public class PersistenceTests
 
         // Plik wskazuje „ręczne parametry”, choć zapisany stan modułu podmieniamy na losowy — wygrywa snapshot.
         var document = WorldFile.Capture(world, "test");
-        var snakeDocument = document.Entities.OfType<SnakeDocument>().Single(aDocument => aDocument.Id == snake.Id);
-        Assert.Equal(manual.Id, snakeDocument.Brain.Current);
+        var snakeDocument = document.Entities.Single(aDocument => aDocument.Id == snake.Id);
+        var brainDocument = snakeDocument.Brain!;
+        Assert.Equal(manual.Id, brainDocument.Current);
         var randomState = random.Modules.Single().State;
-        var modules = snakeDocument.Brain.Modules
+        var modules = brainDocument.Modules
             .Select(aModule => aModule.Id == cpg.Id ? new StateNode(aModule.Id, aModule.Name, randomState) : aModule).ToList();
         var edited = document with
         {
             Entities = [.. document.Entities.Select(aEntity => aEntity == snakeDocument
-                ? snakeDocument with { Brain = snakeDocument.Brain with { Modules = modules } } : aEntity)]
+                ? snakeDocument with { Brain = brainDocument with { Modules = modules } } : aEntity)]
         };
 
         using var restored = WorldFile.Restore(WorldFile.FromJson(WorldFile.ToJson(edited))).World;

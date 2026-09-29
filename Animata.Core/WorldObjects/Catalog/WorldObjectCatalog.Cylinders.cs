@@ -56,10 +56,8 @@ public static partial class WorldObjectCatalog
         var brain = new Brain();
         var creature = new CylinderCreature(brain) { Color = aColor };
         creature.Place(aPosition, Quaternion.Identity);
-        var eye = new TargetSensor { Slot = "Eye", TargetId = aTargetId };
-        var wheels = new DiskDriveActuator { Slot = "Wheels" };
-        creature.Body.Sensors.Add(eye);
-        creature.Body.Actuators.Add(wheels);
+        creature.Equip();
+        Aim(creature, aTargetId);
         BuildBrain(brain, aController);
         return creature;
     }

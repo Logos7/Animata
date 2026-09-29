@@ -286,16 +286,7 @@ public static class SeekRigs
     /// </summary>
     public static SeekRig For(Entity aCreature)
     {
-        var rig = aCreature switch
-        {
-            SnakeCreature { Climber: true } climber => ClimbWith(climber.Segments),
-            SnakeCreature snake => SnakeWith(snake.Segments),
-            SpiderCreature => Spider,
-            CarCreature car when WorldObjectCatalog.IsValidWhiskerCount(WorldObjectCatalog.WhiskerCountOf(car)) =>
-                CarWith(WorldObjectCatalog.WhiskerCountOf(car)),
-            CarCreature => Car,
-            _ => Disk
-        };
+        var rig = (aCreature as ActiveEntity)?.TrainingRig ?? Generic(aCreature);
         var steering = aCreature.Body.Actuators.OfType<SteeringDriveActuator>().FirstOrDefault() is { } sourceSteering &&
             !SameSettings(sourceSteering, new SteeringDriveActuator())
                 ? Copy(sourceSteering)
@@ -325,6 +316,29 @@ public static class SeekRigs
                 return creature;
             }
         };
+    }
+
+    /// <summary>
+    /// Rig dla stwora bez własnego (<see cref="ActiveEntity.TrainingRig"/>): nowy stwór tego samego rodzaju z rejestru
+    /// (<see cref="EntityTypes"/>) i ze sterownikiem na podłodze 60 × 60 m, cel 1.5–6 m, bez przeszkód, wysiłek = średnia
+    /// wielkość komend. Encja spoza rejestru — rig walca.
+    /// </summary>
+    public static SeekRig Generic(Entity aCreature)
+    {
+        if (EntityTypes.Of(aCreature) is not { IsCreature: true } type)
+            return Disk;
+        return new SeekRig(
+            type.Name.ToLowerInvariant(),
+            (aTargetId, aController) =>
+            {
+                var creature = (ActiveEntity)type.Create();
+                WorldObjectCatalog.Aim(creature, aTargetId);
+                WorldObjectCatalog.BuildBrain(creature.Brain!, aController);
+                return creature;
+            },
+            AverageCommand,
+            new SeekTargetOptions(),
+            AddFloor);
     }
 
     private static bool SameSettings(SteeringDriveActuator aA, SteeringDriveActuator aB) =>

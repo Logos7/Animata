@@ -100,16 +100,8 @@ public static partial class WorldObjectCatalog
     {
         var brain = new Brain();
         var snake = new SnakeCreature(aSegments, brain) { Color = aColor };
-        var eye = new TargetSensor { Slot = "Eye", TargetId = aTargetId };
-        var joints = new JointSensor(aSegments - 1) { Slot = "Joints" };
-        var clock = new ClockSensor { Slot = "Clock" };
-        var feel = new FeelSensor { Slot = "Feel" };
-        var spine = new SpineActuator(aSegments - 1) { Slot = "Spine" };
-        snake.Body.Sensors.Add(eye);
-        snake.Body.Sensors.Add(joints);
-        snake.Body.Sensors.Add(clock);
-        snake.Body.Sensors.Add(feel);
-        snake.Body.Actuators.Add(spine);
+        snake.Equip();
+        Aim(snake, aTargetId);
         BuildBrain(brain, aController);
         snake.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
         return snake;

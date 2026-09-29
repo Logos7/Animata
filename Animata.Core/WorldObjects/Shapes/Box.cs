@@ -23,6 +23,7 @@ public sealed class Box() : PhysicalStaticEntity(new Body())
 
     private Vector3 _size = new(1.5f, 1, 0.06f);
 
+    [Setting]
     public Vector3 Size
     {
         get => _size;
@@ -36,6 +37,7 @@ public sealed class Box() : PhysicalStaticEntity(new Body())
         }
     }
 
+    [Setting]
     public Vector3 Color { get; set; } = DefaultColor;
 
     /// <summary>Wysokość górnej ściany.</summary>

@@ -53,6 +53,13 @@ public static partial class WorldObjectCatalog
         graph.Validate();
     }
 
+    /// <summary>Oczy stwora (<see cref="TargetSensor"/>) patrzą na podaną encję (null — bez celu).</summary>
+    public static void Aim(ActiveEntity aCreature, Guid? aTargetId)
+    {
+        foreach (var eye in aCreature.Body.Sensors.OfType<TargetSensor>())
+            eye.TargetId = aTargetId;
+    }
+
     /// <summary>Pionowy cylinder stojący na (x, y, z).</summary>
     public static Cylinder CreateCylinder(Vector3 aPosition, float aRadius = 0.5f, float aHeight = 0.8f) => new()
     {

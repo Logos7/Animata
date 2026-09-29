@@ -484,15 +484,9 @@ public sealed class ModuleInspector
         yield return ("Logika", "Sieć neuronowa", Icons.Neural, NewNetwork, null);
         yield return ("Logika", "Router", Icons.Router, () => new RouterModule(2, actuatorPorts) { Name = "Router" }, null);
         yield return ("Logika", "Stała", Icons.Constant, () => new ConstantModule("Value", 0) { Name = "Stała" }, null);
-        if (aCreature.Body.Sensors.OfType<RaySensor>().FirstOrDefault() is { } rays)
-            yield return ("Logika", "AvoidAndSeek", Icons.Brain, () => new AvoidAndSeekModule(rays.Angles) { Name = "AvoidAndSeek" }, null);
-        yield return ("Logika", "ApproachTarget", Icons.Brain, () => new ApproachTargetModule { Name = "Approach" }, null);
-        if (aCreature is SnakeCreature && aCreature.Body.Actuators.OfType<SpineActuator>().FirstOrDefault() is { } spine)
-            yield return ("Logika", "CPG · fala stawów", Icons.Snake, () => new CpgModule(spine.Joints) { Name = "CPG" }, null);
-        if (aCreature is SnakeCreature climber)
-            yield return ("Logika", "CPG · toczenie (wspinaczka)", Icons.Tree, () => WorldObjectCatalog.CreateClimbingCpg(climber.Segments), null);
-        if (aCreature is SpiderCreature)
-            yield return ("Logika", "Chód · kłus", Icons.Spider, () => new GaitModule { Name = "Chód" }, null);
+        // Sterowniki dopasowane do tego ciała (te same co w menu „Mózg”, ale wstawiane obok istniejących modułów).
+        foreach (var preset in aCreature.BrainPresets)
+            yield return ("Dla tego ciała", preset.Name, Icons.Brain, preset.Create, null);
 
         yield return ("Struktura", "Podgraf", Icons.Composite, () => new CompositeModule { Name = "Podgraf" }, null);
     }

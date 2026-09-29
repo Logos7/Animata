@@ -3,6 +3,7 @@ using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
+using Animata.Core.Training;
 
 namespace Animata.Core.WorldObjects;
 
@@ -14,17 +15,51 @@ namespace Animata.Core.WorldObjects;
 /// </summary>
 public sealed class SnakeCreature : ArticulatedCreature
 {
-    public SnakeCreature(int aSegments, Brain? aBrain = null) : base(WorldObjectCatalog.SnakePlan(aSegments), aBrain)
+    public SnakeCreature(int aSegments = WorldObjectCatalog.DefaultSnakeSegments, Brain? aBrain = null)
+        : base(WorldObjectCatalog.SnakePlan(aSegments), aBrain)
     {
-        Segments = aSegments;
+        _segments = aSegments;
     }
 
-    public int Segments { get; private set; }
+    private int _segments;
+
+    /// <summary>Oko „Eye” (głowa), czucie stawów „Joints”, zegar rytmu „Clock”, czucie terenu „Feel”, kręgosłup „Spine”.</summary>
+    public override void Equip()
+    {
+        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
+        Body.Sensors.Add(new JointSensor(Segments - 1) { Slot = "Joints" });
+        Body.Sensors.Add(new ClockSensor { Slot = "Clock" });
+        Body.Sensors.Add(new FeelSensor { Slot = "Feel" });
+        Body.Actuators.Add(new SpineActuator(Segments - 1) { Slot = "Spine" });
+        base.Equip();
+    }
+
+    public override IReadOnlyList<BrainPreset> BrainPresets =>
+    [
+        new("Sieć neuronowa", "zegar rytmu, cel i czucie terenu, 2 warstwy ukryte, losowe wagi",
+            () => WorldObjectCatalog.CreateSnakeNeuralModule(Segments, WorldObjectCatalog.SnakeHiddenLayers)),
+        new("CPG · pełzanie", "generator fali: 6 parametrów (amplituda, częstotliwość, fala, skręt, pochylenie)",
+            () => WorldObjectCatalog.CreateCpg(Segments), true),
+        new("CPG · toczenie (wspinaczka)", "zwój toczy się po pniu w górę — dla węża owiniętego wokół cylindra",
+            () => WorldObjectCatalog.CreateClimbingCpg(Segments), true)
+    ];
+
+    public override SeekRig TrainingRig => Climber ? SeekRigs.ClimbWith(Segments) : SeekRigs.SnakeWith(Segments);
+
+    public override string Describe() => $"SnakeCreature · {Segments} segm. · {JointCount} stawów · fizyka Bepu";
+
+    [Setting]
+    public int Segments
+    {
+        get => _segments;
+        set => SetSegments(value);
+    }
 
     /// <summary>
     /// Wspinacz: uczy się wchodzić na pień — cylinder z tarciem chwytnym (próby zaczyna owinięty wokół pnia, cel na jego szczycie —
     /// <see cref="Training.SeekRigs.ClimbWith"/>), a nie pełzać po ziemi.
     /// </summary>
+    [Setting]
     public bool Climber { get; set; }
 
     /// <summary>Owija węża wokół cylindra-pnia (<see cref="SnakeWrap.Around"/>) i robi z niego wspinacza.</summary>
@@ -57,7 +92,7 @@ public sealed class SnakeCreature : ArticulatedCreature
             ?? new List<(BrainSnapshot Old, BrainSnapshot New)>();
 
         Rebuild(WorldObjectCatalog.SnakePlan(aSegments));
-        Segments = aSegments;
+        _segments = aSegments;
         foreach (var actuator in Body.Actuators.OfType<SpineActuator>())
             actuator.SetJointCount(joints);
         foreach (var sensor in Body.Sensors.OfType<JointSensor>())

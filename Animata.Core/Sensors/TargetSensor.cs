@@ -28,6 +28,7 @@ public sealed class TargetSensor : Sensor
 
     private readonly Dictionary<string, float> _readings = Ports.ToDictionary(aPort => aPort, _ => 0f);
 
+    [Setting]
     public Guid? TargetId { get; set; }
 
     public override IReadOnlyList<string> OutputPorts => Ports;

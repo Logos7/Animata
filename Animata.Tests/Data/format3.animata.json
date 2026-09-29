@@ -1,0 +1,1228 @@
+{
+  "Format": 3,
+  "Name": "format3",
+  "Time": 0.6666667014360428,
+  "Entities": [
+    {
+      "$type": "box",
+      "Size": [
+        20,
+        20,
+        0.2
+      ],
+      "Color": [
+        0.2,
+        0.27,
+        0.33
+      ],
+      "Locked": true,
+      "Id": "4113fef8-cfe6-4300-a395-9cf942bc0a7f",
+      "Name": "Pod\u0142oga",
+      "Position": [
+        0,
+        0,
+        -0.2
+      ],
+      "Rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "$type": "sphere",
+      "Radius": 0.4,
+      "Locked": false,
+      "Id": "7446bdd8-2acc-417c-8c7a-ccd7fe1c4a18",
+      "Name": "Kula A",
+      "Position": [
+        5,
+        0,
+        0
+      ],
+      "Rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "$type": "cylinder",
+      "Radius": 0.25,
+      "Height": 3,
+      "Grip": 1.2,
+      "Color": [
+        0.45,
+        0.32,
+        0.2
+      ],
+      "Locked": false,
+      "Id": "9965eddf-e2f2-4fd8-a0df-1490c1027e6f",
+      "Name": "Pie\u0144",
+      "Position": [
+        -4,
+        4,
+        0
+      ],
+      "Rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "$type": "car",
+      "Color": [
+        0.85,
+        0.6604437,
+        0.3825
+      ],
+      "Whiskers": 7,
+      "WhiskerRange": 2.5,
+      "Target": "7446bdd8-2acc-417c-8c7a-ccd7fe1c4a18",
+      "Brain": {
+        "Modules": [
+          {
+            "$type": "state",
+            "State": {
+              "$type": "avoidAndSeek",
+              "RayAngles": [
+                -1.0471976,
+                -0.6981317,
+                -0.34906584,
+                0,
+                0.3490659,
+                0.6981317,
+                1.0471976
+              ],
+              "SteerGain": 1.42,
+              "AvoidGain": 5.27,
+              "PathWidth": 0.56,
+              "ClearProximity": 0.31,
+              "SideCommitment": 0.38,
+              "FrontAngle": 0.82,
+              "ReverseProximity": 0.96,
+              "ReverseDuration": 0.56,
+              "ReleaseProximity": 0.47,
+              "SideMemory": 1,
+              "StopGap": 0.1,
+              "SlowdownGap": 1.19,
+              "MinThrottle": 0.31,
+              "TurnAroundGap": 0.91,
+              "TurnAroundAngle": 1.24
+            },
+            "Id": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "Name": "AvoidAndSeek"
+          }
+        ],
+        "Connections": [
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Found",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Found"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Gap",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Gap"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionX",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "DirectionX"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionY",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "DirectionY"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray0",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Ray0"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray1",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Ray1"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray2",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Ray2"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray3",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Ray3"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray4",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Ray4"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray5",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Ray5"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray6",
+            "TargetId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "TargetPort": "Ray6"
+          },
+          {
+            "SourceId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "SourcePort": "Steer",
+            "TargetId": "29baf386-e52a-cb18-6cdb-941f72c267a9",
+            "TargetPort": "Steer"
+          },
+          {
+            "SourceId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+            "SourcePort": "Throttle",
+            "TargetId": "29baf386-e52a-cb18-6cdb-941f72c267a9",
+            "TargetPort": "Throttle"
+          }
+        ],
+        "Positions": {},
+        "Snapshots": [
+          {
+            "Id": "bb8c13be-5633-45d3-8d21-e5777fb9cf77",
+            "Label": "r\u0119czny 1",
+            "CreatedUtc": "2026-09-29T17:45:40.6709043Z",
+            "Modules": [
+              {
+                "ModuleId": "44282a53-5825-47f3-a8b5-218f58d0b8f8",
+                "ModuleName": "AvoidAndSeek",
+                "State": {
+                  "$type": "avoidAndSeek",
+                  "RayAngles": [
+                    -1.0471976,
+                    -0.6981317,
+                    -0.34906584,
+                    0,
+                    0.3490659,
+                    0.6981317,
+                    1.0471976
+                  ],
+                  "SteerGain": 1.42,
+                  "AvoidGain": 5.27,
+                  "PathWidth": 0.56,
+                  "ClearProximity": 0.31,
+                  "SideCommitment": 0.38,
+                  "FrontAngle": 0.82,
+                  "ReverseProximity": 0.96,
+                  "ReverseDuration": 0.56,
+                  "ReleaseProximity": 0.47,
+                  "SideMemory": 1,
+                  "StopGap": 0.1,
+                  "SlowdownGap": 1.19,
+                  "MinThrottle": 0.31,
+                  "TurnAroundGap": 0.91,
+                  "TurnAroundAngle": 1.24
+                }
+              }
+            ]
+          }
+        ],
+        "Current": "bb8c13be-5633-45d3-8d21-e5777fb9cf77"
+      },
+      "Drive": {
+        "MaxSpeed": 3.1,
+        "MaxReverseSpeed": 1,
+        "MaxSteerAngle": 0.6108653,
+        "MaxTurnSpeed": 0,
+        "DriveTorque": 4
+      },
+      "Id": "01c813b5-ba7b-415e-8db2-644f584e1b71",
+      "Name": "Autko 7",
+      "Position": [
+        -2.6684346,
+        -1.914989,
+        -0.027169526
+      ],
+      "Rotation": [
+        0.0005869922,
+        -0.004998475,
+        0.15098433,
+        0.98852336
+      ]
+    },
+    {
+      "$type": "cylinderCreature",
+      "Color": [
+        0.85,
+        0.79155314,
+        0.3825
+      ],
+      "Target": "01c813b5-ba7b-415e-8db2-644f584e1b71",
+      "Brain": {
+        "Modules": [
+          {
+            "$type": "state",
+            "State": {
+              "$type": "neuralNetwork",
+              "Layers": [
+                3,
+                6,
+                2
+              ],
+              "Weights": [
+                [
+                  [
+                    -0.08474045,
+                    -0.29399768,
+                    -0.14379343
+                  ],
+                  [
+                    0.5070371,
+                    -0.49289083,
+                    0.34354007
+                  ],
+                  [
+                    -0.23007853,
+                    0.22186668,
+                    0.43263972
+                  ],
+                  [
+                    -0.102694064,
+                    0.358033,
+                    -0.43901435
+                  ],
+                  [
+                    -0.32789597,
+                    0.28560594,
+                    -0.5505399
+                  ],
+                  [
+                    0.029009266,
+                    -0.29285234,
+                    -0.3555535
+                  ]
+                ],
+                [
+                  [
+                    -0.18909183,
+                    -0.029948642,
+                    0.38058674,
+                    0.38022733,
+                    -0.08004162,
+                    -0.2506947
+                  ],
+                  [
+                    -0.021518936,
+                    -0.19435604,
+                    0.2596023,
+                    -0.039462015,
+                    0.2338674,
+                    -0.19993766
+                  ]
+                ]
+              ],
+              "Biases": [
+                [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0
+                ]
+              ],
+              "Ports": [
+                "Found",
+                "Gap",
+                "DirectionX",
+                "DirectionY"
+              ],
+              "InputExpressions": [
+                "Found * DirectionY",
+                "Found * Gap",
+                "Found * DirectionX"
+              ],
+              "Outputs": [
+                {
+                  "Port": "Turn",
+                  "Scale": 1,
+                  "Offset": 0
+                },
+                {
+                  "Port": "Step",
+                  "Scale": 1,
+                  "Offset": 0
+                }
+              ]
+            },
+            "Id": "5ef5fa96-c270-4da3-a624-7f015990dd5d",
+            "Name": "Neural"
+          }
+        ],
+        "Connections": [
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Found",
+            "TargetId": "5ef5fa96-c270-4da3-a624-7f015990dd5d",
+            "TargetPort": "Found"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Gap",
+            "TargetId": "5ef5fa96-c270-4da3-a624-7f015990dd5d",
+            "TargetPort": "Gap"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionX",
+            "TargetId": "5ef5fa96-c270-4da3-a624-7f015990dd5d",
+            "TargetPort": "DirectionX"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionY",
+            "TargetId": "5ef5fa96-c270-4da3-a624-7f015990dd5d",
+            "TargetPort": "DirectionY"
+          },
+          {
+            "SourceId": "5ef5fa96-c270-4da3-a624-7f015990dd5d",
+            "SourcePort": "Turn",
+            "TargetId": "29baf386-e52a-cb18-6cdb-941f72c267a9",
+            "TargetPort": "Turn"
+          },
+          {
+            "SourceId": "5ef5fa96-c270-4da3-a624-7f015990dd5d",
+            "SourcePort": "Step",
+            "TargetId": "29baf386-e52a-cb18-6cdb-941f72c267a9",
+            "TargetPort": "Step"
+          }
+        ],
+        "Positions": {},
+        "Snapshots": [
+          {
+            "Id": "1af15931-76ce-4922-b466-be675b696ca7",
+            "Label": "r\u0119czne wagi",
+            "CreatedUtc": "2026-09-29T17:45:40.7812689Z",
+            "Modules": [
+              {
+                "ModuleId": "5ef5fa96-c270-4da3-a624-7f015990dd5d",
+                "ModuleName": "Neural",
+                "State": {
+                  "$type": "neuralNetwork",
+                  "Layers": [
+                    3,
+                    6,
+                    2
+                  ],
+                  "Weights": [
+                    [
+                      [
+                        3,
+                        0,
+                        0
+                      ],
+                      [
+                        0,
+                        2,
+                        0
+                      ],
+                      [
+                        0,
+                        0,
+                        3
+                      ],
+                      [
+                        0,
+                        0,
+                        0
+                      ],
+                      [
+                        0,
+                        0,
+                        0
+                      ],
+                      [
+                        0,
+                        0,
+                        0
+                      ]
+                    ],
+                    [
+                      [
+                        2,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                      ],
+                      [
+                        0,
+                        2,
+                        2,
+                        0,
+                        0,
+                        0
+                      ]
+                    ]
+                  ],
+                  "Biases": [
+                    [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      -2
+                    ]
+                  ],
+                  "Ports": [
+                    "Found",
+                    "Gap",
+                    "DirectionX",
+                    "DirectionY"
+                  ],
+                  "InputExpressions": [
+                    "Found * DirectionY",
+                    "Found * Gap",
+                    "Found * DirectionX"
+                  ],
+                  "Outputs": [
+                    {
+                      "Port": "Turn",
+                      "Scale": 1,
+                      "Offset": 0
+                    },
+                    {
+                      "Port": "Step",
+                      "Scale": 1,
+                      "Offset": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "Current": null
+      },
+      "Drive": {
+        "MaxSpeed": 2,
+        "MaxReverseSpeed": 0,
+        "MaxSteerAngle": 0,
+        "MaxTurnSpeed": 1.7,
+        "DriveTorque": 3
+      },
+      "Id": "0b2e8806-eabf-4eea-b7bd-f78d0e18fb9e",
+      "Name": "Walec goni",
+      "Position": [
+        -2.839965,
+        2.0000381,
+        -0.007726133
+      ],
+      "Rotation": [
+        -1.9162891E-05,
+        -0.00011011009,
+        -4.2369873E-05,
+        1
+      ]
+    },
+    {
+      "$type": "snake",
+      "Color": [
+        0.85,
+        0.39493364,
+        0.3825
+      ],
+      "Segments": 10,
+      "Target": "7446bdd8-2acc-417c-8c7a-ccd7fe1c4a18",
+      "Brain": {
+        "Modules": [
+          {
+            "$type": "state",
+            "State": {
+              "$type": "cpg",
+              "Joints": 9,
+              "Amplitude": 0.245197,
+              "Frequency": 0.7243816,
+              "PhaseLag": 0.5221324,
+              "TurnGain": -0.748251,
+              "PitchAmplitude": 0.42227077,
+              "PitchPhase": 2.9720457,
+              "Grip": false
+            },
+            "Id": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "Name": "CPG"
+          }
+        ],
+        "Connections": [
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Found",
+            "TargetId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "TargetPort": "Found"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Gap",
+            "TargetId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "TargetPort": "Gap"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionX",
+            "TargetId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "TargetPort": "DirectionX"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionY",
+            "TargetId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "TargetPort": "DirectionY"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw0",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw0"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw1",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw1"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw2",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw2"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw3",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw3"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw4",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw4"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw5",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw5"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw6",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw6"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw7",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw7"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Yaw8",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw8"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch0",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch0"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch1",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch1"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch2",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch2"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch3",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch3"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch4",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch4"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch5",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch5"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch6",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch6"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch7",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch7"
+          },
+          {
+            "SourceId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+            "SourcePort": "Pitch8",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch8"
+          }
+        ],
+        "Positions": {},
+        "Snapshots": [
+          {
+            "Id": "acd8e4b1-6657-4278-8de1-76cb7e9ed601",
+            "Label": "r\u0119czne parametry",
+            "CreatedUtc": "2026-09-29T17:45:40.7926607Z",
+            "Modules": [
+              {
+                "ModuleId": "80e85c48-e873-42e8-8ee9-b1f2d5e32104",
+                "ModuleName": "CPG",
+                "State": {
+                  "$type": "cpg",
+                  "Joints": 9,
+                  "Amplitude": 0.35,
+                  "Frequency": 1.2,
+                  "PhaseLag": 0.9,
+                  "TurnGain": 0.5,
+                  "PitchAmplitude": 0,
+                  "PitchPhase": 1.5707964,
+                  "Grip": false
+                }
+              }
+            ]
+          }
+        ],
+        "Current": null
+      },
+      "Climber": false,
+      "Parts": [
+        -1.2711891,
+        -5.0751143,
+        0.093993634,
+        0.013720453,
+        0.17929772,
+        -0.96511626,
+        0.19030163,
+        -0.99251556,
+        -4.85398,
+        0.14674702,
+        0.052319914,
+        0.13680013,
+        -0.89038295,
+        0.4310066,
+        -0.83902293,
+        -4.530978,
+        0.17352445,
+        -0.10119426,
+        0.06823103,
+        -0.76222605,
+        0.635701,
+        -0.9186285,
+        -4.207878,
+        0.13042486,
+        -0.26039284,
+        0.0076277554,
+        -0.40292394,
+        0.8773767,
+        -1.1960578,
+        -4.1689167,
+        0.10135141,
+        -0.32647339,
+        -0.08969245,
+        0.23839208,
+        0.9102415,
+        -1.3691026,
+        -4.434969,
+        0.16235268,
+        -0.24881896,
+        -0.023392564,
+        0.6544454,
+        0.7136128,
+        -1.4851903,
+        -4.7553134,
+        0.26249784,
+        -0.34597984,
+        -0.050406657,
+        0.48067957,
+        0.8041792,
+        -1.7590494,
+        -4.8925967,
+        0.2993192,
+        -0.4643759,
+        0.0023233292,
+        -0.024113055,
+        0.8853068,
+        -1.9599075,
+        -4.707988,
+        0.2693749,
+        -0.3412374,
+        0.21776286,
+        -0.62946326,
+        0.66325897,
+        -1.9296956,
+        -4.357205,
+        0.27826816,
+        -0.16813053,
+        0.38425756,
+        -0.6864685,
+        0.59400284
+      ],
+      "Id": "6a96c543-23ee-4677-804d-d72f4722d1ae",
+      "Name": "W\u0105\u017C 10",
+      "Position": [
+        -1.274321,
+        -5.048766,
+        0.023844011
+      ],
+      "Rotation": [
+        0.013720453,
+        0.17929772,
+        -0.96511626,
+        0.19030163
+      ]
+    },
+    {
+      "$type": "snake",
+      "Color": [
+        1,
+        1,
+        1
+      ],
+      "Segments": 8,
+      "Target": "7446bdd8-2acc-417c-8c7a-ccd7fe1c4a18",
+      "Brain": {
+        "Modules": [
+          {
+            "$type": "state",
+            "State": {
+              "$type": "cpg",
+              "Joints": 7,
+              "Amplitude": 0.92754835,
+              "Frequency": 1.2,
+              "PhaseLag": 0,
+              "TurnGain": 0,
+              "PitchAmplitude": 0.92754835,
+              "PitchPhase": 1.5707964,
+              "Grip": true
+            },
+            "Id": "47498209-44e5-4057-b1a1-8079d846a114",
+            "Name": "CPG"
+          }
+        ],
+        "Connections": [
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Found",
+            "TargetId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "TargetPort": "Found"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Gap",
+            "TargetId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "TargetPort": "Gap"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionX",
+            "TargetId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "TargetPort": "DirectionX"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionY",
+            "TargetId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "TargetPort": "DirectionY"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Yaw0",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw0"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Yaw1",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw1"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Yaw2",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw2"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Yaw3",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw3"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Yaw4",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw4"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Yaw5",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw5"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Yaw6",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Yaw6"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Pitch0",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch0"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Pitch1",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch1"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Pitch2",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch2"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Pitch3",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch3"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Pitch4",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch4"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Pitch5",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch5"
+          },
+          {
+            "SourceId": "47498209-44e5-4057-b1a1-8079d846a114",
+            "SourcePort": "Pitch6",
+            "TargetId": "7ee5ed4a-2964-7aeb-1806-605d76e9d187",
+            "TargetPort": "Pitch6"
+          }
+        ],
+        "Positions": {},
+        "Snapshots": [],
+        "Current": null
+      },
+      "Climber": true,
+      "Parts": [
+        -3.752193,
+        3.7974591,
+        0.30717507,
+        0.22420366,
+        0.1382273,
+        -0.43370426,
+        -0.8616998,
+        -4.0356703,
+        3.6761537,
+        0.26136464,
+        0.16077138,
+        0.07283706,
+        0.06922715,
+        -0.98186296,
+        -4.287166,
+        3.8604825,
+        0.21090816,
+        0.11655913,
+        -0.023876905,
+        0.5402849,
+        -0.83302826,
+        -4.263982,
+        4.1776576,
+        0.17473775,
+        0.100698635,
+        -0.12508114,
+        0.8712956,
+        -0.46374413,
+        -3.982682,
+        4.31939,
+        0.13591644,
+        0.04558855,
+        -0.13210309,
+        0.98995924,
+        0.021243453,
+        -3.7103515,
+        4.159258,
+        0.093833745,
+        -0.016189793,
+        -0.12329982,
+        0.8592216,
+        0.49625927,
+        -3.6999054,
+        3.8452764,
+        0.069823086,
+        -0.04967351,
+        -0.037130907,
+        0.51306015,
+        0.85610926,
+        -3.9613078,
+        3.6811867,
+        0.083425544,
+        -0.04270679,
+        0.06409508,
+        0.00896719,
+        0.99698925
+      ],
+      "Id": "5088cb2b-00fb-4d26-bf81-4d50ea05a08d",
+      "Name": "Wspinacz",
+      "Position": [
+        -3.7197406,
+        3.7774723,
+        0.24258116
+      ],
+      "Rotation": [
+        0.22420366,
+        0.1382273,
+        -0.43370426,
+        -0.8616998
+      ]
+    },
+    {
+      "$type": "spider",
+      "Color": [
+        0.54633737,
+        0.3825,
+        0.85
+      ],
+      "Target": "7446bdd8-2acc-417c-8c7a-ccd7fe1c4a18",
+      "Brain": {
+        "Modules": [
+          {
+            "$type": "state",
+            "State": {
+              "$type": "gait",
+              "Stride": 0.2334531,
+              "Lift": 0.7528477,
+              "Knee": -0.020920277,
+              "KneeSwing": -0.49894285,
+              "Frequency": 2.5139723,
+              "TurnGain": 1.4107327
+            },
+            "Id": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "Name": "Ch\u00F3d"
+          }
+        ],
+        "Connections": [
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Found",
+            "TargetId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "TargetPort": "Found"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Gap",
+            "TargetId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "TargetPort": "Gap"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionX",
+            "TargetId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "TargetPort": "DirectionX"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionY",
+            "TargetId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "TargetPort": "DirectionY"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Yaw0",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Yaw0"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Yaw1",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Yaw1"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Yaw2",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Yaw2"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Yaw3",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Yaw3"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Yaw4",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Yaw4"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Yaw5",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Yaw5"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Yaw6",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Yaw6"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Yaw7",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Yaw7"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Pitch0",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Pitch0"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Pitch1",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Pitch1"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Pitch2",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Pitch2"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Pitch3",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Pitch3"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Pitch4",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Pitch4"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Pitch5",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Pitch5"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Pitch6",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Pitch6"
+          },
+          {
+            "SourceId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+            "SourcePort": "Pitch7",
+            "TargetId": "3085bd58-8637-c4a6-6763-0bd0f2c65f0f",
+            "TargetPort": "Pitch7"
+          }
+        ],
+        "Positions": {},
+        "Snapshots": [
+          {
+            "Id": "24bf6e36-b5e7-4b41-850d-6d6d6bf2595f",
+            "Label": "r\u0119czne parametry",
+            "CreatedUtc": "2026-09-29T17:45:40.8300052Z",
+            "Modules": [
+              {
+                "ModuleId": "88234b1a-a1af-4224-8f9a-36fc988d1c69",
+                "ModuleName": "Ch\u00F3d",
+                "State": {
+                  "$type": "gait",
+                  "Stride": 0.6,
+                  "Lift": 0.6,
+                  "Knee": 0,
+                  "KneeSwing": -0.4,
+                  "Frequency": 2.5,
+                  "TurnGain": 1.5
+                }
+              }
+            ]
+          }
+        ],
+        "Current": null
+      },
+      "Id": "e158b9e3-6189-4e0c-a263-909dd97ec81d",
+      "Name": "Paj\u0105k",
+      "Position": [
+        2.052935,
+        3.0975907,
+        0.023552954
+      ],
+      "Rotation": [
+        0.003115162,
+        -0.008650782,
+        0.393087,
+        0.91945535
+      ]
+    }
+  ]
+}

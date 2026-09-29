@@ -13,6 +13,18 @@ namespace Animata.Studio.Kit;
 /// <summary>Ikony obrysowe w układzie 16×16 (dane ścieżek).</summary>
 public static class Icons
 {
+    /// <summary>Ikona z podpowiedzi rodzaju obiektu (<see cref="Core.WorldObjects.EntityType.Icon"/>); nieznana — mózg.</summary>
+    public static string For(string aHint) => aHint switch
+    {
+        "wheel" => Wheel,
+        "disk" or "target" => Target,
+        "snake" => Snake,
+        "spider" => Spider,
+        "pillar" => Pillar,
+        "slab" => Slab,
+        _ => Brain
+    };
+
     public const string Back = "M10 3L5 8L10 13";
     public const string Chevron = "M6 4L10 8L6 12";
     public const string Enter = "M3 8H12M9 5L12 8L9 11";
@@ -335,8 +347,6 @@ public static class Ui
     /// <summary>Kolor encji do list i miniatur.</summary>
     public static Color ColorOf(Core.Entities.Entity aEntity) => aEntity switch
     {
-        Core.WorldObjects.CarCreature car => Color.FromRgb((byte)(car.Color.X * 255), (byte)(car.Color.Y * 255), (byte)(car.Color.Z * 255)),
-        Core.WorldObjects.CylinderCreature cylinder => Color.FromRgb((byte)(cylinder.Color.X * 255), (byte)(cylinder.Color.Y * 255), (byte)(cylinder.Color.Z * 255)),
         Core.Entities.ArticulatedCreature body => Color.FromRgb((byte)(body.Color.X * 255), (byte)(body.Color.Y * 255), (byte)(body.Color.Z * 255)),
         Core.WorldObjects.Sphere => StudioPalette.Target,
         Core.WorldObjects.Cylinder cylinder => Color.FromRgb((byte)(cylinder.Color.X * 255), (byte)(cylinder.Color.Y * 255), (byte)(cylinder.Color.Z * 255)),

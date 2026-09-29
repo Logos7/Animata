@@ -318,14 +318,7 @@ public sealed class CreaturePanel : StudioPanel
         };
     }
 
-    private string BodyInfo() => _creature switch
-    {
-        Core.WorldObjects.CarCreature car => $"CarCreature · {car.Length:0.##} × {car.Width:0.##} × {car.Height:0.##} m · obrys r {car.BoundingRadius:0.##}",
-        Core.WorldObjects.CylinderCreature cylinder => $"CylinderCreature · r {cylinder.Radius:0.##} · h {cylinder.Height:0.##} m",
-        SnakeCreature snake => $"SnakeCreature · {snake.Segments} segm. · {snake.JointCount} stawów · fizyka Bepu",
-        SpiderCreature spider => $"SpiderCreature · 4 nogi · {spider.JointCount} stawów · fizyka Bepu",
-        _ => _creature.GetType().Name
-    };
+    private string BodyInfo() => _creature.Describe();
 
     // ---------- snapshoty ----------
 

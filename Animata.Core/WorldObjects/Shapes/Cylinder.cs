@@ -16,12 +16,17 @@ public sealed class Cylinder() : PhysicalStaticEntity(new Body())
 {
     public static readonly Vector3 DefaultColor = new(0.5f, 0.5f, 0.55f);
 
+    [Setting]
     public float Radius { get; set; } = 0.5f;
+
+    [Setting]
     public float Height { get; set; } = 0.8f;
 
     /// <summary>Tarcie chwytne kontaktu z cylindrem; 0 — zwykłe tarcie (mniejsze z obu ciał).</summary>
+    [Setting]
     public float Grip { get; set; }
 
+    [Setting]
     public Vector3 Color { get; set; } = DefaultColor;
 
     public override float BoundingRadius => Radius;
