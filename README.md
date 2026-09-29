@@ -138,8 +138,7 @@ Roughly in this direction, one experiment at a time:
 
 Requirements: **.NET 10 SDK**. The Studio uses HelixToolkit's SharpDX renderer, so it runs on **Windows**.
 
-BepuPhysics is built from a source copy in `external/bepuphysics2` (see its VENDORED.md), because the NuGet
-2.5.0-beta.29 still has an old friction bug the creatures' gaits would feel.
+BepuPhysics comes from NuGet (`BepuPhysics` 2.5.0-beta.29, the newest package).
 
 ```powershell
 dotnet build

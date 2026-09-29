@@ -1,7 +1,0 @@
-<Project>
-  <!-- Bepu (submoduł) budujemy zawsze w Release: projekty spoza .slnx dostają przy budowaniu rozwiązania
-       domyślną konfigurację, a Debug Bepu jest wolny (CHECKMATH) i asercją finalizatora BufferPool zabija testy. -->
-  <PropertyGroup>
-    <Configuration>Release</Configuration>
-  </PropertyGroup>
-</Project>
