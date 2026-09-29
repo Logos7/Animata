@@ -779,7 +779,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             await using (var stream = await file.OpenWriteAsync())
             await using (var writer = new StreamWriter(stream))
                 await writer.WriteAsync(WorldFile.ToJson(document));
-            if (file.TryGetLocalPath() is { } path)
+            if (WorldFiles.LocalPath(file) is { } path)
                 RecentFiles.Add(path);
             Session.Status = $"zapisano: {file.Name}";
         }
@@ -800,7 +800,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             var document = WorldFile.FromJson(await reader.ReadToEndAsync());
             _renderer.Select(null);
             Session.Load(document);
-            if (file.TryGetLocalPath() is { } path)
+            if (WorldFiles.LocalPath(file) is { } path)
                 RecentFiles.Add(path);
             _listKey = string.Empty;
             _propertiesBuilt = false;

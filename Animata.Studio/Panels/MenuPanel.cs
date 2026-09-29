@@ -220,7 +220,7 @@ public sealed class MenuPanel : StudioPanel
     {
         if (await WorldFiles.PickOpenAsync(this) is not { } file)
             return;
-        if (file.TryGetLocalPath() is { } path)
+        if (WorldFiles.LocalPath(file) is { } path)
             _openFile(path);
     }
 

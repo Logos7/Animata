@@ -41,6 +41,9 @@ public static class WorldFiles
         });
     }
 
+    /// <summary>Ścieżka pliku na dysku albo null (plik spoza systemu plików).</summary>
+    public static string? LocalPath(IStorageFile aFile) => aFile.Path is { IsAbsoluteUri: true, IsFile: true } uri ? uri.LocalPath : null;
+
     /// <summary>Nazwa sceny z nazwy pliku (bez .animata.json).</summary>
     public static string SceneName(string aPath)
     {
