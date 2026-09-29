@@ -1,5 +1,6 @@
 using Quaternion = System.Numerics.Quaternion;
 using Vector3 = System.Numerics.Vector3;
+using Vector2 = System.Numerics.Vector2;
 using Avalonia;
 using Avalonia.Media;
 using Animata.Core.Actuators;

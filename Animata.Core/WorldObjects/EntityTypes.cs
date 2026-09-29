@@ -29,7 +29,7 @@ public sealed record EntityType(string Id, string Name, string Icon, Type ClrTyp
 /// </summary>
 public static class EntityTypes
 {
-    public static readonly IReadOnlyList<EntityType> All =
+    private static readonly List<EntityType> Types =
     [
         EntityType.Creature("car", "Autko", "wheel", aBrain => new CarCreature(aBrain)),
         EntityType.Creature("cylinderCreature", "Walec", "disk", aBrain => new CylinderCreature(aBrain)),
@@ -39,6 +39,30 @@ public static class EntityTypes
         new("cylinder", "Cylinder", "pillar", typeof(Cylinder), () => new Cylinder()),
         new("box", "Klocek", "slab", typeof(Box), () => new Box())
     ];
+
+    /// <summary>Wszystkie rodzaje (kopia listy).</summary>
+    public static IReadOnlyList<EntityType> All
+    {
+        get
+        {
+            lock (Types)
+                return [.. Types];
+        }
+    }
+
+    /// <summary>
+    /// Dopisuje rodzaj spoza tej listy (np. stwór z innego projektu albo z testu). Identyfikator i klasa muszą być nowe —
+    /// inaczej <see cref="ArgumentException"/>.
+    /// </summary>
+    public static void Register(EntityType aType)
+    {
+        lock (Types)
+        {
+            if (Types.Any(aExisting => aExisting.Id == aType.Id || aExisting.ClrType == aType.ClrType))
+                throw new ArgumentException($"Rodzaj „{aType.Id}” ({aType.ClrType.Name}) już jest w rejestrze.", nameof(aType));
+            Types.Add(aType);
+        }
+    }
 
     /// <summary>Rodzaje stworów (do menu wstawiania).</summary>
     public static IEnumerable<EntityType> Creatures => All.Where(aType => aType.IsCreature);

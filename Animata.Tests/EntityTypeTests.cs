@@ -28,7 +28,7 @@ public class EntityTypeTests
             Assert.NotEmpty(creature.Body.Sensors);
             Assert.NotEmpty(creature.Body.Actuators);
             Assert.NotEmpty(creature.BrainPresets);
-            Assert.NotNull(creature.TrainingRig);
+            Assert.NotNull(Animata.Core.Training.SeekRigs.For(creature));
             // Pusty mózg: same węzły ciała, bez sterownika.
             Assert.All(creature.Brain!.Graph.Modules, aModule => Assert.True(aModule is SensorModule or ActuatorModule));
             Assert.Equal(creature.Body.Sensors.Count + creature.Body.Actuators.Count, creature.Brain.Graph.Modules.Count);
@@ -122,5 +122,84 @@ public class EntityTypeTests
     public void UnknownFormat_IsRejected()
     {
         Assert.Throws<NotSupportedException>(() => WorldFile.FromJson("""{ "Format": 2, "Name": "", "Time": 0, "Entities": [] }"""));
+    }
+}
+
+/// <summary>
+/// Nowy stwór od zera — tylko ta klasa i jedna linijka rejestracji: toczek, klocek na dwóch kołach z okiem.
+/// Zapis, kopiowanie, wymiana mózgu i nauka działają bez żadnej zmiany w zapisie świata ani w nauce.
+/// </summary>
+public sealed class RollerCreature(Animata.Core.Brains.Brain? aBrain = null) : ArticulatedCreature(Plan(), aBrain)
+{
+    [Setting]
+    public float Mood { get; set; } = 0.5f;
+
+    public static Animata.Core.Bodies.BodyPlan Plan()
+    {
+        var builder = new Animata.Core.Bodies.BodyPlanBuilder()
+            .Part(new Animata.Core.Bodies.PartPlan("Kadłub", Animata.Core.Bodies.PartShape.Box, new Vector3(0.5f, 0.3f, 0.15f), 1,
+                new Vector3(0, 0, 0.2f), Quaternion.Identity, 0.3f));
+        foreach (var (name, side) in new[] { ("Koło L", 1f), ("Koło P", -1f) })
+        {
+            builder.Part(new Animata.Core.Bodies.PartPlan(name, Animata.Core.Bodies.PartShape.Cylinder, new Vector3(0.12f, 0.06f, 0), 0.2f,
+                new Vector3(0, side * 0.22f, 0.12f), Quaternion.Identity, 1.2f));
+            builder.Wheel($"Oś {name}", "Kadłub", name, aSteerable: false, aDriven: true, aTorque: 2);
+        }
+        return builder.Build();
+    }
+
+    public override void Equip()
+    {
+        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
+        Body.Actuators.Add(new DiskDriveActuator { Slot = "Wheels" });
+        base.Equip();
+    }
+
+    public override IReadOnlyList<Animata.Core.Brains.BrainPreset> BrainPresets =>
+        [new("Sterownik celu", "skręca do celu i jedzie", () => new ApproachTargetModule { Name = "Approach" }, true)];
+}
+
+public class NewCreatureTests
+{
+    static NewCreatureTests()
+    {
+        if (EntityTypes.Find("roller") is null)
+            EntityTypes.Register(EntityType.Creature("roller", "Toczek", "wheel", aBrain => new RollerCreature(aBrain)));
+    }
+
+    [Fact]
+    public void NewCreature_NeedsOnlyAClassAndARegistryLine()
+    {
+        using var world = new World();
+        world.Add(WorldObjectCatalog.CreateFloor(20, 20));
+        var ball = WorldObjectCatalog.CreateSphere(new Vector3(4, 0, 0));
+        world.Add(ball);
+        var roller = (RollerCreature)EntityTypes.Find("roller")!.Create();
+        WorldObjectCatalog.InstallBrain(roller, roller.BrainPresets[0]);
+        WorldObjectCatalog.Aim(roller, ball.Id);
+        roller.Mood = 0.9f;
+        roller.Body.Actuators.OfType<DiskDriveActuator>().Single().MaxSpeed = 1.5f;
+        roller.Place(new Vector3(-1, 0, 0), Quaternion.Identity);
+        world.Add(roller);
+        for (var tick = 0; tick < 30; tick++)
+            world.Update(1f / 30);
+
+        // Zapis i odczyt: rodzaj, ustawienia stwora i napędu, cel, mózg.
+        var json = WorldFile.ToJson(WorldFile.Capture(world));
+        using var restored = WorldFile.Restore(WorldFile.FromJson(json)).World;
+        var twin = (RollerCreature)restored.Find(roller.Id)!;
+        Assert.Equal(0.9f, twin.Mood);
+        Assert.Equal(1.5f, twin.Body.Actuators.OfType<DiskDriveActuator>().Single().MaxSpeed);
+        Assert.Equal(ball.Id, twin.Body.Sensors.OfType<TargetSensor>().Single().TargetId);
+        Assert.Single(twin.Brain!.Graph.Modules.OfType<ApproachTargetModule>());
+        Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored)));
+
+        // Nauka: ogólny rig z rejestru buduje toczka z podanym sterownikiem i próba się odbywa.
+        var rig = Animata.Core.Training.SeekRigs.For(roller);
+        var result = Animata.Core.Training.SeekTargetTask.Run(new ApproachTargetModule(),
+            Animata.Core.Training.SeekTargetTask.CreateEpisodes(rig.DefaultOptions with { EpisodesPerGeneration = 1, EpisodeSeconds = 2 }, 0),
+            rig.DefaultOptions with { EpisodeSeconds = 2 }, rig);
+        Assert.Single(result);
+        Assert.True(float.IsFinite(result[0].Cost));
     }
 }
