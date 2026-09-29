@@ -156,7 +156,7 @@ public static class PanelParts
 
     /// <summary>
     /// Wybór celu oka: „brak” albo dowolna encja sceny poza właścicielem oka — kula, inny stwór (pościg, ucieczka),
-    /// cylinder, klocek. Lista odświeża się przy najechaniu i fokusie (encje mogą przybyć, zniknąć albo zmienić nazwę).
+    /// cylinder, klocek. Lista odświeża się przy najechaniu (encje mogą przybyć, zniknąć albo zmienić nazwę).
     /// </summary>
     public static Control TargetPicker(StudioSession aSession, ActiveEntity aOwner, TargetSensor aEye, Action? aChanged = null)
     {
@@ -164,34 +164,44 @@ public static class PanelParts
         ToolTip.SetTip(picker, "Na co patrzy oko: kula, inny stwór albo dowolna bryła. Nauka i tak ćwiczy na własnych celach — to zmienia tylko cel w scenie.");
         var updating = false;
         var shown = string.Empty;
+        List<TargetChoice> choices = [];
+        // Odświeżanie tylko przy zamkniętej liście i poza obsługą wyboru: podmiana ItemsSource albo przebudowa panelu
+        // w trakcie zamykania listy wywracała ComboBox (ArgumentOutOfRangeException w Avalonii).
         void Fill()
         {
-            var current = aEye.TargetId is { } id ? aSession.World.Find(id) : null;
+            if (picker.IsDropDownOpen)
+                return;
             var candidates = aSession.World.Entities.Where(aEntity => !ReferenceEquals(aEntity, aOwner))
                 .OrderBy(aEntity => aEntity switch { Sphere => 0, ActiveEntity => 1, Cylinder => 2, _ => 3 })
                 .ToList();
-            var key = string.Join("|", candidates.Select(aEntity => $"{aEntity.Id}:{StudioSession.NameOf(aEntity)}")) + $"#{current?.Id}";
-            if (key == shown)
-                return;
-            shown = key;
+            var key = string.Join("|", candidates.Select(aEntity => $"{aEntity.Id}:{StudioSession.NameOf(aEntity)}"));
             updating = true;
-            var choices = new List<TargetChoice> { new(null, "brak") };
-            choices.AddRange(candidates.Select(aEntity => new TargetChoice(aEntity, StudioSession.NameOf(aEntity))));
-            picker.ItemsSource = choices;
-            picker.SelectedItem = choices.FirstOrDefault(aChoice => ReferenceEquals(aChoice.Target, current)) ?? choices[0];
+            if (key != shown)
+            {
+                shown = key;
+                choices = [new(null, "brak"), .. candidates.Select(aEntity => new TargetChoice(aEntity, StudioSession.NameOf(aEntity)))];
+                picker.ItemsSource = choices;
+            }
+            var current = aEye.TargetId is { } id ? aSession.World.Find(id) : null;
+            var selected = choices.FirstOrDefault(aChoice => ReferenceEquals(aChoice.Target, current)) ?? choices[0];
+            if (!ReferenceEquals(picker.SelectedItem, selected))
+                picker.SelectedItem = selected;
             updating = false;
         }
         Fill();
         picker.Tapped += (_, aEvent) => aEvent.Handled = true;
-        picker.PointerEntered += (_, _) => Fill();
-        picker.GotFocus += (_, _) => Fill();
+        picker.PointerEntered += (_, _) => Dispatcher.UIThread.Post(Fill);
         picker.SelectionChanged += (_, _) =>
         {
             if (updating || picker.SelectedItem is not TargetChoice choice)
                 return;
-            aEye.TargetId = choice.Target?.Id;
-            aSession.Status = choice.Target is null ? "oko bez celu" : $"oko patrzy na: {choice.Name}";
-            aChanged?.Invoke();
+            // Zmiana po zamknięciu listy — reakcja (np. przebudowa inspektora) może usunąć ten ComboBox z drzewa.
+            Dispatcher.UIThread.Post(() =>
+            {
+                aEye.TargetId = choice.Target?.Id;
+                aSession.Status = choice.Target is null ? "oko bez celu" : $"oko patrzy na: {choice.Name}";
+                aChanged?.Invoke();
+            });
         };
         return picker;
     }
