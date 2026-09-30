@@ -153,6 +153,10 @@ public sealed class LampRoller(Brain? aBrain = null) : ArticulatedCreature(Rolle
         Body.Actuators.Add(new LampActuator { Slot = "Lamp" });
         base.Equip();
     }
+
+    // Rejestr jest wspólny dla testów, więc toczek spełnia ten sam kontrakt co każdy stwór (EntityTypeTests).
+    public override IReadOnlyList<BrainPreset> BrainPresets =>
+        [new("Sterownik celu", "koła do celu, lampa wolna", () => new ApproachTargetModule { Name = "Approach" }, true)];
 }
 
 public sealed class LampActuator : Actuator
