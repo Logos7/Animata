@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Numerics;
 using Animata.Core.Actuators;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
@@ -7,13 +5,12 @@ using Animata.Core.Entities;
 using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
-using Animata.Core.Worlds;
 
 namespace Animata.Tests;
 
 /// <summary>
 /// Nauka uczy tego, co jest w scenie: rig dostaje ustawienia zmysłów i napędów stwora, a zmiana modułu albo ustawień
-/// w trakcie nauki restartuje ją na nowych warunkach. Kontakt z przeszkodą liczy fizyka. Stwór może mieć kilka napędów.
+/// w trakcie nauki restartuje ją na nowych warunkach. Stwór może mieć kilka napędów.
 /// </summary>
 public class TrainingSetupTests : IDisposable
 {
@@ -81,23 +78,6 @@ public class TrainingSetupTests : IDisposable
         car.Brain!.Graph.Remove(TrainingController.FindTrainable(car)!);
         Assert.NotNull(PollFor(training));
         Assert.False(training.IsTraining(car.Brain));
-    }
-
-    [Fact]
-    public void ObstacleContact_ComesFromPhysics()
-    {
-        using var world = new World();
-        world.Add(WorldObjectCatalog.CreateFloor(20, 20));
-        var touched = WorldObjectCatalog.CreateCylinder(new Vector3(1.05f, 0, 0), 0.5f); // przód autka na 0.6 m
-        var near = WorldObjectCatalog.CreateCylinder(new Vector3(0, 1.2f, 0), 0.5f);     // obrys autka (0.6) sięga, bok (0.3) nie
-        world.Add(touched);
-        world.Add(near);
-        var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null);
-        world.Add(car);
-        world.Update(1f / 30); // pierwszy krok: nos autka wchodzi w cylinder (potem fizyka go odpycha)
-
-        Assert.True(car.Touches(touched));
-        Assert.False(car.Touches(near));
     }
 
     [Fact]

@@ -79,10 +79,6 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     public IReadOnlyList<Quaternion> PartOrientations => _orientations;
 
     /// <summary>Czy część czegoś dotykała w ostatnim kroku fizyki (klocka, cylindra, innej części).</summary>
-    /// <summary>Czy któraś część stwora dotykała w ostatnim kroku tej bryły (kontakt w fizyce, nie obrys).</summary>
-    public bool Touches(PhysicalStaticEntity aOther) =>
-        _physics is { } physics && aOther.StaticHandle is { } other && _bodies.Any(aBody => physics.IsTouching(aBody, other));
-
     public bool IsPartTouching(int aPart) => _physics is { } physics && aPart < _bodies.Length && physics.IsTouching(_bodies[aPart]);
 
     /// <summary>Zmierzony skręt stawu (rad, wokół osi Z dziecka w pozie spoczynkowej).</summary>

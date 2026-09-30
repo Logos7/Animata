@@ -587,11 +587,16 @@ public sealed class SeekTargetTask
 
     private BrainModule CreateModule(float[] aParameters) => TrainableModules.Create(_template, aParameters, _moduleName);
 
-    /// <summary>Kontakt z przeszkodą: w fizyce — dotyk którejkolwiek części; stwór bez części — obrys.</summary>
+    /// <summary>
+    /// „Kontakt” z przeszkodą: obrys stwora (okrąg <see cref="Entity.BoundingRadius"/>) dotyka cylindra. Celowo obrys, a nie
+    /// kontakt w fizyce: autko dostaje karę już z odstępu ~30 cm od boku, co trzyma je z dala od cylindrów. Pomiar
+    /// (sieć autka od losowych wag, 20 pok., walidacja 32 tras): obrys 28/32 i 28/32 (ziarna 3 i 5), prawdziwy kontakt
+    /// części z cylindrem 2/32 i 25/32 — rzadka kara za faktyczne zderzenie nie uczy omijania.
+    /// </summary>
     private static bool Touches(Entity aCreature, List<Cylinder> aObstacles)
     {
         foreach (var obstacle in aObstacles)
-            if (aCreature is ArticulatedCreature body ? body.Touches(obstacle) : Gap(aCreature, obstacle) < 0.01f)
+            if (Gap(aCreature, obstacle) < 0.01f)
                 return true;
         return false;
     }
