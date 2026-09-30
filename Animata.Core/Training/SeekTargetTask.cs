@@ -329,13 +329,11 @@ public static class SeekRigs
             return Disk;
         return new SeekRig(
             type.Name.ToLowerInvariant(),
-            (aTargetId, aController) =>
+            (aTargetId, aController) => new Spawn(type)
             {
-                var creature = (ActiveEntity)type.Create();
-                WorldObjectCatalog.Aim(creature, aTargetId);
-                WorldObjectCatalog.BuildBrain(creature.Brain!, aController);
-                return creature;
-            },
+                Slots = Spawn.Aim(aTargetId),
+                Brain = Spawn.Controller(aController)
+            }.Build<ActiveEntity>(),
             AverageCommand,
             new SeekTargetOptions(),
             AddFloor);

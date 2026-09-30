@@ -53,13 +53,13 @@ public static partial class WorldObjectCatalog
     /// <summary>Stwór z okiem namierzającym cel i napędem różnicowym, sterowany podanym modułem.</summary>
     public static CylinderCreature CreateSeeker(Vector3 aPosition, Vector3 aColor, Guid? aTargetId, BrainModule aController)
     {
-        var brain = new Brain();
-        var creature = new CylinderCreature(brain) { Color = aColor };
-        creature.Place(aPosition, Quaternion.Identity);
-        creature.Equip();
-        Aim(creature, aTargetId);
-        BuildBrain(brain, aController);
-        return creature;
+        return new Spawn(EntityTypes.Of<CylinderCreature>())
+        {
+            Settings = Spawn.Configure<CylinderCreature>(aCreature => aCreature.Color = aColor),
+            Slots = Spawn.Aim(aTargetId),
+            Brain = Spawn.Controller(aController),
+            Pose = Spawn.At(aPosition)
+        }.Build<CylinderCreature>();
     }
 
     public static CylinderCreature CreateControllerSeeker(Vector3 aPosition, Guid? aTargetId) =>

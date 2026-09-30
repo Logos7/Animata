@@ -56,6 +56,28 @@ public class SnapshotTests
     }
 
     [Fact]
+    public void Restore_OfSnapshotThatDoesNotFitTheGraph_ChangesNothing()
+    {
+        // Sieć ze snapshotu ma 3 wąsy, a w grafie są połączenia do Ray3 i Ray4 — po przywróceniu graf by się nie skompilował.
+        var car = WorldObjectCatalog.CreateNeuralCar(default, 0, null);
+        var brain = car.Brain!;
+        var network = brain.Graph.Modules.OfType<NeuralNetworkModule>().Single();
+        var state = (NeuralNetworkState)network.CaptureState();
+        var misfit = new BrainSnapshot(Guid.NewGuid(), "3 wąsy", DateTime.UtcNow,
+            [new ModuleSnapshot(network.Id, network.Name, WhiskerRewiring.Remap(state, 3))]);
+        var json = WorldFileJson(car);
+
+        Assert.Throws<InvalidOperationException>(() => brain.Restore(misfit));
+        Assert.True(network.CaptureState().SameAs(state));
+        Assert.Equal(json, WorldFileJson(car));
+        brain.Graph.Validate();
+    }
+
+    private static string WorldFileJson(Animata.Core.Entities.Entity aEntity) =>
+        Animata.Core.Persistence.WorldFile.ToJson(new Animata.Core.Persistence.WorldDocument(
+            Animata.Core.Persistence.WorldFile.Format, "", 0, Animata.Core.Persistence.WorldFile.CaptureEntities([aEntity])));
+
+    [Fact]
     public void StepBack_SkipsSnapshotsEqualToCurrentState_AndWraps()
     {
         var creature = WorldObjectCatalog.CreateNeuralSeeker(default, null);

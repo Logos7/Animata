@@ -83,38 +83,21 @@ public sealed class SnakeCreature : ArticulatedCreature
             return;
 
         var joints = aSegments - 1;
-        var graphs = Brain is null ? new List<BrainGraph>() : PortRewiring.GraphsOf(Brain.Graph).ToList();
-        var pairs = graphs.Select(aGraph => (Graph: aGraph, Pairs: PortRewiring.SameNamePairs(aGraph, IsSpinePort))).ToList();
-        var networks = graphs.SelectMany(aGraph => aGraph.Modules.OfType<NeuralNetworkModule>())
-            .Where(aNetwork => aNetwork.Outputs.Any(aOutput => IsSpinePort(aOutput.Port))).ToList();
-        var networkStates = networks.Select(aNetwork => RemapSpineOutputs((NeuralNetworkState)aNetwork.CaptureState(), joints)).ToList();
-        var snapshots = Brain?.Snapshots.Select(aSnapshot => (Old: aSnapshot, New: Convert(aSnapshot, joints))).ToList()
-            ?? new List<(BrainSnapshot Old, BrainSnapshot New)>();
-
-        Rebuild(WorldObjectCatalog.SnakePlan(aSegments));
-        _segments = aSegments;
-        foreach (var actuator in Body.Actuators.OfType<SpineActuator>())
-            actuator.SetJointCount(joints);
-        foreach (var sensor in Body.Sensors.OfType<JointSensor>())
-            sensor.SetJointCount(joints);
-
-        foreach (var module in graphs.SelectMany(aGraph => aGraph.Modules))
-            if (module is CpgModule cpg)
-                cpg.SetJointCount(joints);
-
-        for (var index = 0; index < networks.Count; index++)
-            networks[index].RestoreState(networkStates[index]);
-
-        foreach (var (graph, links) in pairs)
-            PortRewiring.Rewire(graph, links);
-        if (Brain is null)
-            return;
-        foreach (var (old, converted) in snapshots)
-            if (!ReferenceEquals(old, converted))
-                Brain.ReplaceSnapshot(old, converted);
-        Brain.Graph.InvalidateDeep();
-        Brain.Graph.Validate();
-        Brain.Reset();
+        PortRewiring.Change(this,
+            (aState, _) => aState is NeuralNetworkState network ? RemapSpineOutputs(network, joints) : aState,
+            (_, aPort) => IsSpinePort(aPort),
+            aGraphs =>
+            {
+                Rebuild(WorldObjectCatalog.SnakePlan(aSegments));
+                _segments = aSegments;
+                foreach (var actuator in Body.Actuators.OfType<SpineActuator>())
+                    actuator.SetJointCount(joints);
+                foreach (var sensor in Body.Sensors.OfType<JointSensor>())
+                    sensor.SetJointCount(joints);
+                foreach (var module in aGraphs.SelectMany(aGraph => aGraph.Modules))
+                    if (module is CpgModule cpg)
+                        cpg.SetJointCount(joints);
+            });
     }
 
     /// <summary>
@@ -169,31 +152,6 @@ public sealed class SnakeCreature : ArticulatedCreature
 
     private static (string Kind, int Joint) SplitSpinePort(string aPort) =>
         aPort.StartsWith("Yaw", StringComparison.Ordinal) ? ("Yaw", int.Parse(aPort.AsSpan(3))) : ("Pitch", int.Parse(aPort.AsSpan(5)));
-
-    private static BrainSnapshot Convert(BrainSnapshot aSnapshot, int aJoints)
-    {
-        var modules = aSnapshot.Modules.Select(aModule => Convert(aModule, aJoints)).ToArray();
-        return modules.SequenceEqual(aSnapshot.Modules) ? aSnapshot : aSnapshot with { Modules = modules };
-    }
-
-    private static ModuleSnapshot Convert(ModuleSnapshot aModule, int aJoints)
-    {
-        switch (aModule.State)
-        {
-            case NeuralNetworkState network when network.Outputs.Any(aOutput => IsSpinePort(aOutput.Port)):
-            {
-                var remapped = RemapSpineOutputs(network, aJoints);
-                return ReferenceEquals(remapped, network) ? aModule : aModule with { State = remapped };
-            }
-            case CompositeState composite:
-            {
-                var inner = composite.Modules.Select(aInner => Convert(aInner, aJoints)).ToArray();
-                return inner.SequenceEqual(composite.Modules) ? aModule : aModule with { State = new CompositeState(inner) };
-            }
-            default:
-                return aModule;
-        }
-    }
 
     /// <summary>Port stawu: Yaw{i} albo Pitch{i}.</summary>
     public static bool IsSpinePort(string aPort) =>

@@ -15,11 +15,11 @@ public sealed record DemoScene(World World, IReadOnlyList<ActiveEntity> Creature
 public static partial class WorldObjectCatalog
 {
     /// <summary>Kula (cel oka) leżąca na (x, y, z).</summary>
-    public static Sphere CreateSphere(Vector3 aPosition, float aRadius = 0.4f) => new()
+    public static Sphere CreateSphere(Vector3 aPosition, float aRadius = 0.4f) => new Spawn(EntityTypes.Of<Sphere>())
     {
-        Radius = aRadius,
-        Body = { Position = aPosition }
-    };
+        Settings = Spawn.Configure<Sphere>(aSphere => aSphere.Radius = aRadius),
+        Pose = Spawn.At(aPosition)
+    }.Build<Sphere>();
 
 
     /// <summary>
@@ -61,32 +61,38 @@ public static partial class WorldObjectCatalog
     }
 
     /// <summary>Pionowy cylinder stojący na (x, y, z).</summary>
-    public static Cylinder CreateCylinder(Vector3 aPosition, float aRadius = 0.5f, float aHeight = 0.8f) => new()
+    public static Cylinder CreateCylinder(Vector3 aPosition, float aRadius = 0.5f, float aHeight = 0.8f) => new Spawn(EntityTypes.Of<Cylinder>())
     {
-        Radius = aRadius,
-        Height = aHeight,
-        Body = { Position = aPosition }
-    };
+        Settings = Spawn.Configure<Cylinder>(aCylinder =>
+        {
+            aCylinder.Radius = aRadius;
+            aCylinder.Height = aHeight;
+        }),
+        Pose = Spawn.At(aPosition)
+    }.Build<Cylinder>();
 
     /// <summary>Klocek: środek spodu w (x, y, z), wymiary, obrót wokół pionu.</summary>
-    public static Box CreateBox(Vector3 aPosition, Vector3 aSize, float aYaw = 0) => new()
+    public static Box CreateBox(Vector3 aPosition, Vector3 aSize, float aYaw = 0) => new Spawn(EntityTypes.Of<Box>())
     {
-        Size = aSize,
-        Body = { Position = aPosition, Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) }
-    };
+        Settings = Spawn.Configure<Box>(aBox => aBox.Size = aSize),
+        Pose = Spawn.At(aPosition, aYaw)
+    }.Build<Box>();
 
     /// <summary>Kolor podłogi.</summary>
     public static readonly Vector3 FloorColor = new(0.20f, 0.27f, 0.33f);
 
     /// <summary>Podłoga: zablokowany klocek szer. × głęb. × 0.2 m z górną ścianą na z = 0, środek w (0, 0).</summary>
-    public static Box CreateFloor(float aWidth, float aDepth) => new()
+    public static Box CreateFloor(float aWidth, float aDepth) => new Spawn(EntityTypes.Of<Box>())
     {
+        Settings = Spawn.Configure<Box>(aBox =>
+        {
+            aBox.Size = new Vector3(aWidth, aDepth, 0.2f);
+            aBox.Color = FloorColor;
+            aBox.Locked = true;
+        }),
         Name = "Podłoga",
-        Size = new Vector3(aWidth, aDepth, 0.2f),
-        Color = FloorColor,
-        Locked = true,
-        Body = { Position = new Vector3(0, 0, -0.2f) }
-    };
+        Pose = Spawn.At(new Vector3(0, 0, -0.2f))
+    }.Build<Box>();
 
     /// <summary>Wyjścia sieci sterującej stawami (wąż, pająk): Yaw0, Pitch0, Yaw1, Pitch1, … — nowy staw dopisuje się na końcu.</summary>
     public static string[] JointNetworkOutputs(int aJoints) =>

@@ -8,9 +8,10 @@ namespace Animata.Core.Entities;
 /// <summary>
 /// Ustawienie zapisywane w pliku świata i kopiowane razem z encją: właściwość stwora (np. liczba segmentów, kolor),
 /// zmysłu (np. zasięg wąsów, cel oka) albo napędu (prędkość, moment). Właściwość musi mieć publiczny getter i setter
-/// typu, który umie <see cref="Settings"/> (liczby, bool, enum, Guid?, float[], Vector3). Kolejność zapisu i odtwarzania
-/// = kolejność deklaracji (klasa bazowa najpierw) — ustawienie, które przebudowuje ciało (segmenty), deklaruje się
-/// przed tymi, które od niego zależą.
+/// typu, który umie <see cref="Settings"/> (liczby, bool, enum, Guid?, float[], Vector3). Kolejność zapisu = kolejność
+/// deklaracji (klasa bazowa najpierw). Ustawienia jednego obiektu nie mogą zależeć od siebie nawzajem: ciało przebudowują
+/// tylko ustawienia stwora (np. segmenty), a ustawienia zmysłów i napędów, które od kształtu ciała zależą, nadaje się
+/// w osobnym, późniejszym kroku (<see cref="WorldObjects.Spawn"/>).
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class SettingAttribute : Attribute;

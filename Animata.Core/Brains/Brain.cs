@@ -127,21 +127,35 @@ public class Brain
     /// <summary>
     /// Przywraca stan modułów ze snapshotu (dopasowanie po Id modułu, także w podgrafach — moduł zgrupowany w podgraf
     /// po zrobieniu snapshotu nadal się przywróci). Moduły, których już nie ma w grafie, są pomijane. Zwraca liczbę przywróconych modułów.
+    /// Snapshot to stan modułów (parametry i konfiguracja modułu, np. kształt sieci i jej porty), nigdy struktura grafu
+    /// (które moduły, połączenia). Przywrócenie jest atomowe: jeśli moduł odrzuci stan albo graf po nim się nie kompiluje
+    /// (np. sieć ze snapshotu nie ma portu, do którego prowadzi połączenie), wszystkie moduły wracają do stanu sprzed
+    /// wywołania i leci <see cref="InvalidOperationException"/> z powodem.
     /// </summary>
     public int Restore(BrainSnapshot aSnapshot)
     {
-        var restored = 0;
-        foreach (var entry in aSnapshot.Modules)
+        var restored = new List<(BrainModule Module, ModuleState? Before)>();
+        try
         {
-            var module = Graph.FindDeep(entry.ModuleId);
-            if (module is null)
-                continue;
-            module.RestoreState(entry.State);
-            restored++;
+            foreach (var entry in aSnapshot.Modules)
+            {
+                if (Graph.FindDeep(entry.ModuleId) is not { } module)
+                    continue;
+                restored.Add((module, module.CaptureState()));
+                module.RestoreState(entry.State);
+            }
+            Graph.InvalidateDeep();
+            Graph.Validate();
         }
-
-        Graph.InvalidateDeep();
-        return restored;
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or BrainException or FormatException)
+        {
+            for (var index = restored.Count - 1; index >= 0; index--)
+                if (restored[index].Before is { } before)
+                    restored[index].Module.RestoreState(before);
+            Graph.InvalidateDeep();
+            throw new InvalidOperationException($"Snapshot „{aSnapshot.Label}” nie pasuje do tego mózgu: {exception.Message}", exception);
+        }
+        return restored.Count;
     }
 
     /// <summary>

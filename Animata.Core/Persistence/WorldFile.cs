@@ -233,43 +233,44 @@ public static class WorldFile
         return new DemoScene(world, creatures);
     }
 
+    /// <summary>Obiekt z dokumentu — ta sama droga co każdy nowy obiekt (<see cref="Spawn"/>), kroki z pliku.</summary>
     private static Entity RestoreEntity(EntityDocument aDocument)
     {
         var type = EntityTypes.Find(aDocument.Type) ?? throw new NotSupportedException($"Nieznany rodzaj obiektu w pliku: {aDocument.Type}.");
-        var entity = type.Create();
-        // Kolejność: ustawienia obiektu (mogą przebudować ciało — segmenty), ustawienia slotów, mózg, na końcu poza.
-        Settings.Apply(entity, aDocument.Settings);
-        if (entity is ActiveEntity creature)
-        {
-            foreach (var (slot, values) in aDocument.Sensors ?? Empty)
-                if (creature.Body.FindSensor(slot) is { } sensor)
-                    Settings.Apply(sensor, values);
-            foreach (var (slot, values) in aDocument.Actuators ?? Empty)
-                if (creature.Body.FindActuator(slot) is { } actuator)
-                    Settings.Apply(actuator, values);
-            if (aDocument.Brain is { } brain && creature.Brain is { } target)
-                RestoreBrain(target, brain);
-        }
-
-        entity.AssignId(aDocument.Id);
-        entity.Name = aDocument.Name;
         var position = ToVector(aDocument.Position);
         var rotation = ToRotation(aDocument.Rotation);
-        if (aDocument.Parts is { } parts && entity is ArticulatedCreature bent && parts.Length == 7 * bent.PartPositions.Count)
+        return new Spawn(type)
         {
-            var count = bent.PartPositions.Count;
-            bent.PlaceParts(
-                [.. Enumerable.Range(0, count).Select(aPart => new Vector3(parts[7 * aPart], parts[7 * aPart + 1], parts[7 * aPart + 2]))],
-                [.. Enumerable.Range(0, count).Select(aPart => new Quaternion(parts[7 * aPart + 3], parts[7 * aPart + 4], parts[7 * aPart + 5], parts[7 * aPart + 6]))]);
-        }
-        else if (entity.Locked)
-        {
-            entity.Body.Position = position;
-            entity.Body.Rotation = rotation;
-        }
-        else
-            entity.Place(position, rotation);
-        return entity;
+            Settings = aEntity => Settings.Apply(aEntity, aDocument.Settings),
+            Slots = aCreature =>
+            {
+                foreach (var (slot, values) in aDocument.Sensors ?? Empty)
+                    if (aCreature.Body.FindSensor(slot) is { } sensor)
+                        Settings.Apply(sensor, values);
+                foreach (var (slot, values) in aDocument.Actuators ?? Empty)
+                    if (aCreature.Body.FindActuator(slot) is { } actuator)
+                        Settings.Apply(actuator, values);
+            },
+            Brain = aCreature =>
+            {
+                if (aDocument.Brain is { } brain && aCreature.Brain is { } target)
+                    RestoreBrain(target, brain);
+            },
+            Id = aDocument.Id,
+            Name = aDocument.Name,
+            Pose = aEntity =>
+            {
+                if (aDocument.Parts is { } parts && aEntity is ArticulatedCreature bent && parts.Length == 7 * bent.PartPositions.Count)
+                {
+                    var count = bent.PartPositions.Count;
+                    bent.PlaceParts(
+                        [.. Enumerable.Range(0, count).Select(aPart => new Vector3(parts[7 * aPart], parts[7 * aPart + 1], parts[7 * aPart + 2]))],
+                        [.. Enumerable.Range(0, count).Select(aPart => new Quaternion(parts[7 * aPart + 3], parts[7 * aPart + 4], parts[7 * aPart + 5], parts[7 * aPart + 6]))]);
+                }
+                else
+                    Spawn.At(position, rotation)(aEntity);
+            }
+        }.Build();
     }
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>> Empty =

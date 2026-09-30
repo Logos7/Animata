@@ -57,14 +57,13 @@ public static partial class WorldObjectCatalog
         int aWhiskers = DefaultWhiskers)
     {
         var angles = WhiskerAnglesFor(aWhiskers);
-        var brain = new Brain();
-        var car = new CarCreature(brain) { Color = aColor };
-        car.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
-        car.Equip();
-        car.Body.Sensors.OfType<RaySensor>().Single().SetAngles(angles);
-        Aim(car, aTargetId);
-        BuildBrain(brain, aController);
-        return car;
+        return new Spawn(EntityTypes.Of<CarCreature>())
+        {
+            Settings = Spawn.Configure<CarCreature>(aCar => aCar.Color = aColor),
+            Slots = Spawn.Then(aCar => aCar.Body.Sensors.OfType<RaySensor>().Single().SetAngles(angles), Spawn.Aim(aTargetId)),
+            Brain = Spawn.Controller(aController),
+            Pose = Spawn.At(aPosition, aYaw)
+        }.Build<CarCreature>();
     }
 
     public static AvoidAndSeekModule CreateAvoidController(int aWhiskers = DefaultWhiskers) =>

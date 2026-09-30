@@ -32,53 +32,18 @@ public static class WhiskerRewiring
         if (sensor.Angles.Count == aCount)
             return;
 
-        var brain = aCreature.Brain;
-        var graphs = brain is null ? new List<BrainGraph>() : PortRewiring.GraphsOf(brain.Graph).ToList();
-
-        // 1. Wszystko, co może rzucić, zanim cokolwiek się zmieni.
-        var networks = graphs.SelectMany(aGraph => aGraph.Modules.OfType<NeuralNetworkModule>())
-            .Where(aNetwork => aNetwork.Ports.Any(RaySensor.IsPortName)).ToList();
-        var networkStates = networks.Select(aNetwork => Remap((NeuralNetworkState)aNetwork.CaptureState(), aCount, aNetwork.Name)).ToList();
-        var snapshots = brain?.Snapshots.Select(aSnapshot => (Old: aSnapshot, New: Convert(aSnapshot, aCount))).ToList()
-            ?? new List<(BrainSnapshot Old, BrainSnapshot? New)>();
-        var fed = graphs.Select(aGraph => (Graph: aGraph, Pairs: FedByRays(aGraph, sensor.Slot))).ToList();
-
-        // 2. Ciało i moduły.
-        sensor.SetAngles(angles);
-        foreach (var module in graphs.SelectMany(aGraph => aGraph.Modules))
-            if (module is AvoidAndSeekModule avoid)
-                avoid.SetRayAngles(angles);
-        for (var index = 0; index < networks.Count; index++)
-            networks[index].RestoreState(networkStates[index]);
-
-        // 3. Połączenia, snapshoty, kompilacja.
-        foreach (var (graph, pairs) in fed)
-            PortRewiring.Rewire(graph, pairs);
-        if (brain is null)
-            return;
-        foreach (var (old, converted) in snapshots)
-            if (converted is null)
-                brain.RemoveSnapshot(old);
-            else if (!ReferenceEquals(converted, old))
-                brain.ReplaceSnapshot(old, converted);
-        brain.Graph.InvalidateDeep();
-        brain.Graph.Validate();
-        brain.Reset();
-    }
-
-    /// <summary>Pary (węzeł sensora, moduł) połączone wąsem „port do portu tej samej nazwy” (Ray3 → Ray3).</summary>
-    private static List<(BrainModule Source, BrainModule Target)> FedByRays(BrainGraph aGraph, string aSlot)
-    {
-        var pairs = new List<(BrainModule Source, BrainModule Target)>();
-        foreach (var link in aGraph.Connections)
-        {
-            if (!RaySensor.IsPortName(link.SourcePort) || link.SourcePort != link.TargetPort)
-                continue;
-            if (aGraph.Find(link.SourceId) is SensorModule source && source.Slot == aSlot &&
-                aGraph.Find(link.TargetId) is { } target && !pairs.Contains((source, target)))
-                pairs.Add((source, target));
-        }
-        return pairs;
+        PortRewiring.Change(aCreature,
+            (aState, aName) => aState is NeuralNetworkState network && network.Ports.Count(RaySensor.IsPortName) is > 0 and var rays && rays != aCount
+                ? Remap(network, aCount, aName)
+                : aState,
+            (aSource, aPort) => aSource is SensorModule source && source.Slot == sensor.Slot && RaySensor.IsPortName(aPort),
+            aGraphs =>
+            {
+                sensor.SetAngles(angles);
+                foreach (var module in aGraphs.SelectMany(aGraph => aGraph.Modules))
+                    if (module is AvoidAndSeekModule avoid)
+                        avoid.SetRayAngles(angles);
+            });
     }
 
     // ---------- sieć ----------
@@ -156,37 +121,5 @@ public static class WhiskerRewiring
 
         return new NeuralNetworkState(layers, weights, aState.Biases.Select(aLayer => (float[])aLayer.Clone()).ToArray(),
             [.. ports], [.. expressions], [.. aState.Outputs]);
-    }
-
-    // ---------- snapshoty ----------
-
-    /// <summary>Snapshot z sieciami przeliczonymi na nową liczbę wąsów; ten sam obiekt, gdy nic się nie zmienia; null, gdy się nie da.</summary>
-    private static BrainSnapshot? Convert(BrainSnapshot aSnapshot, int aCount)
-    {
-        try
-        {
-            var modules = aSnapshot.Modules.Select(aModule => Convert(aModule, aCount)).ToArray();
-            return modules.SequenceEqual(aSnapshot.Modules) ? aSnapshot : aSnapshot with { Modules = modules };
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
-    private static ModuleSnapshot Convert(ModuleSnapshot aModule, int aCount)
-    {
-        switch (aModule.State)
-        {
-            case NeuralNetworkState network when network.Ports.Count(RaySensor.IsPortName) is > 0 and var rays && rays != aCount:
-                return aModule with { State = Remap(network, aCount, aModule.ModuleName) };
-            case CompositeState composite:
-            {
-                var inner = composite.Modules.Select(aInner => Convert(aInner, aCount)).ToArray();
-                return inner.SequenceEqual(composite.Modules) ? aModule : aModule with { State = new CompositeState(inner) };
-            }
-            default:
-                return aModule;
-        }
     }
 }

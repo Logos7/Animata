@@ -219,15 +219,30 @@ public sealed class StudioSession : IDisposable
     public string StepBack(Brain aBrain)
     {
         var error = Training.Stop(aBrain);
-        if (History.StepBack(aBrain) is not { } restored)
-            return Status = error ?? (aBrain.Snapshots.Count == 0 ? "brak snapshotów" : "brak snapshotów innych niż stan bieżący");
-        return Status = $"przywrócono {restored.Index + 1}/{aBrain.Snapshots.Count}: {restored.Snapshot.Label}";
+        try
+        {
+            if (History.StepBack(aBrain) is not { } restored)
+                return Status = error ?? (aBrain.Snapshots.Count == 0 ? "brak snapshotów" : "brak snapshotów innych niż stan bieżący");
+            return Status = $"przywrócono {restored.Index + 1}/{aBrain.Snapshots.Count}: {restored.Snapshot.Label}";
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Status = exception.Message;
+        }
     }
 
+    /// <summary>Przywraca snapshot; gdy nie pasuje do mózgu, mózg zostaje bez zmian, a powód trafia do statusu.</summary>
     public string Restore(Brain aBrain, BrainSnapshot aSnapshot)
     {
         var error = Training.Stop(aBrain);
-        aBrain.Restore(aSnapshot);
+        try
+        {
+            aBrain.Restore(aSnapshot);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Status = exception.Message;
+        }
         return Status = error ?? $"przywrócono: {aSnapshot.Label}";
     }
 
@@ -359,14 +374,19 @@ public sealed class StudioSession : IDisposable
         var position = aPosition with { Z = GroundAt(aPosition) };
         var target = NearestTarget(position);
         var yaw = target is null ? 0 : MathF.Atan2(target.Body.Position.Y - position.Y, target.Body.Position.X - position.X);
-        var creature = (ActiveEntity)aType.Create();
-        if (creature is ArticulatedCreature body)
-            body.Color = WorldObjectCatalog.RandomColor();
-        if (creature.BrainPresets.Count > 0)
-            WorldObjectCatalog.InstallBrain(creature, creature.BrainPresets[0]);
-        WorldObjectCatalog.Aim(creature, target?.Id);
-        creature.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw));
-        creature.Name = UniqueName(aType.Name);
+        // Ta sama droga co każdy obiekt (Spawn): losowy kolor, cel, pierwszy gotowy mózg, poza.
+        var creature = new Spawn(aType)
+        {
+            Settings = aEntity =>
+            {
+                if (aEntity is ArticulatedCreature body)
+                    body.Color = WorldObjectCatalog.RandomColor();
+            },
+            Slots = Spawn.Aim(target?.Id),
+            Brain = Spawn.Preset(aCreature => aCreature.BrainPresets.FirstOrDefault()),
+            Name = UniqueName(aType.Name),
+            Pose = Spawn.At(position, yaw)
+        }.Build<ActiveEntity>();
         World.Add(creature);
         Status = target is null ? $"dodano: {creature.Name} (brak kuli — dodaj cel)" : $"dodano: {creature.Name}";
         return creature;

@@ -98,13 +98,18 @@ public static partial class WorldObjectCatalog
     public static SnakeCreature CreateSnake(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController,
         int aSegments = DefaultSnakeSegments)
     {
-        var brain = new Brain();
-        var snake = new SnakeCreature(aSegments, brain) { Color = aColor };
-        snake.Equip();
-        Aim(snake, aTargetId);
-        BuildBrain(brain, aController);
-        snake.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
-        return snake;
+        CheckSnakeLength(aSegments);
+        return new Spawn(EntityTypes.Of<SnakeCreature>())
+        {
+            Settings = Spawn.Configure<SnakeCreature>(aSnake =>
+            {
+                aSnake.Segments = aSegments;
+                aSnake.Color = aColor;
+            }),
+            Slots = Spawn.Aim(aTargetId),
+            Brain = Spawn.Controller(aController),
+            Pose = Spawn.At(aPosition, aYaw)
+        }.Build<SnakeCreature>();
     }
 
     /// <summary>

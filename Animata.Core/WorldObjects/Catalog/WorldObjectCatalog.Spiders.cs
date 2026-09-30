@@ -17,13 +17,13 @@ public static partial class WorldObjectCatalog
     /// </summary>
     public static SpiderCreature CreateSpider(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController)
     {
-        var brain = new Brain();
-        var spider = new SpiderCreature(brain) { Color = aColor };
-        spider.Equip();
-        Aim(spider, aTargetId);
-        BuildBrain(brain, aController);
-        spider.Place(aPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw));
-        return spider;
+        return new Spawn(EntityTypes.Of<SpiderCreature>())
+        {
+            Settings = Spawn.Configure<SpiderCreature>(aSpider => aSpider.Color = aColor),
+            Slots = Spawn.Aim(aTargetId),
+            Brain = Spawn.Controller(aController),
+            Pose = Spawn.At(aPosition, aYaw)
+        }.Build<SpiderCreature>();
     }
 
     /// <summary>Pająk z generatorem kłusa: ręczne parametry jako snapshot „ręczne parametry”, chód wylosowany.</summary>

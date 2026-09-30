@@ -5,9 +5,9 @@ namespace Animata.Core.WorldObjects;
 
 /// <summary>
 /// Rodzaj obiektu świata: identyfikator w pliku (<see cref="Id"/>, nie zmieniać — zapisane światy się do niego odwołują),
-/// nazwa do UI, ikona (podpowiedź dla Studia) i budowa domyślnego obiektu. Stwór z <see cref="Create"/> jest wyposażony
-/// (<see cref="ActiveEntity.Equip"/>) i ma pusty mózg — sam ciało z węzłami zmysłów i napędów; sterownik dokłada się
-/// z <see cref="ActiveEntity.BrainPresets"/> albo z pliku.
+/// nazwa do UI, ikona (podpowiedź dla Studia) i budowa domyślnego obiektu — pierwszy krok <see cref="Spawn"/>. Stwór
+/// z <see cref="Create"/> jest wyposażony (<see cref="ActiveEntity.Equip"/>) i ma pusty mózg — samo ciało z węzłami zmysłów
+/// i napędów; resztę (ustawienia, cel, mózg, pozę) dokłada <see cref="Spawn"/>.
 /// </summary>
 public sealed record EntityType(string Id, string Name, string Icon, Type ClrType, Func<Entity> Create)
 {
@@ -71,5 +71,12 @@ public static class EntityTypes
     public static EntityType? Find(string aId) => All.FirstOrDefault(aType => aType.Id == aId);
 
     /// <summary>Rodzaj encji albo null (encja spoza rejestru).</summary>
-    public static EntityType? Of(Entity aEntity) => All.FirstOrDefault(aType => aType.ClrType == aEntity.GetType());
+    public static EntityType? Of(Entity aEntity) => Of(aEntity.GetType());
+
+    /// <summary>Rodzaj zarejestrowanej klasy; klasa spoza rejestru → <see cref="InvalidOperationException"/>.</summary>
+    public static EntityType Of<T>() where T : Entity =>
+        Of(typeof(T)) ?? throw new InvalidOperationException($"{typeof(T).Name} nie ma wpisu w rejestrze {nameof(EntityTypes)}.");
+
+    /// <summary>Rodzaj klasy obiektu albo null (klasa spoza rejestru).</summary>
+    public static EntityType? Of(Type aClass) => All.FirstOrDefault(aType => aType.ClrType == aClass);
 }
