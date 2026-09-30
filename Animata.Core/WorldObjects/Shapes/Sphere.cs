@@ -9,7 +9,7 @@ namespace Animata.Core.WorldObjects;
 /// </summary>
 public sealed class Sphere() : StaticEntity(new Body())
 {
-    [Setting]
+    [Setting("Promień", Unit = "m", Min = 0.05, Max = 5)]
     public float Radius { get; set; } = 0.4f;
 
     public override float BoundingRadius => Radius;

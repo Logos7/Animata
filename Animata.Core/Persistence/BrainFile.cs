@@ -27,7 +27,8 @@ public sealed record BrainLoadReport(IReadOnlyList<string> MissingSlots, int Dro
 /// <summary>Zapis i odczyt samego mózgu: <see cref="Capture"/> → <see cref="ToJson"/> / <see cref="FromJson"/> → <see cref="Load"/>.</summary>
 public static class BrainFile
 {
-    public const int Format = 1;
+    /// <summary>Format 2: moduły jak w pliku świata formatu 5 (każdy jako stan). Format 1 jest przepisywany.</summary>
+    public const int Format = 2;
 
     /// <summary>Sugerowane rozszerzenie pliku mózgu.</summary>
     public const string Extension = ".brain.json";
@@ -43,10 +44,17 @@ public static class BrainFile
 
     public static BrainFileDocument FromJson(string aJson)
     {
-        var document = JsonSerializer.Deserialize<BrainFileDocument>(aJson, WorldFile.Options)
+        var node = System.Text.Json.Nodes.JsonNode.Parse(aJson) as System.Text.Json.Nodes.JsonObject
             ?? throw new JsonException("Pusty plik mózgu.");
-        if (document.Format != Format)
-            throw new NotSupportedException($"Plik mózgu ma format {document.Format}, a ta wersja czyta tylko format {Format}.");
+        var format = node["Format"]?.GetValue<int>() ?? 0;
+        if (format is < 1 or > Format)
+            throw new NotSupportedException($"Plik mózgu ma format {format}, a ta wersja czyta formaty 1–{Format}.");
+        if (format == 1)
+        {
+            WorldFileMigration.ModulesAsStates(node);
+            node["Format"] = Format;
+        }
+        var document = node.Deserialize<BrainFileDocument>(WorldFile.Options) ?? throw new JsonException("Pusty plik mózgu.");
         if (document.Brain is null)
             throw new JsonException("W pliku nie ma mózgu.");
         return document;

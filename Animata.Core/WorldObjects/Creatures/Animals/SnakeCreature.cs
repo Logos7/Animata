@@ -48,7 +48,7 @@ public sealed class SnakeCreature : ArticulatedCreature
 
     public override string Describe() => $"SnakeCreature · {Segments} segm. · {JointCount} stawów · fizyka Bepu";
 
-    [Setting]
+    [Setting("Segmenty", Min = WorldObjectCatalog.MinSnakeSegments, Max = WorldObjectCatalog.MaxSnakeSegments, Step = 1, Reshapes = true, Slots = "Spine,Joints", Tip = "Liczba segmentów węża. Ciało przebudowuje się w miejscu, CPG zachowuje wyuczony chód, sieć dostaje przeliczone wyjścia.")]
     public int Segments
     {
         get => _segments;
@@ -59,7 +59,7 @@ public sealed class SnakeCreature : ArticulatedCreature
     /// Wspinacz: uczy się wchodzić na pień — cylinder z tarciem chwytnym (próby zaczyna owinięty wokół pnia, cel na jego szczycie —
     /// <see cref="Training.SeekRigs.ClimbWith"/>), a nie pełzać po ziemi.
     /// </summary>
-    [Setting]
+    [Setting("Wspinacz", Tip = "Nauka uczy wchodzenia na pień — cylinder z tarciem chwytnym (próby: wąż owinięty wokół niego, kula na szczycie) zamiast pełzania po ziemi.")]
     public bool Climber { get; set; }
 
     /// <summary>Owija węża wokół cylindra-pnia (<see cref="SnakeWrap.Around"/>) i robi z niego wspinacza.</summary>

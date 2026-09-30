@@ -44,6 +44,17 @@ public sealed class RouterModule : BrainModule
 
     public static string ChannelPort(int aChannel, string aPort) => $"In{aChannel}.{aPort}";
 
+    /// <summary>Konfiguracja routera (zapis w pliku, snapshot).</summary>
+    public override ModuleState CaptureState() => new RouterState(Channels, [.. _ports]);
+
+    /// <summary>Konfiguracji routera nie da się zmienić — stan musi być ten sam, inaczej <see cref="ArgumentException"/>.</summary>
+    public override void RestoreState(ModuleState aState)
+    {
+        var state = Expect<RouterState>(aState);
+        if (state.Channels != Channels || !state.Ports.SequenceEqual(_ports))
+            throw new ArgumentException("Router ma inną liczbę kanałów albo inne porty niż w stanie.", nameof(aState));
+    }
+
     public override IReadOnlyDictionary<string, float> Evaluate(
         IReadOnlyDictionary<string, float> aInputs, BrainContext aContext)
     {

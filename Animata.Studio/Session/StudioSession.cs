@@ -461,50 +461,41 @@ public sealed class StudioSession : IDisposable
     }
 
     /// <summary>
-    /// Zmienia liczbę wąsów stwora w miejscu (ten sam stwór i mózg, patrz <see cref="WhiskerRewiring"/>): sieć zachowuje
-    /// przeliczone wagi, AvoidAndSeek parametry, snapshoty są przeliczane. Trwająca nauka jest zatrzymywana i wznawiana
-    /// już w ciele z nową liczbą wąsów. Zwraca false (z powodem w <see cref="Status"/>), gdy się nie da.
+    /// Zmiana ustawienia obiektu albo jego zmysłu czy napędu (edytor ustawień). Ustawienie, które zmienia kształt ciała
+    /// (<see cref="SettingAttribute.Reshapes"/>: liczba wąsów, segmenty), idzie przy zatrzymanej nauce — ten sam stwór i mózg,
+    /// sieć i snapshoty są przeliczane, nauka wraca już w nowym ciele. Zwraca false (z powodem w <see cref="Status"/>),
+    /// gdy wartość jest spoza zakresu albo zmiana się nie udała; nic się wtedy nie zmienia.
     /// </summary>
-    public bool SetWhiskers(ActiveEntity aCreature, int aWhiskers)
+    public bool ChangeSetting(Entity aEntity, object aOwner, SettingInfo aSetting, object? aValue)
     {
-        if (!WorldObjectCatalog.IsValidWhiskerCount(aWhiskers))
+        if (aSetting.Attribute.Reshapes && aEntity is ActiveEntity creature)
         {
-            Status = $"liczba wąsów musi być nieparzysta, od 1 do {WorldObjectCatalog.MaxWhiskers}";
+            if (aValue is IConvertible && Math.Abs(Convert.ToDouble(aValue) - aSetting.GetNumber(aOwner)) < 1e-9)
+                return true;
+            var training = WithTrainingPaused(creature, () =>
+            {
+                aSetting.Set(aOwner, aValue);
+                if (creature.Brain is { } brain)
+                    History.Forget(brain);
+            });
+            if (training is null)
+                return false;
+            Status = $"{NameOf(creature)}: {aSetting.Label.ToLowerInvariant()} {aSetting.GetNumber(aOwner):0.##}"
+                + (training == true ? " — nauka wznowiona w nowym ciele" : string.Empty);
+            return true;
+        }
+        try
+        {
+            aSetting.Set(aOwner, aValue);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            Status = exception.Message;
             return false;
         }
-        if (WorldObjectCatalog.WhiskerCountOf(aCreature) == aWhiskers)
-            return true;
-
-        var training = WithTrainingPaused(aCreature, () =>
-        {
-            WhiskerRewiring.SetCount(aCreature, aWhiskers);
-            if (aCreature.Brain is { } brain)
-                History.Forget(brain);
-        });
-        if (training is null)
-            return false;
-        Status = $"{NameOf(aCreature)}: {Whiskers(aWhiskers)}" + (training == true ? " — nauka wznowiona od przeliczonych wag" : string.Empty);
-        return true;
-    }
-
-    /// <summary>
-    /// Zmienia liczbę segmentów węża w miejscu (<see cref="SnakeCreature.SetSegments"/>): parametry CPG zostają,
-    /// trwająca nauka jest zatrzymywana i wznawiana w ciele o nowej długości.
-    /// </summary>
-    public bool SetSegments(SnakeCreature aSnake, int aSegments)
-    {
-        if (!WorldObjectCatalog.IsValidSnakeLength(aSegments))
-        {
-            Status = $"wąż ma od {WorldObjectCatalog.MinSnakeSegments} do {WorldObjectCatalog.MaxSnakeSegments} segmentów";
-            return false;
-        }
-        if (aSnake.Segments == aSegments)
-            return true;
-
-        var training = WithTrainingPaused(aSnake, () => aSnake.SetSegments(aSegments));
-        if (training is null)
-            return false;
-        Status = $"{NameOf(aSnake)}: {Segments(aSegments)}" + (training == true ? " — nauka wznowiona" : string.Empty);
+        Status = aValue is Guid id
+            ? $"{NameOf(aEntity)}: {aSetting.Label.ToLowerInvariant()} → {(World.Find(id) is { } target ? NameOf(target) : "?")}"
+            : $"{NameOf(aEntity)}: {aSetting.Label.ToLowerInvariant()} zmienione";
         return true;
     }
 

@@ -24,7 +24,7 @@ public sealed class FeelSensor : Sensor
     private readonly Dictionary<string, float> _readings = Ports.ToDictionary(aPort => aPort, _ => 0f);
 
     /// <summary>Jak daleko przed głową (m) sprawdzać teren.</summary>
-    [Setting]
+    [Setting("Zasięg przed głową", Unit = "m", Min = 0.05, Max = 2)]
     public float Reach { get; set; } = 0.3f;
 
     public override IReadOnlyList<string> OutputPorts => Ports;

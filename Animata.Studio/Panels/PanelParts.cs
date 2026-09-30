@@ -18,58 +18,11 @@ namespace Animata.Studio.Panels;
 /// <summary>Kawałki UI wspólne dla kilku paneli.</summary>
 public static class PanelParts
 {
-    /// <summary>
-    /// Edytowalne parametry napędu stwora (autko: prędkość, wsteczny, skręt kół, moment; walec: prędkość, obrót, moment)
-    /// albo null, gdy stwór nie ma takiego napędu. Zmiana działa od razu w scenie; trwająca nauka bierze ustawienia
-    /// z chwili startu — nowe obejmie ją po zatrzymaniu i wznowieniu (L).
-    /// </summary>
-    public static Control? DriveEditor(ActiveEntity aCreature)
-    {
-        var section = Ui.VStack(2, Ui.Header("Napęd — ustawienia"));
-        switch (aCreature.Body.Actuators.FirstOrDefault(aActuator => aActuator is SteeringDriveActuator or DiskDriveActuator))
-        {
-            case SteeringDriveActuator steering:
-                section.Children.Add(Ui.Row("Prędkość maks. [m/s]", Number(steering.MaxSpeed, 0.1f, 20, aValue => steering.MaxSpeed = aValue)));
-                section.Children.Add(Ui.Row("Wstecz maks. [m/s]", Number(steering.MaxReverseSpeed, 0, 10, aValue => steering.MaxReverseSpeed = aValue)));
-                section.Children.Add(Ui.Row("Skręt kół maks. [°]", Number(steering.MaxSteerAngle * 180 / MathF.PI, 1, 70,
-                    aValue => steering.MaxSteerAngle = aValue * MathF.PI / 180)));
-                section.Children.Add(Ui.Row("Moment koła [N·m]", Number(steering.DriveTorque, 0.1f, 50, aValue => steering.DriveTorque = aValue)));
-                break;
-            case DiskDriveActuator disk:
-                section.Children.Add(Ui.Row("Prędkość maks. [m/s]", Number(disk.MaxSpeed, 0.1f, 20, aValue => disk.MaxSpeed = aValue)));
-                section.Children.Add(Ui.Row("Obrót maks. [rad/s]", Number(disk.MaxTurnSpeed, 0.1f, 20, aValue => disk.MaxTurnSpeed = aValue)));
-                section.Children.Add(Ui.Row("Moment koła [N·m]", Number(disk.DriveTorque, 0.1f, 50, aValue => disk.DriveTorque = aValue)));
-                break;
-            default:
-                return null;
-        }
-        return section;
-    }
-
-    /// <summary>Pole liczby z zakresem: poza zakresem albo nie-liczba — odrzucone (pole wraca do poprzedniej wartości).</summary>
-    private static TextBox Number(float aValue, float aMin, float aMax, Action<float> aSet) =>
-        Ui.Field(Ui.F(aValue), aText =>
-        {
-            if (!Ui.TryParse(aText, out var value) || value < aMin || value > aMax)
-                return false;
-            aSet(value);
-            return true;
-        }, 96);
-
-    /// <summary>
-    /// Lista liczby segmentów węża (2…24). Zmiana w miejscu (<see cref="StudioSession.SetSegments"/>): ten sam wąż i mózg,
-    /// parametry CPG zostają. Po niej — już po obsłudze zdarzenia listy — woła <paramref name="aChanged"/>.
-    /// </summary>
     private static readonly System.Numerics.Vector3[] Swatches =
     [
         new(0.90f, 0.36f, 0.33f), new(0.95f, 0.62f, 0.25f), new(0.93f, 0.82f, 0.30f), new(0.45f, 0.78f, 0.36f),
         new(0.28f, 0.72f, 0.68f), new(0.33f, 0.60f, 0.92f), new(0.60f, 0.45f, 0.90f), new(0.88f, 0.45f, 0.72f)
     ];
-
-    /// <summary>Kolor stwora: kilka gotowych i „losuj”. Kolor nic nie znaczy — to tylko wygląd.</summary>
-    public static Control ColorPicker(ActiveEntity aCreature, Action? aChanged = null) => aCreature is ArticulatedCreature body
-        ? ColorPicker(() => body.Color, aColor => body.Color = aColor, aChanged)
-        : Ui.Text("—", 13);
 
     /// <summary>Wybór koloru (gotowe odcienie i „losuj”) dowolnej encji z kolorem — stwora, klocka, cylindra.</summary>
     public static Control ColorPicker(Func<System.Numerics.Vector3> aGet, Action<System.Numerics.Vector3> aSet, Action? aChanged = null)
@@ -99,60 +52,6 @@ public static class PanelParts
         }
         row.Children.Add(Ui.IconButton(Icons.Shuffle, "Losowy kolor", () => Set(WorldObjectCatalog.RandomColor())));
         return row;
-    }
-
-    public static Control SegmentPicker(StudioSession aSession, SnakeCreature aSnake, Action? aChanged = null)
-    {
-        var picker = new ComboBox
-        {
-            ItemsSource = Enumerable.Range(WorldObjectCatalog.MinSnakeSegments,
-                WorldObjectCatalog.MaxSnakeSegments - WorldObjectCatalog.MinSnakeSegments + 1).ToArray(),
-            SelectedItem = aSnake.Segments,
-            MinWidth = 96
-        };
-        ToolTip.SetTip(picker, "Liczba segmentów węża. Ciało przebudowuje się w miejscu, CPG zachowuje wyuczony chód.");
-        picker.Tapped += (_, aEvent) => aEvent.Handled = true;
-        picker.SelectionChanged += (_, _) =>
-        {
-            if (picker.SelectedItem is not int count || count == aSnake.Segments)
-                return;
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (!aSession.SetSegments(aSnake, count))
-                    picker.SelectedItem = aSnake.Segments;
-                aChanged?.Invoke();
-            });
-        };
-        return picker;
-    }
-
-    /// <summary>
-    /// Lista liczby wąsów (1, 3, …, 25) stwora z wąsami. Zmiana idzie w miejscu (<see cref="StudioSession.SetWhiskers"/>),
-    /// po niej — już po obsłudze zdarzenia listy — woła <paramref name="aChanged"/> (np. przebudowa panelu).
-    /// </summary>
-    public static Control WhiskerPicker(StudioSession aSession, ActiveEntity aCreature, Action? aChanged = null)
-    {
-        var picker = new ComboBox
-        {
-            ItemsSource = WorldObjectCatalog.WhiskerCounts,
-            SelectedItem = WorldObjectCatalog.WhiskerCountOf(aCreature),
-            MinWidth = 96
-        };
-        ToolTip.SetTip(picker, "Liczba wąsów (nieparzysta, wachlarz 120°). Mózg dopasowuje się sam: sieć dostaje przeliczone wagi, a nie losowe.");
-        // Klik w listę nie może przejść do karty pod nią (karty w panelu stwora po kliknięciu wjeżdżają do grafu).
-        picker.Tapped += (_, aEvent) => aEvent.Handled = true;
-        picker.SelectionChanged += (_, _) =>
-        {
-            if (picker.SelectedItem is not int count || count == WorldObjectCatalog.WhiskerCountOf(aCreature))
-                return;
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (!aSession.SetWhiskers(aCreature, count))
-                    picker.SelectedItem = WorldObjectCatalog.WhiskerCountOf(aCreature);
-                aChanged?.Invoke();
-            });
-        };
-        return picker;
     }
 
     /// <summary>
@@ -225,13 +124,13 @@ public static class PanelParts
     }
 
     /// <summary>
-    /// Wybór celu oka: „brak” albo dowolna encja sceny poza właścicielem oka — kula, inny stwór (pościg, ucieczka),
-    /// cylinder, klocek. Lista odświeża się przy najechaniu (encje mogą przybyć, zniknąć albo zmienić nazwę).
+    /// Wskazanie obiektu sceny (np. cel oka): „brak” albo dowolna encja sceny poza <paramref name="aOwner"/> — kula, inny stwór
+    /// (pościg, ucieczka), cylinder, klocek. Lista odświeża się przy najechaniu (encje mogą przybyć, zniknąć albo zmienić nazwę).
+    /// <paramref name="aSet"/> dostaje wybór już po zamknięciu listy.
     /// </summary>
-    public static Control TargetPicker(StudioSession aSession, ActiveEntity aOwner, TargetSensor aEye, Action? aChanged = null)
+    public static Control EntityPicker(StudioSession aSession, Entity aOwner, Func<Guid?> aGet, Action<Guid?> aSet)
     {
         var picker = new ComboBox { MinWidth = 150 };
-        ToolTip.SetTip(picker, "Na co patrzy oko: kula, inny stwór albo dowolna bryła. Nauka i tak ćwiczy na własnych celach — to zmienia tylko cel w scenie.");
         var updating = false;
         var shown = string.Empty;
         List<TargetChoice> choices = [];
@@ -252,26 +151,20 @@ public static class PanelParts
                 choices = [new(null, "brak"), .. candidates.Select(aEntity => new TargetChoice(aEntity, StudioSession.NameOf(aEntity)))];
                 picker.ItemsSource = choices;
             }
-            var current = aEye.TargetId is { } id ? aSession.World.Find(id) : null;
+            var current = aGet() is { } id ? aSession.World.Find(id) : null;
             var selected = choices.FirstOrDefault(aChoice => ReferenceEquals(aChoice.Target, current)) ?? choices[0];
             if (!ReferenceEquals(picker.SelectedItem, selected))
                 picker.SelectedItem = selected;
             updating = false;
         }
         Fill();
-        picker.Tapped += (_, aEvent) => aEvent.Handled = true;
         picker.PointerEntered += (_, _) => Dispatcher.UIThread.Post(Fill);
         picker.SelectionChanged += (_, _) =>
         {
             if (updating || picker.SelectedItem is not TargetChoice choice)
                 return;
             // Zmiana po zamknięciu listy — reakcja (np. przebudowa inspektora) może usunąć ten ComboBox z drzewa.
-            Dispatcher.UIThread.Post(() =>
-            {
-                aEye.TargetId = choice.Target?.Id;
-                aSession.Status = choice.Target is null ? "oko bez celu" : $"oko patrzy na: {choice.Name}";
-                aChanged?.Invoke();
-            });
+            Dispatcher.UIThread.Post(() => aSet(choice.Target?.Id));
         };
         return picker;
     }

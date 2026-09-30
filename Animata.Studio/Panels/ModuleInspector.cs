@@ -223,56 +223,29 @@ public sealed class ModuleInspector
         return null;
     }
 
+    /// <summary>Węzeł zmysłu: typ, slot, porty i ustawienia (zmysłu i stwora, które go dotyczą) z edytora ustawień.</summary>
     private void SensorSection(StackPanel aPanel, SensorModule aModule)
     {
         var sensor = _creature.Body.FindSensor(aModule.Slot);
         var section = Ui.VStack(2, Ui.Header("Sensor"));
         section.Children.Add(Ui.Row("Typ", sensor?.GetType().Name ?? "brak w ciele!", true));
         section.Children.Add(Ui.Row("Slot", aModule.Slot, true));
-        switch (sensor)
-        {
-            case RaySensor rays:
-                section.Children.Add(Ui.Row("Liczba wąsów", PanelParts.WhiskerPicker(_session, _creature, () => Changed?.Invoke()), 34));
-                section.Children.Add(Ui.Row("Promienie", string.Join(" ", rays.Angles.Select(aAngle => $"{aAngle * 180 / MathF.PI:+0;−0;0}°")), true));
-                section.Children.Add(Ui.Row("Zasięg [m]", Ui.Field(Ui.F(rays.Range), aText =>
-                {
-                    if (!Ui.TryParse(aText, out var range) || range <= 0.1f || range > 50)
-                        return Fail("Zasięg musi być w (0.1, 50] m.");
-                    rays.Range = range;
-                    return true;
-                }, 100)));
-                section.Children.Add(Ui.Row("Wykrywa", rays.Detects.ToString(), true));
-                break;
-            case TargetSensor eye:
-                section.Children.Add(Ui.Row("Cel", PanelParts.TargetPicker(_session, _creature, eye, () => Changed?.Invoke()), 34));
-                break;
-            case JointSensor joints:
-                section.Children.Add(Ui.Row("Stawy", $"{joints.Joints} (Yaw, Pitch jako ułamek zakresu)", true));
-                if (_creature is SnakeCreature snake)
-                    section.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(_session, snake, () => Changed?.Invoke()), 34));
-                break;
-        }
+        section.Children.Add(Ui.Row("Porty", aModule.OutputPorts.Count.ToString(), true));
+        foreach (var row in SettingsEditor.SlotRows(_session, _creature, aModule.Slot, _ => Changed?.Invoke()))
+            section.Children.Add(row);
         aPanel.Children.Add(section);
     }
 
+    /// <summary>Węzeł napędu: typ, slot, porty i ustawienia (napędu i stwora, które go dotyczą) z edytora ustawień.</summary>
     private void ActuatorSection(StackPanel aPanel, ActuatorModule aModule)
     {
         var actuator = _creature.Body.FindActuator(aModule.Slot);
         var section = Ui.VStack(2, Ui.Header("Aktuator"));
         section.Children.Add(Ui.Row("Typ", actuator?.GetType().Name ?? "brak w ciele!", true));
-        switch (actuator)
-        {
-            case SteeringDriveActuator or DiskDriveActuator:
-                if (PanelParts.DriveEditor(_creature) is { } drive)
-                    section.Children.Add(drive);
-                break;
-            case SpineActuator spine:
-                section.Children.Add(Ui.Row("Stawy", $"{spine.Joints} · porty Yaw{{i}}, Pitch{{i}} ∈ [-1, 1]", true));
-                if (_creature is SnakeCreature snake)
-                    section.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(_session, snake, () => Changed?.Invoke()), 34));
-                break;
-
-        }
+        section.Children.Add(Ui.Row("Slot", aModule.Slot, true));
+        section.Children.Add(Ui.Row("Porty", aModule.InputPorts.Count.ToString(), true));
+        foreach (var row in SettingsEditor.SlotRows(_session, _creature, aModule.Slot, _ => Changed?.Invoke()))
+            section.Children.Add(row);
         aPanel.Children.Add(section);
     }
 

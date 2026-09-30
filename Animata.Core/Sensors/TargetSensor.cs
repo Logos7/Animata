@@ -28,7 +28,7 @@ public sealed class TargetSensor : Sensor
 
     private readonly Dictionary<string, float> _readings = Ports.ToDictionary(aPort => aPort, _ => 0f);
 
-    [Setting]
+    [Setting("Cel", Tip = "Na co patrzy oko: kula, inny stwór albo dowolna bryła. Nauka i tak ćwiczy na własnych celach — to zmienia tylko cel w scenie.")]
     public Guid? TargetId { get; set; }
 
     public override IReadOnlyList<string> OutputPorts => Ports;

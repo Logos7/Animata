@@ -119,6 +119,39 @@ public class EntityTypeTests
     }
 
     [Fact]
+    public void Format4File_And_Format1Brain_AreMigrated_ModulesBecomeStates()
+    {
+        var json4 = File.ReadAllText(DataFile("format4.animata.json"));
+        using var world = WorldFile.Restore(WorldFile.FromJson(json4)).World;
+        var car = world.Entities.OfType<CarCreature>().Single();
+        var graph = car.Brain!.Graph;
+        Assert.Equal(0.25f, graph.Modules.OfType<ConstantModule>().Single().Value);
+        Assert.Equal("Bias", graph.Modules.OfType<ConstantModule>().Single().Port);
+        var composite = graph.Modules.OfType<CompositeModule>().Single();
+        var router = composite.Children.OfType<RouterModule>().Single();
+        Assert.Equal(2, router.Channels);
+        Assert.Equal(1.5f, composite.Children.OfType<ConstantModule>().Single().Value);
+        Assert.Single(graph.Positions, aEntry => aEntry.Value == new Vector2(10, 20));
+        var snapshot = Assert.Single(car.Brain.Snapshots);
+        Assert.True(car.Brain.Matches(snapshot));
+
+        // W nowym formacie nie ma już osobnych rekordów stałej i routera, a zapis → odczyt daje ten sam plik.
+        var json5 = WorldFile.ToJson(WorldFile.Capture(world, "format5"));
+        Assert.Contains("\"$type\": \"router\"", json5);
+        using var again = WorldFile.Restore(WorldFile.FromJson(json5)).World;
+        Assert.Equal(json5, WorldFile.ToJson(WorldFile.Capture(again, "format5")));
+
+        // Plik mózgu formatu 1 wczytuje się do nowego autka tak samo.
+        var fresh = WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, null);
+        var report = BrainFile.Load(fresh.Brain!, BrainFile.FromJson(File.ReadAllText(DataFile("format1.brain.json"))));
+        Assert.True(report.Fits);
+        Assert.Equal(WorldFile.ToJson(new WorldDocument(WorldFile.Format, "", 0, WorldFile.CaptureEntities([car])))
+                .Replace(car.Id.ToString(), "-").Split("\"Brain\"")[1],
+            WorldFile.ToJson(new WorldDocument(WorldFile.Format, "", 0, WorldFile.CaptureEntities([fresh])))
+                .Replace(fresh.Id.ToString(), "-").Split("\"Brain\"")[1]);
+    }
+
+    [Fact]
     public void UnknownFormat_IsRejected()
     {
         Assert.Throws<NotSupportedException>(() => WorldFile.FromJson("""{ "Format": 2, "Name": "", "Time": 0, "Entities": [] }"""));

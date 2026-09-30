@@ -36,7 +36,7 @@ public abstract class Entity
     /// Zablokowana (np. klocek-podłoga): nie przesuwa jej mysz, panel, <see cref="Place"/> ani przyciąganie do terenu,
     /// UI jej nie usuwa ani nie kopiuje. Da się ją zaznaczyć i zmienić we właściwościach (tam też się ją odblokowuje).
     /// </summary>
-    [Setting]
+    [Setting("Zablokowany", Tip = "Zablokowany obiekt (np. podłoga) jest jak tło: klik w scenie go nie zaznacza, nie przesuwa go mysz, panel ani przyciąganie do terenu i nie da się go usunąć. Zaznaczysz go z listy albo przez PPM → Właściwości / Odblokuj.")]
     public bool Locked { get; set; }
 
     /// <summary>

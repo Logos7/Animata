@@ -118,11 +118,17 @@ public class Brain
         foreach (var entry in aSnapshot.Modules)
         {
             var module = Graph.FindDeep(entry.ModuleId);
-            if (module is not null && !entry.State.SameAs(module.CaptureState()))
+            if (module is not null && !Matches(entry.State, module))
                 return false;
         }
         return true;
     }
+
+    /// <summary>Stan ze snapshotu = stan modułu; podgraf porównywany wpis po wpisie (moduły dodane później się nie liczą).</summary>
+    private static bool Matches(ModuleState aState, BrainModule aModule) =>
+        aState is CompositeState composite && aModule is CompositeModule inner
+            ? composite.Modules.All(aEntry => inner.Inner.FindDeep(aEntry.ModuleId) is not { } child || Matches(aEntry.State, child))
+            : aState.SameAs(aModule.CaptureState());
 
     /// <summary>
     /// Przywraca stan modułów ze snapshotu (dopasowanie po Id modułu, także w podgrafach — moduł zgrupowany w podgraf

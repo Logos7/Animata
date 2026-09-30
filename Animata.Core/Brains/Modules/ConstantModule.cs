@@ -24,11 +24,14 @@ public sealed class ConstantModule : BrainModule
     public override IReadOnlyList<string> InputPorts => [];
     public override IReadOnlyList<string> OutputPorts => _ports;
 
-    public override ModuleState CaptureState() => new ConstantState(Value);
+    public override ModuleState CaptureState() => new ConstantState(Value, Port);
 
+    /// <summary>Wartość ze stanu; stan innej stałej (inny port) → <see cref="ArgumentException"/>.</summary>
     public override void RestoreState(ModuleState aState)
     {
         var state = Expect<ConstantState>(aState);
+        if (state.Port is not null && state.Port != Port)
+            throw new ArgumentException($"Stan stałej {state.Port}, a ta stała ma port {Port}.", nameof(aState));
         Value = state.Value;
     }
 

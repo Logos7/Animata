@@ -30,6 +30,18 @@ public sealed class CarCreature : ArticulatedCreature
         Color = new Vector3(0.24f, 0.68f, 0.9f);
     }
 
+    /// <summary>
+    /// Liczba wąsów (nieparzysta, wachlarz 120°) — widok kątów wąsów; zmiana idzie w miejscu (<see cref="WhiskerRewiring.SetCount"/>):
+    /// ten sam stwór i mózg, sieć dostaje przeliczone wagi. Nie zapisuje się — w pliku są kąty.
+    /// </summary>
+    [Setting("Wąsy", Min = 1, Max = WorldObjectCatalog.MaxWhiskers, Step = 2, Reshapes = true, Slots = "Whiskers", Derived = true,
+        Tip = "Liczba wąsów (nieparzysta, wachlarz 120°). Mózg dopasowuje się sam: sieć dostaje przeliczone wagi, a nie losowe.")]
+    public int Whiskers
+    {
+        get => WorldObjectCatalog.WhiskerCountOf(this);
+        set => WhiskerRewiring.SetCount(this, value);
+    }
+
     public float Length => DefaultLength;
     public float Width => DefaultWidth;
     public float Height => DefaultHeight;

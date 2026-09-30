@@ -18,6 +18,7 @@ namespace Animata.Core.Brains;
 [JsonDerivedType(typeof(ApproachTargetState), "approachTarget")]
 [JsonDerivedType(typeof(NeuralNetworkState), "neuralNetwork")]
 [JsonDerivedType(typeof(ConstantState), "constant")]
+[JsonDerivedType(typeof(RouterState), "router")]
 [JsonDerivedType(typeof(AvoidAndSeekState), "avoidAndSeek")]
 [JsonDerivedType(typeof(CompositeState), "composite")]
 [JsonDerivedType(typeof(CpgState), "cpg")]
@@ -36,7 +37,7 @@ public abstract record ModuleState
     /// <summary>
     /// Nowy moduł o kształcie tego stanu (z podanym Id), gotowy na <see cref="BrainModule.RestoreState"/> — dzięki temu
     /// zapis świata i mózgu odtwarza każdy moduł opisany stanem bez listy typów. Null — stan nie opisuje całego modułu
-    /// (stała, podgraf: zapisuje się je inaczej). Nowy typ modułu: rekord stanu z tą metodą i wpis JsonDerivedType wyżej.
+    /// (podgraf: jego wnętrze to struktura, zapisuje się osobno). Nowy typ modułu: rekord stanu z tą metodą i wpis JsonDerivedType wyżej.
     /// </summary>
     public virtual BrainModule? CreateModule(Guid aId) => null;
 }
@@ -46,7 +47,17 @@ public sealed record ApproachTargetState(float TurnGain, float StopGap, float Sl
     public override BrainModule CreateModule(Guid aId) => new ApproachTargetModule { Id = aId };
 }
 
-public sealed record ConstantState(float Value) : ModuleState;
+/// <summary>Stała: wartość i port (null — stan sprzed zapisu portu; pasuje do każdej stałej).</summary>
+public sealed record ConstantState(float Value, string? Port = null) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new ConstantModule(Port ?? "Value", Value) { Id = aId };
+}
+
+/// <summary>Router: liczba kanałów i porty kanału — sama konfiguracja (router nie ma parametrów).</summary>
+public sealed record RouterState(int Channels, string[] Ports) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new RouterModule(Channels, Ports) { Id = aId };
+}
 
 public sealed record AvoidAndSeekState(
     float[] RayAngles,

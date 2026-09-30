@@ -50,19 +50,17 @@ public sealed record BrainDocument(
     IReadOnlyList<BrainSnapshot> Snapshots,
     Guid? Current = null);
 
+/// <summary>
+/// Moduł mózgu w pliku: każdy moduł opisany swoim stanem (<see cref="StateNode"/>), jedynie podgraf ma osobny rekord,
+/// bo jego wnętrze to struktura (moduły i połączenia), a nie stan.
+/// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(StateNode), "state")]
-[JsonDerivedType(typeof(ConstantNode), "constant")]
-[JsonDerivedType(typeof(RouterNode), "router")]
 [JsonDerivedType(typeof(CompositeNode), "composite")]
 public abstract record ModuleDocument(Guid Id, string Name);
 
-/// <summary>Moduł opisany w całości swoim stanem: sieć, CPG, AvoidAndSeek, ApproachTarget.</summary>
+/// <summary>Moduł opisany w całości swoim stanem (<see cref="ModuleState.CreateModule"/>): sieć, CPG, chód, sterowniki, stała, router.</summary>
 public sealed record StateNode(Guid Id, string Name, ModuleState State) : ModuleDocument(Id, Name);
-
-public sealed record ConstantNode(Guid Id, string Name, string Port, float Value) : ModuleDocument(Id, Name);
-
-public sealed record RouterNode(Guid Id, string Name, int Channels, string[] Ports) : ModuleDocument(Id, Name);
 
 /// <summary>Podgraf: Id granic, porty i wnętrze (bez granic; połączenia wnętrza odwołują się do Id granic).</summary>
 public sealed record CompositeNode(Guid Id, string Name, Guid InputId, Guid OutputId, string[] Inputs, string[] Outputs,
@@ -74,10 +72,11 @@ public sealed record CompositeNode(Guid Id, string Name, Guid InputId, Guid Outp
 public static class WorldFile
 {
     /// <summary>
-    /// Format 4: każdy obiekt w jednym kształcie (<see cref="EntityDocument"/>: rodzaj, ustawienia, sloty, części, mózg).
-    /// Format 3 (osobny rekord na rodzaj stwora) jest czytany i przepisywany na 4 (<see cref="WorldFileMigration"/>); starsze nie.
+    /// Format 5: każdy obiekt w jednym kształcie (<see cref="EntityDocument"/>: rodzaj, ustawienia, sloty, części, mózg),
+    /// każdy moduł mózgu poza podgrafem jako stan (<see cref="StateNode"/>). Formaty 3 i 4 są czytane i przepisywane
+    /// (<see cref="WorldFileMigration"/>); starsze nie.
     /// </summary>
-    public const int Format = 4;
+    public const int Format = 5;
 
     /// <summary>Sugerowane rozszerzenie pliku.</summary>
     public const string Extension = ".animata.json";
@@ -94,10 +93,9 @@ public static class WorldFile
     {
         var node = JsonNode.Parse(aJson) as JsonObject ?? throw new JsonException("Pusty plik świata.");
         var format = node["Format"]?.GetValue<int>() ?? 0;
-        if (format == WorldFileMigration.From)
-            node = WorldFileMigration.Migrate(node);
-        else if (format != Format)
-            throw new NotSupportedException($"Plik świata ma format {format}, a ta wersja czyta formaty {WorldFileMigration.From} i {Format}.");
+        if (format < WorldFileMigration.Oldest || format > Format)
+            throw new NotSupportedException($"Plik świata ma format {format}, a ta wersja czyta formaty {WorldFileMigration.Oldest}–{Format}.");
+        node = WorldFileMigration.Migrate(node);
         return node.Deserialize<WorldDocument>(Options) ?? throw new JsonException("Pusty plik świata.");
     }
 
@@ -199,8 +197,6 @@ public static class WorldFile
 
     private static ModuleDocument CaptureModule(BrainModule aModule) => aModule switch
     {
-        ConstantModule constant => new ConstantNode(constant.Id, constant.Name, constant.Port, constant.Value),
-        RouterModule router => new RouterNode(router.Id, router.Name, router.Channels, [.. router.Ports]),
         CompositeModule composite => new CompositeNode(composite.Id, composite.Name, composite.Input.Id, composite.Output.Id,
             [.. composite.InputPorts], [.. composite.OutputPorts], CaptureBrain(composite.Inner, [], [composite.Input, composite.Output])),
         _ when aModule.CaptureState() is { } state && state.CreateModule(aModule.Id) is not null =>
@@ -316,8 +312,6 @@ public static class WorldFile
     {
         BrainModule module = aDocument switch
         {
-            ConstantNode constant => new ConstantModule(constant.Port, constant.Value) { Id = constant.Id },
-            RouterNode router => new RouterModule(router.Channels, router.Ports) { Id = router.Id },
             CompositeNode composite => RestoreComposite(composite),
             StateNode state => RestoreStateModule(state),
             _ => throw new NotSupportedException($"Nieznany rodzaj modułu w pliku: {aDocument.GetType().Name}.")

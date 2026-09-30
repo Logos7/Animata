@@ -1,0 +1,354 @@
+{
+  "Format": 4,
+  "Name": "format4",
+  "Time": 0.5000000260770321,
+  "Entities": [
+    {
+      "Id": "eb4fa761-c4c4-4606-8dfd-76757cba29a3",
+      "Type": "box",
+      "Name": "Pod\u0142oga",
+      "Position": [
+        0,
+        0,
+        -0.2
+      ],
+      "Rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "Settings": {
+        "Locked": true,
+        "Size": [
+          20,
+          20,
+          0.2
+        ],
+        "Color": [
+          0.2,
+          0.27,
+          0.33
+        ]
+      },
+      "Sensors": null,
+      "Actuators": null,
+      "Parts": null,
+      "Brain": null
+    },
+    {
+      "Id": "876a7ab5-ceda-4df7-a882-886552dafba1",
+      "Type": "sphere",
+      "Name": "Kula",
+      "Position": [
+        4,
+        0,
+        0
+      ],
+      "Rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "Settings": {
+        "Locked": false,
+        "Radius": 0.4
+      },
+      "Sensors": null,
+      "Actuators": null,
+      "Parts": null,
+      "Brain": null
+    },
+    {
+      "Id": "9bc0cc41-e002-479e-beb8-d7e9493d95e6",
+      "Type": "car",
+      "Name": "Autko z routerem",
+      "Position": [
+        -2.8072383,
+        1.5068475E-05,
+        -0.027534395
+      ],
+      "Rotation": [
+        -1.281021E-06,
+        -0.0050782273,
+        -1.5561342E-05,
+        0.9999871
+      ],
+      "Settings": {
+        "Locked": false,
+        "Color": [
+          0.3825,
+          0.85,
+          0.6471398
+        ]
+      },
+      "Sensors": {
+        "Eye": {
+          "TargetId": "876a7ab5-ceda-4df7-a882-886552dafba1"
+        },
+        "Whiskers": {
+          "RayAngles": [
+            -1.0471976,
+            -0.5235988,
+            0,
+            0.5235988,
+            1.0471976
+          ],
+          "Range": 3,
+          "Detects": 3
+        }
+      },
+      "Actuators": {
+        "Wheels": {
+          "MaxSpeed": 2.5,
+          "MaxReverseSpeed": 1,
+          "MaxSteerAngle": 0.6108653,
+          "DriveTorque": 3
+        }
+      },
+      "Parts": null,
+      "Brain": {
+        "Modules": [
+          {
+            "$type": "state",
+            "State": {
+              "$type": "avoidAndSeek",
+              "RayAngles": [
+                -1.0471976,
+                -0.5235988,
+                0,
+                0.5235988,
+                1.0471976
+              ],
+              "SteerGain": 1.42,
+              "AvoidGain": 5.27,
+              "PathWidth": 0.56,
+              "ClearProximity": 0.31,
+              "SideCommitment": 0.38,
+              "FrontAngle": 0.82,
+              "ReverseProximity": 0.96,
+              "ReverseDuration": 0.56,
+              "ReleaseProximity": 0.47,
+              "SideMemory": 1,
+              "StopGap": 0.1,
+              "SlowdownGap": 1.19,
+              "MinThrottle": 0.31,
+              "TurnAroundGap": 0.91,
+              "TurnAroundAngle": 1.24
+            },
+            "Id": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "Name": "AvoidAndSeek"
+          },
+          {
+            "$type": "constant",
+            "Port": "Bias",
+            "Value": 0.25,
+            "Id": "b5392b02-a883-417d-89a2-b59cd5a808c0",
+            "Name": "Sta\u0142a"
+          },
+          {
+            "$type": "composite",
+            "InputId": "0900b866-4a6c-4b88-87bb-fad6cfdf051c",
+            "OutputId": "80c20c3e-1a52-41a4-99f9-ea3b85caf1dd",
+            "Inputs": [
+              "Select"
+            ],
+            "Outputs": [
+              "V"
+            ],
+            "Inner": {
+              "Modules": [
+                {
+                  "$type": "router",
+                  "Channels": 2,
+                  "Ports": [
+                    "V"
+                  ],
+                  "Id": "cb434300-d42e-44ab-b0b8-a473accebe3d",
+                  "Name": "Router"
+                },
+                {
+                  "$type": "constant",
+                  "Port": "Value",
+                  "Value": 1.5,
+                  "Id": "345ad814-3232-4e14-b670-6c03df593641",
+                  "Name": "Wewn\u0119trzna"
+                }
+              ],
+              "Connections": [
+                {
+                  "SourceId": "0900b866-4a6c-4b88-87bb-fad6cfdf051c",
+                  "SourcePort": "Select",
+                  "TargetId": "cb434300-d42e-44ab-b0b8-a473accebe3d",
+                  "TargetPort": "Select"
+                },
+                {
+                  "SourceId": "345ad814-3232-4e14-b670-6c03df593641",
+                  "SourcePort": "Value",
+                  "TargetId": "cb434300-d42e-44ab-b0b8-a473accebe3d",
+                  "TargetPort": "In1.V"
+                },
+                {
+                  "SourceId": "cb434300-d42e-44ab-b0b8-a473accebe3d",
+                  "SourcePort": "V",
+                  "TargetId": "80c20c3e-1a52-41a4-99f9-ea3b85caf1dd",
+                  "TargetPort": "V"
+                }
+              ],
+              "Positions": {},
+              "Snapshots": [],
+              "Current": null
+            },
+            "Id": "d949cd19-826f-4826-b492-95cdba2216c3",
+            "Name": "Prze\u0142\u0105cznik"
+          }
+        ],
+        "Connections": [
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Found",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "Found"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "Gap",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "Gap"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionX",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "DirectionX"
+          },
+          {
+            "SourceId": "1da07425-6372-4a2f-02a2-d54794e390fe",
+            "SourcePort": "DirectionY",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "DirectionY"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray0",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "Ray0"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray1",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "Ray1"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray2",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "Ray2"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray3",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "Ray3"
+          },
+          {
+            "SourceId": "29463d7c-a569-abb4-30e8-35551f98d441",
+            "SourcePort": "Ray4",
+            "TargetId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "TargetPort": "Ray4"
+          },
+          {
+            "SourceId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "SourcePort": "Steer",
+            "TargetId": "29baf386-e52a-cb18-6cdb-941f72c267a9",
+            "TargetPort": "Steer"
+          },
+          {
+            "SourceId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+            "SourcePort": "Throttle",
+            "TargetId": "29baf386-e52a-cb18-6cdb-941f72c267a9",
+            "TargetPort": "Throttle"
+          },
+          {
+            "SourceId": "b5392b02-a883-417d-89a2-b59cd5a808c0",
+            "SourcePort": "Bias",
+            "TargetId": "d949cd19-826f-4826-b492-95cdba2216c3",
+            "TargetPort": "Select"
+          }
+        ],
+        "Positions": {
+          "b5392b02-a883-417d-89a2-b59cd5a808c0": [
+            10,
+            20
+          ]
+        },
+        "Snapshots": [
+          {
+            "Id": "8eb9390e-afb4-4e81-86d7-212fcb14992f",
+            "Label": "z routerem",
+            "CreatedUtc": "2026-09-30T10:04:33.1301461Z",
+            "Modules": [
+              {
+                "ModuleId": "1ae8b8c7-736f-4c3e-94a9-098bd4ea3a5b",
+                "ModuleName": "AvoidAndSeek",
+                "State": {
+                  "$type": "avoidAndSeek",
+                  "RayAngles": [
+                    -1.0471976,
+                    -0.5235988,
+                    0,
+                    0.5235988,
+                    1.0471976
+                  ],
+                  "SteerGain": 1.42,
+                  "AvoidGain": 5.27,
+                  "PathWidth": 0.56,
+                  "ClearProximity": 0.31,
+                  "SideCommitment": 0.38,
+                  "FrontAngle": 0.82,
+                  "ReverseProximity": 0.96,
+                  "ReverseDuration": 0.56,
+                  "ReleaseProximity": 0.47,
+                  "SideMemory": 1,
+                  "StopGap": 0.1,
+                  "SlowdownGap": 1.19,
+                  "MinThrottle": 0.31,
+                  "TurnAroundGap": 0.91,
+                  "TurnAroundAngle": 1.24
+                }
+              },
+              {
+                "ModuleId": "b5392b02-a883-417d-89a2-b59cd5a808c0",
+                "ModuleName": "Sta\u0142a",
+                "State": {
+                  "$type": "constant",
+                  "Value": 0.25
+                }
+              },
+              {
+                "ModuleId": "d949cd19-826f-4826-b492-95cdba2216c3",
+                "ModuleName": "Prze\u0142\u0105cznik",
+                "State": {
+                  "$type": "composite",
+                  "Modules": [
+                    {
+                      "ModuleId": "345ad814-3232-4e14-b670-6c03df593641",
+                      "ModuleName": "Wewn\u0119trzna",
+                      "State": {
+                        "$type": "constant",
+                        "Value": 1.5
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "Current": "8eb9390e-afb4-4e81-86d7-212fcb14992f"
+      }
+    }
+  ]
+}

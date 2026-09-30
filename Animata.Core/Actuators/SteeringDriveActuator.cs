@@ -15,18 +15,18 @@ public sealed class SteeringDriveActuator : Actuator
 
     private static readonly string[] Ports = [SteerPort, ThrottlePort];
 
-    [Setting]
+    [Setting("Prędkość maks.", Unit = "m/s", Min = 0.1, Max = 20)]
     public float MaxSpeed { get; set; } = 2.5f;
 
-    [Setting]
+    [Setting("Wstecz maks.", Unit = "m/s", Min = 0, Max = 10)]
     public float MaxReverseSpeed { get; set; } = 1;
 
     /// <summary>Maksymalny kąt skrętu kół w radianach.</summary>
-    [Setting]
+    [Setting("Skręt kół maks.", Unit = "°", Scale = 180 / Math.PI, Min = 1, Max = 70)]
     public float MaxSteerAngle { get; set; } = 35 * MathF.PI / 180;
 
     /// <summary>Największy moment silnika jednego koła napędzanego (N·m) — przyspieszenie i hamowanie.</summary>
-    [Setting]
+    [Setting("Moment koła", Unit = "N·m", Min = 0.1, Max = 50)]
     public float DriveTorque { get; set; } = 3;
 
     /// <summary>Kopiuje ustawienia (nie stan) z innego napędu — np. do ciała w ukrytej próbie nauki.</summary>

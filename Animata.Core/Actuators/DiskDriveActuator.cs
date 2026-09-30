@@ -14,14 +14,14 @@ public sealed class DiskDriveActuator : Actuator
 
     private static readonly string[] Ports = [TurnPort, StepPort];
 
-    [Setting]
+    [Setting("Prędkość maks.", Unit = "m/s", Min = 0.1, Max = 20)]
     public float MaxSpeed { get; set; } = 2;
 
-    [Setting]
+    [Setting("Obrót maks.", Unit = "rad/s", Min = 0.1, Max = 20)]
     public float MaxTurnSpeed { get; set; } = 2.5f;
 
     /// <summary>Największy moment silnika jednego koła (N·m).</summary>
-    [Setting]
+    [Setting("Moment koła", Unit = "N·m", Min = 0.1, Max = 50)]
     public float DriveTorque { get; set; } = 3;
 
     /// <summary>Kopiuje ustawienia (nie stan) z innego napędu.</summary>

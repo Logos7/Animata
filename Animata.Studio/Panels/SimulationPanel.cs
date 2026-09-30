@@ -408,81 +408,34 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         var height = Ui.MonoText(string.Empty, 12.5);
         _updaters.Add(() => height.Text = $"{Ui.F(entity.Body.Position.Z)} m" + (Session.SnapToGround && !entity.Locked && entity is Sphere or Cylinder or Box ? " · teren" : string.Empty));
         transform.Children.Add(Ui.Row("Wysokość", height));
-        switch (entity)
-        {
-            case Sphere sphere:
-                transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(sphere.Radius), aText => SetRadius(aText, aValue => sphere.Radius = aValue), 110)));
-                break;
-            case Cylinder cylinder:
-                transform.Children.Add(Ui.Row("Promień [m]", Ui.Field(Ui.F(cylinder.Radius), aText => SetRadius(aText, aValue => cylinder.Radius = aValue), 110)));
-                transform.Children.Add(Ui.Row("Wysokość bryły [m]", Ui.Field(Ui.F(cylinder.Height), aText =>
-                {
-                    if (!Ui.TryParse(aText, out var value) || value < 0.05f || value > 30)
-                        return false;
-                    cylinder.Height = value;
-                    return true;
-                }, 110)));
-                var grip = Ui.Field(Ui.F(cylinder.Grip), aText =>
-                {
-                    if (!Ui.TryParse(aText, out var value) || value < 0 || value > 5)
-                        return false;
-                    cylinder.Grip = value;
-                    return true;
-                }, 110);
-                ToolTip.SetTip(grip, "Tarcie chwytne: kontakt z cylindrem ma takie tarcie niezależnie od tarcia ciała (np. pień do wspinania węża). 0 — zwykłe tarcie.");
-                transform.Children.Add(Ui.Row("Tarcie chwytne", grip));
-                break;
-            case Box box:
-                transform.Children.Add(Ui.Row("Szerokość [m]", Ui.Field(Ui.F(box.Size.X), aText => SetBoxSize(box, aText, 0), 110)));
-                transform.Children.Add(Ui.Row("Głębokość [m]", Ui.Field(Ui.F(box.Size.Y), aText => SetBoxSize(box, aText, 1), 110)));
-                transform.Children.Add(Ui.Row("Grubość [m]", Ui.Field(Ui.F(box.Size.Z, 3), aText => SetBoxSize(box, aText, 2), 110)));
-                break;
-        }
-        switch (entity)
-        {
-            case Box box:
-                transform.Children.Add(Ui.Row("Kolor", PanelParts.ColorPicker(() => box.Color, aColor => box.Color = aColor,
-                    () => { _listKey = string.Empty; _propertiesBuilt = false; }), 34));
-                break;
-            case Cylinder cylinder:
-                transform.Children.Add(Ui.Row("Kolor", PanelParts.ColorPicker(() => cylinder.Color, aColor => cylinder.Color = aColor,
-                    () => { _listKey = string.Empty; _propertiesBuilt = false; }), 34));
-                break;
-        }
-        if (entity is not ActiveEntity)
-        {
-            var locked = new CheckBox { IsChecked = entity.Locked, Content = Ui.Text("stoi — klik w scenie jej nie zaznacza", 12.5) };
-            ToolTip.SetTip(locked, "Zablokowana encja (np. podłoga) jest jak tło: klik w scenie jej nie zaznacza, nie przesuwa jej mysz, panel " +
-                "ani przyciąganie do terenu i nie da się jej usunąć. Zaznaczysz ją z listy albo przez PPM → Właściwości / Odblokuj.");
-            locked.IsCheckedChanged += (_, _) => entity.Locked = locked.IsChecked == true;
-            transform.Children.Add(Ui.Row("Zablokowany", locked, 34));
-        }
         _properties.Children.Add(transform);
+
+        // Ustawienia z opisu (SettingAttribute): obiektu, a u stwora także każdego zmysłu i napędu.
+        // Pola liczb zmieniają się w miejscu; przełączniki, listy i kolor przebudowują panel (lista encji też, bo kolor i nazwa).
+        void Changed(SettingInfo aSetting)
+        {
+            if (aSetting.Type == typeof(float) || aSetting.Type == typeof(int) && aSetting.Choices() is null)
+                return;
+            _listKey = string.Empty;
+            _propertiesBuilt = false;
+        }
+        if (SettingsEditor.Section("Ustawienia", SettingsEditor.Rows(Session, entity, entity, null, Changed)) is { } settings)
+            _properties.Children.Add(settings);
 
         if (entity is ActiveEntity active)
         {
             var details = Ui.VStack(2, Ui.Header("Budowa"));
-            details.Children.Add(Ui.Row("Kolor", PanelParts.ColorPicker(active, () => { _listKey = string.Empty; _propertiesBuilt = false; }), 34));
             var controllers = active.Brain?.Graph.Modules.Where(aModule => aModule is not SensorModule and not ActuatorModule)
                 .Select(GraphCanvas.TitleOf).ToList() ?? [];
             details.Children.Add(Ui.Row("Mózg", controllers.Count > 0 ? string.Join(", ", controllers) : "—"));
             details.Children.Add(Ui.Row("Zmysły", string.Join(", ", active.Body.Sensors.Select(SensorName))));
-            if (active.Body.Sensors.OfType<TargetSensor>().FirstOrDefault() is { } eye)
-                details.Children.Add(Ui.Row("Cel oka", PanelParts.TargetPicker(Session, active, eye), 34));
-            if (active is CarCreature car)
-                details.Children.Add(Ui.Row("Wąsy", PanelParts.WhiskerPicker(Session, car, () => _propertiesBuilt = false)));
-            if (active is SnakeCreature snake)
-            {
-                details.Children.Add(Ui.Row("Segmenty", PanelParts.SegmentPicker(Session, snake, () => _propertiesBuilt = false)));
-                var climber = new CheckBox { IsChecked = snake.Climber, Content = Ui.Text("wspinaczka na cylinder", 12.5) };
-                ToolTip.SetTip(climber, "Nauka uczy wchodzenia na pień — cylinder z tarciem chwytnym (próby: wąż owinięty wokół niego, kula na szczycie) zamiast pełzania po ziemi.");
-                climber.IsCheckedChanged += (_, _) => snake.Climber = climber.IsChecked == true;
-                details.Children.Add(Ui.Row("Uczy się", climber, 34));
-            }
             details.Children.Add(Ui.Row("Napęd", string.Join(", ", active.Body.Actuators.Select(aActuator => aActuator.GetType().Name.Replace("Actuator", string.Empty)))));
             _properties.Children.Add(details);
-            if (PanelParts.DriveEditor(active) is { } drive)
-                _properties.Children.Add(drive);
+            foreach (var slot in active.Body.Sensors.Select(aSensor => (aSensor.Slot, (object)aSensor))
+                         .Concat(active.Body.Actuators.Select(aActuator => (aActuator.Slot, (object)aActuator))))
+                if (SettingsEditor.Section($"{slot.Slot} · {slot.Item2.GetType().Name}",
+                        SettingsEditor.Rows(Session, active, slot.Item2, null, Changed)) is { } section)
+                    _properties.Children.Add(section);
 
             if (TrainingController.FindTrainable(active) is not null)
                 _properties.Children.Add(PanelParts.TrainingCard(Session, active, _updaters));
@@ -575,36 +528,6 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             return false;
         var position = aEntity.Body.Position;
         aEntity.Body.Position = aX ? position with { X = value } : position with { Y = value };
-        return true;
-    }
-
-    private static bool SetBoxSize(Box aBox, string aText, int aAxis)
-    {
-        if (!Ui.TryParse(aText, out var value))
-            return false;
-        var size = aBox.Size;
-        size = aAxis switch
-        {
-            0 => size with { X = value },
-            1 => size with { Y = value },
-            _ => size with { Z = value }
-        };
-        try
-        {
-            aBox.Size = size;
-            return true;
-        }
-        catch (ArgumentOutOfRangeException)
-        {
-            return false;
-        }
-    }
-
-    private static bool SetRadius(string aText, Action<float> aSet)
-    {
-        if (!Ui.TryParse(aText, out var value) || value <= 0.05f || value > 5)
-            return false;
-        aSet(value);
         return true;
     }
 

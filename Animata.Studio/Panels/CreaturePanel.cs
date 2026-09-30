@@ -32,8 +32,7 @@ public sealed class CreaturePanel : StudioPanel
     private TextBlock? _brainInfo;
     private int _snapshotCount = -1;
     private float _snapshotCheck;
-    private int _builtWhiskers;
-    private int _builtSegments;
+    private string _builtShape = string.Empty;
     private int _builtRevision;
 
     /// <summary>Snapshot, któremu właśnie zmienia się nazwę (lista wtedy się sama nie przebudowuje).</summary>
@@ -48,8 +47,7 @@ public sealed class CreaturePanel : StudioPanel
     protected override Control Build()
     {
         _updaters.Clear();
-        _builtWhiskers = WorldObjectCatalog.WhiskerCountOf(_creature);
-        _builtSegments = (_creature as SnakeCreature)?.Segments ?? 0;
+        _builtShape = Shape();
         var controllers = _brain.Graph.Modules.Where(aModule => aModule is not SensorModule and not ActuatorModule)
             .Select(GraphCanvas.TitleOf).ToList();
         var titleExtra = Ui.HStack(8, Ui.Dot(Ui.ColorOf(_creature)),
@@ -115,15 +113,6 @@ public sealed class CreaturePanel : StudioPanel
 
         // ---------- aktuatory, nauka, snapshoty ----------
         var effects = Ui.VStack(14, Ui.Header("Aktuatory"));
-        if (_creature is SnakeCreature snake)
-            effects.Children.Add(Ui.Card(Ui.VStack(10, CardHead(Icons.Snake, "Długość", "SnakeCreature"),
-                Ui.Row("Segmenty", PanelParts.SegmentPicker(Session, snake), 34),
-                new TextBlock
-                {
-                    Text = "Ciało przebudowuje się w miejscu; CPG zachowuje wyuczony chód (jego parametry nie zależą od długości).",
-                    FontSize = 12,
-                    TextWrapping = TextWrapping.Wrap
-                }.Res(TextBlock.ForegroundProperty, "Studio.Text3"))));
         foreach (var actuator in _creature.Body.Actuators)
             effects.Children.Add(ActuatorCard(actuator));
         if (PanelParts.HasNetwork(_creature))
@@ -203,7 +192,6 @@ public sealed class CreaturePanel : StudioPanel
                 Grid.SetColumn(rows, 1);
                 grid.Children.Add(rows);
                 content.Children.Add(grid);
-                content.Children.Add(Ui.Row("Cel", PanelParts.TargetPicker(Session, _creature, eye), 34));
                 _updaters.Add(() =>
                 {
                     var readings = Read();
@@ -220,8 +208,6 @@ public sealed class CreaturePanel : StudioPanel
             {
                 content.Children.Add(CardHead(Icons.Whiskers, module is not null ? GraphCanvas.TitleOf(module) : "Wąsy",
                     $"RaySensor ×{rays.Angles.Count} · {rays.Range:0.#} m"));
-                // Karta przebuduje się sama (Refresh widzi inną liczbę wąsów), więc lista nie potrzebuje własnej reakcji.
-                content.Children.Add(Ui.Row("Liczba wąsów", PanelParts.WhiskerPicker(Session, _creature), 34));
                 var gauges = new List<(Gauge Gauge, TextBlock Value)>();
                 for (var ray = 0; ray < rays.Angles.Count; ray++)
                 {
@@ -267,6 +253,9 @@ public sealed class CreaturePanel : StudioPanel
                 break;
             }
         }
+        // Ustawienia zmysłu (i stwora, które go dotyczą — np. liczba wąsów); zmiana kształtu przebudowuje panel sama (Refresh).
+        foreach (var row in SettingsEditor.SlotRows(Session, _creature, aSensor.Slot))
+            content.Children.Add(row);
         return Clickable(Ui.Card(content), aCard => EnterBrain(module, aCard));
     }
 
@@ -290,6 +279,8 @@ public sealed class CreaturePanel : StudioPanel
         }
         if (module is null)
             content.Children.Add(Ui.Text("Żaden moduł mózgu nim nie steruje.", 12, "Studio.Text3"));
+        foreach (var row in SettingsEditor.SlotRows(Session, _creature, aActuator.Slot))
+            content.Children.Add(row);
         _updaters.Add(() =>
         {
             var command = module?.LastCommand;
@@ -430,9 +421,8 @@ public sealed class CreaturePanel : StudioPanel
 
     public override void Refresh(float aDelta)
     {
-        // Liczba wąsów zmieniona (tu, w scenie albo w grafie) — karty, schemat i podgląd grafu od nowa.
-        if (WorldObjectCatalog.WhiskerCountOf(_creature) != _builtWhiskers ||
-            ((_creature as SnakeCreature)?.Segments ?? 0) != _builtSegments || Session.BrainRevision != _builtRevision)
+        // Kształt ciała zmieniony (liczba wąsów, segmenty — tu, w scenie albo w grafie) — karty, schemat i podgląd grafu od nowa.
+        if (Shape() != _builtShape || Session.BrainRevision != _builtRevision)
             Child = Build();
         foreach (var update in _updaters)
             update();
@@ -451,6 +441,12 @@ public sealed class CreaturePanel : StudioPanel
     }
 
     public override void OnShown() => _snapshotCount = -1;
+
+    /// <summary>Wartości ustawień zmieniających kształt ciała (<see cref="SettingAttribute.Reshapes"/>) i liczby portów slotów.</summary>
+    private string Shape() => string.Join("|",
+        Settings.Describe(_creature.GetType()).Where(aSetting => aSetting.Attribute.Reshapes).Select(aSetting => aSetting.Get(_creature))
+            .Concat(_creature.Body.Sensors.Select(aSensor => (object)aSensor.OutputPorts.Count))
+            .Concat(_creature.Body.Actuators.Select(aActuator => (object)aActuator.InputPorts.Count)));
 
     /// <summary>„4 moduły · sieć neuronowa”: liczba modułów (bez granic podgrafów) i czym myśli stwór.</summary>
     private string BrainSummary()
