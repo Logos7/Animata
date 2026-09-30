@@ -161,7 +161,7 @@ public static class SeekRigs
     /// </summary>
     public static SeekRig SnakeWith(int aSegments)
     {
-        WorldObjectCatalog.CheckSnakeLength(aSegments);
+        SnakeCreature.CheckLength(aSegments);
         return SnakeRigs.GetOrAdd(aSegments, CreateSnakeRig);
     }
 
@@ -178,7 +178,7 @@ public static class SeekRigs
             MaxDistance = 6,
             ValidationEpisodes = 8,
             MaxSlabs = 3,
-            BodyLength = aSegments * WorldObjectCatalog.SnakeSpacing
+            BodyLength = aSegments * SnakeCreature.SegmentSpacing
         },
         AddFloor);
 
@@ -212,7 +212,7 @@ public static class SeekRigs
     /// </summary>
     public static SeekRig ClimbWith(int aSegments)
     {
-        WorldObjectCatalog.CheckSnakeLength(aSegments);
+        SnakeCreature.CheckLength(aSegments);
         return ClimbRigs.GetOrAdd(aSegments, aCount => new SeekRig(
             $"wspinaczka ×{aCount}",
             (aTargetId, aController) => WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, aTargetId, aController, aCount),

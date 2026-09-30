@@ -33,7 +33,7 @@ public static class EntityTypes
     [
         EntityType.Creature("car", "Autko", "wheel", aBrain => new CarCreature(aBrain)),
         EntityType.Creature("cylinderCreature", "Walec", "disk", aBrain => new CylinderCreature(aBrain)),
-        EntityType.Creature("snake", "Wąż", "snake", aBrain => new SnakeCreature(WorldObjectCatalog.DefaultSnakeSegments, aBrain)),
+        EntityType.Creature("snake", "Wąż", "snake", aBrain => new SnakeCreature(SnakeCreature.DefaultSegments, aBrain)),
         EntityType.Creature("spider", "Pająk", "spider", aBrain => new SpiderCreature(aBrain)),
         new("sphere", "Kula", "target", typeof(Sphere), () => new Sphere()),
         new("cylinder", "Cylinder", "pillar", typeof(Cylinder), () => new Cylinder()),

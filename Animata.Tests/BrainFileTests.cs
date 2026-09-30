@@ -10,7 +10,7 @@ namespace Animata.Tests;
 /// <summary>Mózgi wymienne: gotowe mózgi dla ciała, zapis i odczyt mózgu z pliku, nazwy snapshotów.</summary>
 public class BrainFileTests
 {
-    private static SnakeCreature NeuralSnake(int aSegments = WorldObjectCatalog.DefaultSnakeSegments) =>
+    private static SnakeCreature NeuralSnake(int aSegments = SnakeCreature.DefaultSegments) =>
         WorldObjectCatalog.CreateNeuralSnake(Vector3.Zero, 0, null, aSegments);
 
     [Fact]

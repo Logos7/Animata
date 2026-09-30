@@ -129,7 +129,7 @@ public static partial class WorldObjectCatalog
             target.Radius = Training.SeekRigs.ClimbTargetRadius;
             target.Name = $"Kula {creatures.Count + 1}";
             world.Add(target);
-            BrainModule brain = neural ? CreateSnakeNeuralModule(DefaultSnakeSegments, SnakeHiddenLayers) : CreateClimbingCpg();
+            BrainModule brain = neural ? CreateSnakeNeuralModule(SnakeCreature.DefaultSegments, SnakeHiddenLayers) : CreateClimbingCpg();
             var snake = CreateSnake(Vector3.Zero, 0, RandomColor(), target.Id, brain);
             snake.Name = name;
             snake.WrapAround(tree, creatures.Count * 1.3f);

@@ -76,11 +76,11 @@ public class SnakeTests
     [InlineData(24)]
     public void SnakePlan_HasSegmentsAndJoints(int aSegments)
     {
-        var plan = WorldObjectCatalog.SnakePlan(aSegments);
+        var plan = SnakeCreature.DefaultPlan(aSegments);
         Assert.Equal(aSegments, plan.Parts.Count);
         Assert.Equal(aSegments - 1, plan.Joints.Count);
-        Assert.Throws<ArgumentOutOfRangeException>(() => WorldObjectCatalog.SnakePlan(1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => WorldObjectCatalog.SnakePlan(WorldObjectCatalog.MaxSnakeSegments + 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SnakeCreature.DefaultPlan(1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SnakeCreature.DefaultPlan(SnakeCreature.MaxSegments + 1));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class SnakeTests
         foreach (var position in snake.PartPositions)
         {
             Assert.True(float.IsFinite(position.X) && float.IsFinite(position.Y) && float.IsFinite(position.Z));
-            Assert.InRange(position.Z, WorldObjectCatalog.SnakeRadius - 0.03f, WorldObjectCatalog.SnakeRadius + 0.2f);
+            Assert.InRange(position.Z, SnakeCreature.SegmentRadius - 0.03f, SnakeCreature.SegmentRadius + 0.2f);
         }
     }
 

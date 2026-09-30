@@ -31,7 +31,7 @@ public class ClimbTests
         using (world)
         {
             Assert.True(snake.Climber);
-            var contact = tree.Radius + WorldObjectCatalog.SnakeRadius;
+            var contact = tree.Radius + SnakeCreature.SegmentRadius;
             foreach (var part in snake.PartPositions)
                 Assert.InRange(new Vector2(part.X, part.Y).Length(), contact - 0.06f, contact + 0.02f);
             Assert.True(snake.PartPositions[0].Z > snake.PartPositions[^1].Z);

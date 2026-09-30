@@ -1,3 +1,6 @@
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using Animata.Core.Bodies;
 using Animata.Core.Actuators;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
@@ -15,8 +18,61 @@ namespace Animata.Core.WorldObjects;
 /// </summary>
 public sealed class SnakeCreature : ArticulatedCreature
 {
-    public SnakeCreature(int aSegments = WorldObjectCatalog.DefaultSnakeSegments, Brain? aBrain = null)
-        : base(WorldObjectCatalog.SnakePlan(aSegments), aBrain)
+    /// <summary>
+    /// Zakres skrętu i pochylenia stawu węża (rad) i moment serwa (N·m). ±1.2 rad w obu osiach — tyle trzeba, żeby
+    /// owinąć się ciasno wokół pnia r 0.25 m (odstęp segmentów 0.36 m); 8 N·m — żeby zwój ścisnął pień i utrzymał ciężar.
+    /// </summary>
+    public const float MaxYaw = 1.2f;
+    public const float MaxPitch = 1.2f;
+    public const float JointStrength = 8;
+
+    public const int MinSegments = 2;
+    public const int MaxSegments = 24;
+    public const int DefaultSegments = 8;
+
+    /// <summary>Promień segmentu węża i długość walca kapsuły (bez półkul).</summary>
+    public const float SegmentRadius = 0.07f;
+    public const float SegmentLength = 0.2f;
+
+    /// <summary>Odstęp środków kolejnych segmentów: kapsuła + mała szczelina na staw.</summary>
+    public const float SegmentSpacing = SegmentLength + 2 * SegmentRadius + 0.02f;
+
+    /// <summary>Tarcie łusek węża: małe zwykłe (sunie do przodu), duże w bok, średnie do tyłu (Coulomb, patrz PartPlan).</summary>
+    public const float Friction = 0.1f;
+    public const float LateralFriction = 1.5f;
+    public const float BackwardFriction = 0.5f;
+
+    public static bool IsValidLength(int aSegments) => aSegments is >= MinSegments and <= MaxSegments;
+
+    /// <summary>Rzuca <see cref="ArgumentOutOfRangeException"/>, gdy wąż miałby za mało albo za dużo segmentów.</summary>
+    public static void CheckLength(int aSegments, [CallerArgumentExpression(nameof(aSegments))] string? aName = null)
+    {
+        if (!IsValidLength(aSegments))
+            throw new ArgumentOutOfRangeException(aName, aSegments, $"Wąż ma od {MinSegments} do {MaxSegments} segmentów.");
+    }
+
+    /// <summary>
+    /// Plan węża: Seg0 (głowa, korzeń) … Seg{n−1} wzdłuż −X, leżące na ziemi; staw J{k} między Seg{k} a Seg{k+1}
+    /// w połowie odstępu. Stawy kulowe: skręt i pochylenie ±1.2 rad (±69°), moment 8 N·m. Każdy segment ma łuski:
+    /// małe tarcie zwykłe <see cref="Friction"/>, duże w bok <see cref="LateralFriction"/> i średnie do tyłu
+    /// <see cref="BackwardFriction"/> (współczynniki Coulomba, patrz <see cref="PartPlan"/>).
+    /// </summary>
+    public static BodyPlan DefaultPlan(int aSegments)
+    {
+        CheckLength(aSegments);
+        var height = SegmentRadius + 0.005f;
+        var builder = new BodyPlanBuilder();
+        for (var segment = 0; segment < aSegments; segment++)
+            builder.Part(new PartPlan($"Seg{segment}", PartShape.Capsule, new Vector3(SegmentRadius, SegmentLength, 0), 0.3f,
+                new Vector3(-segment * SegmentSpacing, 0, height), Quaternion.Identity, Friction, LateralFriction, BackwardFriction));
+        for (var joint = 0; joint < aSegments - 1; joint++)
+            builder.Joint($"J{joint}", $"Seg{joint}", $"Seg{joint + 1}", new Vector3(-(joint + 0.5f) * SegmentSpacing, 0, height),
+                aMaxYaw: MaxYaw, aMaxPitch: MaxPitch, aStrength: JointStrength);
+        return builder.Build();
+    }
+
+    public SnakeCreature(int aSegments = DefaultSegments, Brain? aBrain = null)
+        : base(DefaultPlan(aSegments), aBrain)
     {
         _segments = aSegments;
     }
@@ -48,7 +104,7 @@ public sealed class SnakeCreature : ArticulatedCreature
 
     public override string Describe() => $"SnakeCreature · {Segments} segm. · {JointCount} stawów · fizyka Bepu";
 
-    [Setting("Segmenty", Min = WorldObjectCatalog.MinSnakeSegments, Max = WorldObjectCatalog.MaxSnakeSegments, Step = 1, Reshapes = true, Slots = "Spine,Joints", Tip = "Liczba segmentów węża. Ciało przebudowuje się w miejscu, CPG zachowuje wyuczony chód, sieć dostaje przeliczone wyjścia.")]
+    [Setting("Segmenty", Min = MinSegments, Max = MaxSegments, Step = 1, Reshapes = true, Slots = "Spine,Joints", Tip = "Liczba segmentów węża. Ciało przebudowuje się w miejscu, CPG zachowuje wyuczony chód, sieć dostaje przeliczone wyjścia.")]
     public int Segments
     {
         get => _segments;
@@ -78,7 +134,7 @@ public sealed class SnakeCreature : ArticulatedCreature
     /// </summary>
     public void SetSegments(int aSegments)
     {
-        WorldObjectCatalog.CheckSnakeLength(aSegments);
+        CheckLength(aSegments);
         if (aSegments == Segments)
             return;
 
@@ -88,7 +144,7 @@ public sealed class SnakeCreature : ArticulatedCreature
             (_, aPort) => IsSpinePort(aPort),
             aGraphs =>
             {
-                Rebuild(WorldObjectCatalog.SnakePlan(aSegments));
+                Rebuild(DefaultPlan(aSegments));
                 _segments = aSegments;
                 foreach (var actuator in Body.Actuators.OfType<SpineActuator>())
                     actuator.SetJointCount(joints);

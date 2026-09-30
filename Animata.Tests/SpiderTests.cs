@@ -132,7 +132,7 @@ public class SpiderTests
         for (var a = 0; a < snake.PartPositions.Count; a++)
             for (var b = a + 3; b < snake.PartPositions.Count; b++)
                 closest = MathF.Min(closest, Vector3.Distance(snake.PartPositions[a], snake.PartPositions[b]));
-        Assert.True(closest > WorldObjectCatalog.SnakeRadius * 1.6f, $"closest = {closest}");
+        Assert.True(closest > SnakeCreature.SegmentRadius * 1.6f, $"closest = {closest}");
     }
 
     [Fact]

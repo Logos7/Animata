@@ -83,13 +83,13 @@ public class TerrainTests
         for (var tick = 0; tick < 60; tick++)
             world.Update(Delta);
         foreach (var position in snake.PartPositions)
-            Assert.InRange(position.Z, 0.1f + WorldObjectCatalog.SnakeRadius - 0.02f, 0.1f + WorldObjectCatalog.SnakeRadius + 0.02f);
+            Assert.InRange(position.Z, 0.1f + SnakeCreature.SegmentRadius - 0.02f, 0.1f + SnakeCreature.SegmentRadius + 0.02f);
 
         // Przesunięta płyta odtwarza się w fizyce: wąż spada na podłogę.
         slab.Body.Position = new Vector3(8, 8, 0);
         for (var tick = 0; tick < 60; tick++)
             world.Update(Delta);
-        Assert.InRange(snake.PartPositions[0].Z, WorldObjectCatalog.SnakeRadius - 0.02f, WorldObjectCatalog.SnakeRadius + 0.02f);
+        Assert.InRange(snake.PartPositions[0].Z, SnakeCreature.SegmentRadius - 0.02f, SnakeCreature.SegmentRadius + 0.02f);
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public class TerrainTests
             {
                 Assert.InRange(slab.Height, 0.03f, 0.1f);
                 var back = -new Vector2(MathF.Cos(episode.Yaw), MathF.Sin(episode.Yaw));
-                for (var step = 0f; step <= 8 * WorldObjectCatalog.SnakeSpacing; step += 0.1f)
+                for (var step = 0f; step <= 8 * SnakeCreature.SegmentSpacing; step += 0.1f)
                     Assert.True(Vector2.Distance(slab.Position, back * step) > slab.Size.Length() / 2);
             }
 

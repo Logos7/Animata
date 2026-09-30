@@ -25,7 +25,7 @@ public static class SnakeWrap
         {
             var want = aKey / 1000f;
             var best = (Yaw: 0f, Pitch: 0f, Error: float.MaxValue);
-            for (var yaw = 0.2f; yaw <= WorldObjectCatalog.SnakeMaxYaw; yaw += 0.01f)
+            for (var yaw = 0.2f; yaw <= SnakeCreature.MaxYaw; yaw += 0.01f)
                 for (var pitch = -0.5f; pitch <= 0.5f; pitch += 0.01f)
                 {
                     var (radius, rise) = Screw(yaw, pitch);
@@ -53,7 +53,7 @@ public static class SnakeWrap
     private static (Quaternion Rotation, Vector3 Step) Step(float aYaw, float aPitch)
     {
         var bend = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitY, aPitch);
-        var half = new Vector3(-WorldObjectCatalog.SnakeSpacing / 2, 0, 0);
+        var half = new Vector3(-SnakeCreature.SegmentSpacing / 2, 0, 0);
         return (bend, half + Vector3.Transform(half, bend));
     }
 
@@ -63,7 +63,7 @@ public static class SnakeWrap
     /// </summary>
     public static void Around(SnakeCreature aSnake, Vector3 aTrunk, float aTrunkRadius, float aAngle = 0, float aClearance = 0.12f)
     {
-        var (yaw, pitch) = BendFor(aTrunkRadius + WorldObjectCatalog.SnakeRadius - Squeeze);
+        var (yaw, pitch) = BendFor(aTrunkRadius + SnakeCreature.SegmentRadius - Squeeze);
         var (rotation, step) = Step(yaw, pitch);
         var axis = Vector3.Normalize(new Vector3(rotation.X, rotation.Y, rotation.Z));
         // Oś helisy skierowana tak, by od głowy do ogona schodzić w dół: głowa na górze.
@@ -76,7 +76,7 @@ public static class SnakeWrap
         var points = aSnake.PartPositions.Select(aPoint => new Vector2(aPoint.X, aPoint.Y)).ToList();
         var center = CircleCenter(points);
         var lowest = aSnake.PartPositions.Min(aPoint => aPoint.Z);
-        var shift = new Vector3(aTrunk.X - center.X, aTrunk.Y - center.Y, aTrunk.Z + aClearance + WorldObjectCatalog.SnakeRadius - lowest);
+        var shift = new Vector3(aTrunk.X - center.X, aTrunk.Y - center.Y, aTrunk.Z + aClearance + SnakeCreature.SegmentRadius - lowest);
         aSnake.PlaceBent(shift, root, _ => (yaw, pitch));
     }
 
