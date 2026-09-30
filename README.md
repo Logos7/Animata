@@ -139,6 +139,8 @@ Roughly in this direction, one experiment at a time:
 
 ## Projects
 
+A detailed map of the code — project dependencies, ownership, class hierarchies, body slots, the tick, training and saving — is in [`docs/mapa-kodu.md`](docs/mapa-kodu.md) (Polish, Mermaid diagrams rendered by GitHub).
+
 | Project | What it is |
 | --- | --- |
 | `Animata.Core` | Model, bodies (incl. bodies from blocks), sensors, actuators, brains, physics (BepuPhysics 2), training, snapshots, graph editing, saving. No UI. |
