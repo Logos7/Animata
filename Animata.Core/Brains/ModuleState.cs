@@ -23,6 +23,9 @@ namespace Animata.Core.Brains;
 [JsonDerivedType(typeof(CompositeState), "composite")]
 [JsonDerivedType(typeof(CpgState), "cpg")]
 [JsonDerivedType(typeof(GaitState), "gait")]
+[JsonDerivedType(typeof(StateMachineState), "stateMachine")]
+[JsonDerivedType(typeof(BalanceState), "balance")]
+[JsonDerivedType(typeof(BipedGaitState), "bipedGait")]
 public abstract record ModuleState
 {
     public string ToJson() => JsonSerializer.Serialize(this);
@@ -117,4 +120,29 @@ public sealed record CpgState(
     bool Grip = false) : ModuleState
 {
     public override BrainModule CreateModule(Guid aId) => new CpgModule(Joints) { Id = aId };
+}
+
+/// <summary>Automat stanów: stany, porty warunków, porty wyjść, przejścia, czas przejścia i najkrótszy pobyt (sama konfiguracja).</summary>
+public sealed record StateMachineState(
+    string[] States,
+    string[] Conditions,
+    string[] Ports,
+    StateTransition[] Transitions,
+    float BlendSeconds,
+    float MinDwellSeconds) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new StateMachineModule(States, Conditions, Ports, Transitions) { Id = aId };
+}
+
+/// <summary>Ręczne stanie humanoida: 6 wzmocnień regulatora z błędnika.</summary>
+public sealed record BalanceState(float AnkleP, float AnkleD, float HipP, float HipD, float RollP, float RollD) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new BalanceModule { Id = aId };
+}
+
+/// <summary>Ręczny chód humanoida: 9 uczonych parametrów generatora kroku.</summary>
+public sealed record BipedGaitState(
+    float Stride, float KneeLift, float KneePhase, float Sway, float Frequency, float Lean, float BalanceP, float BalanceD, float TurnGain) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new BipedGaitModule { Id = aId };
 }

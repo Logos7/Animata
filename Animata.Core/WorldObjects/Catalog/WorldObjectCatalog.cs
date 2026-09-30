@@ -35,19 +35,7 @@ public static partial class WorldObjectCatalog
         var drives = graph.Modules.OfType<ActuatorModule>().ToList();
         graph.Modules.Insert(sources.Count, aController);
         var controller = aController;
-
-        var missing = new List<string>();
-        foreach (var port in controller.InputPorts)
-        {
-            var source = sources.FirstOrDefault(aSource => aSource.OutputPorts.Contains(port));
-            if (source is null)
-                missing.Add(port);
-            else
-                graph.Connect(source, port, controller, port);
-        }
-        if (missing.Count > 0)
-            throw new ArgumentException(
-                $"{controller} has inputs no sensor provides: {string.Join(", ", missing)}.", nameof(aController));
+        ConnectSenses(aBrain, controller);
 
         // Każdy napęd, którego porty sterownik wystawia, dostaje je wszystkie; napęd częściowo pokryty to błąd,
         // napęd bez żadnego portu sterownika zostaje wolny (np. drugi napęd dla innego modułu).
@@ -69,6 +57,26 @@ public static partial class WorldObjectCatalog
                 $"{controller} has no outputs for any actuator ({string.Join(", ", drives.SelectMany(aDrive => aDrive.InputPorts))}).",
                 nameof(aController));
         graph.Validate();
+    }
+
+    /// <summary>
+    /// Podpina każde wejście modułu (już dodanego do grafu mózgu) do zmysłu ciała z portem tej samej nazwy. Wejście, którego
+    /// żaden zmysł nie daje (literówka w porcie), to <see cref="ArgumentException"/> z listą — a nie ciche zero.
+    /// </summary>
+    public static void ConnectSenses(Brain aBrain, BrainModule aModule)
+    {
+        var sources = aBrain.Graph.Modules.OfType<SensorModule>().ToList();
+        var missing = new List<string>();
+        foreach (var port in aModule.InputPorts)
+        {
+            var source = sources.FirstOrDefault(aSource => aSource.OutputPorts.Contains(port));
+            if (source is null)
+                missing.Add(port);
+            else
+                aBrain.Graph.Connect(source, port, aModule, port);
+        }
+        if (missing.Count > 0)
+            throw new ArgumentException($"{aModule} has inputs no sensor provides: {string.Join(", ", missing)}.", nameof(aModule));
     }
 
     /// <summary>Oczy stwora (<see cref="TargetSensor"/>) patrzą na podaną encję (null — bez celu).</summary>

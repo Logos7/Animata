@@ -18,21 +18,32 @@ public static partial class WorldObjectCatalog
     public static BrainModule InstallBrain(ActiveEntity aCreature, BrainPreset aPreset)
     {
         var brain = aCreature.Brain ?? throw new InvalidOperationException($"{aCreature} nie ma mózgu.");
-        var controller = aPreset.Create();
         var before = Persistence.WorldFile.CaptureBrain(brain);
+        IReadOnlyList<BrainModule> modules;
         try
         {
             brain.Clear();
-            BuildBrain(brain, controller);
+            if (aPreset.Build is { } build)
+            {
+                modules = build(brain);
+                brain.Graph.Validate();
+            }
+            else
+            {
+                var controller = aPreset.Create();
+                BuildBrain(brain, controller);
+                modules = [controller];
+            }
         }
         catch
         {
             Persistence.WorldFile.RestoreBrain(brain, before);
             throw;
         }
-        if (aPreset.HandTuned && controller.CaptureState() is not null)
-            brain.Capture("ręczne parametry", controller);
+        var tuned = modules.Where(aModule => aModule is ITrainableModule || aModule.CaptureState() is not null).ToList();
+        if (aPreset.HandTuned && tuned.Count > 0)
+            brain.Capture("ręczne parametry", tuned);
         brain.Reset();
-        return controller;
+        return modules[0];
     }
 }

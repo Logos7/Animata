@@ -5,9 +5,11 @@ using Animata.Core.Entities;
 namespace Animata.Core.Training;
 
 /// <summary>
-/// Nauka stworów w scenie. Uczy się pierwszy uczony moduł mózgu (<see cref="ITrainableModule"/>: sieć neuronowa
-/// albo CPG węża). Każdy stwór ma własny <see cref="BackgroundTrainer"/>: ewolucja idzie w ukrytych symulacjach,
-/// a do modułu w scenie trafiają tylko parametry kolejnych mistrzów (lepszych na stałej walidacji).
+/// Nauka stworów w scenie. Uczą się wszystkie uczone moduły mózgu (<see cref="ITrainableModule"/>: sieci, CPG, chody),
+/// także w podgrafach — każdy osobno, we własnych warunkach (<see cref="ActiveEntity.TrainingRigFor"/>; np. sieć stania
+/// humanoida na próbach z pchnięciami, sieć chodu — na dojściu do celu). Każdy moduł ma własny <see cref="BackgroundTrainer"/>:
+/// ewolucja idzie w ukrytych symulacjach, w których moduł steruje ciałem sam, a do modułu w scenie trafiają tylko parametry
+/// kolejnych mistrzów (lepszych na stałej walidacji).
 /// Auto-snapshoty („przed nauką”, „nauka: mistrz…”, „przed losowaniem”) idą przez <see cref="SnapshotHistory"/>,
 /// więc nie powstają serie identycznych snapshotów. Klasę woła się z jednego wątku (UI).
 /// </summary>
@@ -61,62 +63,97 @@ public sealed class TrainingController : IDisposable
 
     public bool IsTraining(Brain aBrain) => SessionOf(aBrain) is not null;
 
-    /// <summary>Pierwszy uczony moduł (sieć albo CPG) na najwyższym poziomie mózgu stwora albo null.</summary>
-    public static BrainModule? FindTrainable(ActiveEntity aCreature) =>
-        aCreature.Brain?.Graph.Modules.FirstOrDefault(aModule => aModule is ITrainableModule);
+    /// <summary>Pierwszy uczony moduł mózgu stwora (także w podgrafie) albo null.</summary>
+    public static BrainModule? FindTrainable(ActiveEntity aCreature) => Trainables(aCreature).FirstOrDefault();
 
-    /// <summary>Ostatni postęp nauki stwora albo null (nie uczy się albo jeszcze nie ma pokolenia).</summary>
+    /// <summary>Wszystkie uczone moduły mózgu stwora, także w podgrafach (rodzic przed dziećmi).</summary>
+    public static IEnumerable<BrainModule> Trainables(ActiveEntity aCreature) =>
+        aCreature.Brain?.Graph.Descendants().Where(aModule => aModule is ITrainableModule) ?? [];
+
+    /// <summary>Ostatni postęp nauki stwora (pierwszego uczonego modułu) albo null.</summary>
     public TrainingProgress? ProgressOf(Brain aBrain) => SessionOf(aBrain)?.Last;
 
+    /// <summary>Postęp nauki każdego uczonego modułu mózgu: nazwa modułu, rig i ostatni postęp (null — jeszcze bez pokolenia).</summary>
+    public IReadOnlyList<(string Module, string Rig, TrainingProgress? Progress)> ProgressesOf(Brain aBrain) =>
+        [.. _sessions.Where(aSession => aSession.Brain == aBrain).Select(aSession => (aSession.Module.Name, aSession.Rig, aSession.Last))];
+
     /// <summary>
-    /// Zaczyna naukę od bieżących wag sieci. Zwraca false, jeśli stwór nie ma sieci albo już się uczy.
+    /// Zaczyna naukę każdego uczonego modułu stwora od jego bieżących parametrów. Zwraca false, jeśli stwór nie ma uczonego
+    /// modułu, już się uczy albo żaden moduł nie da się uczyć w swoich warunkach (np. nie pasuje do ciała).
     /// Ziarno dotyczy tylko losowania prób i mutacji — walidacja jest stała (patrz SeekTargetOptions.ValidationSeed).
     /// </summary>
     public bool Start(ActiveEntity aCreature, int? aSeed = null)
     {
-        if (aCreature.Brain is not { } brain || FindTrainable(aCreature) is not { } module || IsTraining(brain))
+        if (aCreature.Brain is not { } brain || IsTraining(brain))
+            return false;
+        var modules = Trainables(aCreature).ToList();
+        if (modules.Count == 0)
             return false;
 
         var seed = aSeed ?? (Environment.TickCount ^ aCreature.Id.GetHashCode());
-        var rig = SeekRigs.For(aCreature);
-        var task = new SeekTargetTask(module.CaptureState()!, rig, _options(rig, seed), module.Name);
-        var evolution = new Evolution(((ITrainableModule)module).GetParameters(), new EvolutionOptions { Seed = seed });
-        _history.Capture(brain, "przed nauką", module);
-
-        var trainer = new BackgroundTrainer(evolution, task.Evaluate, _maxGenerations, task.Validate);
-        _sessions.Add(new Session(aCreature, brain, module, trainer, rig.Name, Setup(aCreature, module)));
-        trainer.Paused = _paused;
-        trainer.Start();
-        return true;
+        _history.Capture(brain, "przed nauką", [.. modules]);
+        var started = 0;
+        foreach (var module in modules)
+        {
+            SeekRig rig;
+            SeekTargetTask task;
+            try
+            {
+                rig = SeekRigs.For(aCreature, module);
+                task = new SeekTargetTask(module.CaptureState()!, rig, _options(rig, seed), module.Name);
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or BrainException or NotSupportedException)
+            {
+                LastStartError = $"{module.Name}: {exception.Message}";
+                continue;
+            }
+            var evolution = new Evolution(((ITrainableModule)module).GetParameters(), new EvolutionOptions { Seed = seed + started });
+            var trainer = new BackgroundTrainer(evolution, task.Evaluate, _maxGenerations, task.Validate);
+            _sessions.Add(new Session(aCreature, brain, module, trainer, modules.Count > 1 ? $"{rig.Name} ({module.Name})" : rig.Name,
+                Setup(aCreature, module)));
+            trainer.Paused = _paused;
+            trainer.Start();
+            started++;
+        }
+        return started > 0;
     }
 
+    /// <summary>Dlaczego ostatnio jakiś moduł nie ruszył z nauką (np. nie pasuje do ciała w swoich warunkach) albo null.</summary>
+    public string? LastStartError { get; private set; }
+
     /// <summary>
-    /// Zatrzymuje naukę; sieć zostaje z wagami ostatniego mistrza, a ten (jeśli <paramref name="aSnapshot"/>)
-    /// trafia do snapshotu. Zwraca komunikat błędu, jeśli nauka przerwała się wyjątkiem, inaczej null.
+    /// Zatrzymuje naukę wszystkich modułów mózgu; każdy zostaje z parametrami ostatniego mistrza, a ten (jeśli
+    /// <paramref name="aSnapshot"/>) trafia do snapshotu. Zwraca komunikat błędu, jeśli nauka przerwała się wyjątkiem, inaczej null.
     /// </summary>
     public string? Stop(Brain aBrain, bool aSnapshot = true)
     {
-        if (SessionOf(aBrain) is not { } session)
-            return null;
-
-        session.Trainer.Dispose();
-        Poll(session);
-        _sessions.Remove(session);
-        if (aSnapshot && session.Last is { } last)
-            _history.Capture(session.Brain,
-                $"nauka: mistrz z gen {last.ChampionGeneration}, wynik {last.ChampionScore:F3}", session.Module);
-        return session.Trainer.Error is { } error ? $"{session.Rig}: nauka przerwana: {error.Message}" : null;
+        string? error = null;
+        foreach (var session in _sessions.Where(aSession => aSession.Brain == aBrain).ToList())
+            error = StopSession(session, aSnapshot) ?? error;
+        return error;
     }
 
-    /// <summary>Losowe wagi i nauka od zera. Poprzedni stan zostaje w snapshocie (Z cofa).</summary>
+    private string? StopSession(Session aSession, bool aSnapshot = true)
+    {
+        aSession.Trainer.Dispose();
+        Poll(aSession);
+        _sessions.Remove(aSession);
+        if (aSnapshot && aSession.Last is { } last)
+            _history.Capture(aSession.Brain,
+                $"nauka: mistrz z gen {last.ChampionGeneration}, wynik {last.ChampionScore:F3}", aSession.Module);
+        return aSession.Trainer.Error is { } error ? $"{aSession.Rig}: nauka przerwana: {error.Message}" : null;
+    }
+
+    /// <summary>Losowe parametry wszystkich uczonych modułów i nauka od zera. Poprzedni stan zostaje w snapshocie (Z cofa).</summary>
     public bool RandomizeAndRestart(ActiveEntity aCreature, int? aSeed = null)
     {
-        if (aCreature.Brain is not { } brain || FindTrainable(aCreature) is not { } module)
+        if (aCreature.Brain is not { } brain || Trainables(aCreature).ToList() is not { Count: > 0 } modules)
             return false;
 
         Stop(brain);
-        _history.Capture(brain, "przed losowaniem", module);
-        ((ITrainableModule)module).Randomize();
+        _history.Capture(brain, "przed losowaniem", [.. modules]);
+        foreach (var module in modules)
+            ((ITrainableModule)module).Randomize();
         return Start(aCreature, aSeed);
     }
 
@@ -133,18 +170,20 @@ public sealed class TrainingController : IDisposable
         var changed = false;
         foreach (var session in _sessions.ToArray())
         {
+            if (!_sessions.Contains(session))
+                continue;   // zatrzymana razem z innym modułem tego samego mózgu
             changed |= Poll(session);
             if (!session.Trainer.IsRunning)
             {
-                aMessage = Stop(session.Brain) ?? aMessage;
+                aMessage = StopSession(session) ?? aMessage;
                 changed = true;
                 continue;
             }
             if (++session.SetupCheck % SetupCheckInterval != 0)
                 continue;
-            if (!ReferenceEquals(FindTrainable(session.Creature), session.Module))
+            if (!session.Brain.Graph.ContainsDeep(session.Module))
             {
-                aMessage = Stop(session.Brain, aSnapshot: false) ?? $"{session.Rig}: uczony moduł zniknął z mózgu — nauka zatrzymana";
+                aMessage = StopSession(session, aSnapshot: false) ?? $"{session.Rig}: uczony moduł zniknął z mózgu — nauka zatrzymana";
                 changed = true;
             }
             else if (Setup(session.Creature, session.Module) != session.Setup)
@@ -167,7 +206,7 @@ public sealed class TrainingController : IDisposable
     /// </summary>
     private static string Setup(ActiveEntity aCreature, BrainModule aModule)
     {
-        var builder = new System.Text.StringBuilder(aCreature.TrainingRig?.Name ?? aCreature.GetType().Name);
+        var builder = new System.Text.StringBuilder(aCreature.TrainingRigFor(aModule)?.Name ?? aCreature.GetType().Name);
         if (aModule.CaptureState() is { } state)
             builder.Append('|').Append(TrainableModules.Create(state, new float[TrainableModules.ParameterCount(state)], aModule.Name)
                 .CaptureState()?.ToJson());

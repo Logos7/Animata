@@ -50,6 +50,10 @@ public sealed class StudioWindow : Window
         {
             Description = "Pająk z generatorem kłusa i pająk z siecią idą do kuli przez niskie klocki — trzeba nie upaść na brzuch."
         });
+        AddScene(new StudioSession("Humanoidy", WorldObjectCatalog.CreateHumanoidScene)
+        {
+            Description = "Dwa humanoidy z mózgiem ze stanami: stoją, gdy kula jest blisko, idą, gdy daleko. Jeden ma ręczne stanie i krok, drugi dwie sieci do nauczenia."
+        });
         AddScene(new StudioSession("Wspinaczka", WorldObjectCatalog.CreateClimbScene)
         {
             Description = "Dwa węże owinięte wokół pni: jeden toczy się w górę ręcznym ruchem, drugi ma sieć, która musi się tego nauczyć."

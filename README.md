@@ -38,7 +38,7 @@ and let it run on.
   locked box — selectable, but it cannot be moved or deleted until unlocked. Every creature is built from blocks
   (parts and joints, a `BodyPlan`) and lives in real 3D rigid-body physics (BepuPhysics 2). Four creatures:
   a **car** (box body on four wheel bodies with suspension, front-wheel steering, rear-wheel drive), a **cylinder**
-  (disc on two driven side wheels and two support balls, turns in place), a **snake** and a **spider**. There is one
+  (disc on two driven side wheels and two support balls, turns in place), a **snake**, a **spider** and a **humanoid**. There is one
   creature class; what makes a snake a snake is its **design** — data, not code: the body plan (parts and joints),
   the sensor and drive slots, the settings, the ready-made brains and the training setup. A body blueprint can be
   written to JSON and read back, and a creature made from a blueprint alone gets a general neural network that
@@ -64,6 +64,21 @@ and let it run on.
   gait on its own (6/8 after 30 generations). Spiders feel **touch** (each foot and the
   belly) and **balance** (trunk pitch and roll); training punishes lying on the belly or falling over, which removed the
   belly-crawling "gaits" evolution used to find (bad posture 30–38 % of the time → about 1–10 %).
+- **A humanoid with brain states.** A 1.4 m biped: pelvis, trunk, head, two arms and two legs, 18 moving axes (waist,
+  hips, one-way knees, ankles, shoulders, one-way elbows). A **balance** sense (pelvis pitch, roll, their rates, height)
+  and touch in both feet and the trunk. Its brain is the first one with **states**: a *standing* network and a *walking*
+  network both drive every joint, and a **state machine** module between them and the body decides which one is in
+  charge — it walks when the target is further than 0.8 m and stands when it is closer than 0.4 m (or not seen),
+  blending the two over 0.4 s and staying in a state at least 1 s so it doesn't flicker. Each network trains on its
+  own trials: standing on 10 s trials with a random push (0.3–1 m/s), no target and a penalty for leaving the spot,
+  walking on reaching a target 2–5 m away. Honest numbers: with no control it survives pushes in 3/8 trials; the
+  evolved hand balance controller in 7/8 (without the leave-the-spot penalty evolution found a "standing" that shuffled
+  2 m backwards in 40 s); the standing network gets from 3/8 to 6/8 in 15 generations. With the hand-tuned modules the
+  whole state brain works in the Humanoidy scene: it walks to the ball (about 8 s for 3 m), stops and stands still;
+  move the ball and it walks again. **Walking is the open problem**: the
+  first hand-tuned step generator fell in every trial; evolving its nine parameters (30 generations) turned it into a
+  swaying shuffle without knee lift that stays upright in 8/8 trials and reaches the target in 7/8 — that is now the
+  hand-tuned walk. The walking *network* from random weights so far only learns to stand still (30 generations).
 - **Bodies that don't pass through themselves.** Parts of one creature collide with each other unless they are
   neighbours in the joint tree (one or two joints apart), so a coiled snake stays coiled and legs don't cross.
   Joint angles are measured around the child part's own axes, so a leg pointing sideways bends like one pointing forward.
@@ -138,7 +153,7 @@ their way along the posts.
 Roughly in this direction, one experiment at a time:
 
 - more senses and richer brain modules (memory, timing, learning inside a lifetime, not only across generations);
-- neural brains that learn what hand-tuned ones already do — climbing is the open case;
+- neural brains that learn what hand-tuned ones already do — climbing and two-legged walking are the open cases;
 - more body plans (five legs, grippers) and a body editor for building creatures from blocks in the Studio;
 - a living ecosystem: food, energy, reproduction and inheritance of body and brain;
 - moving creatures (body and brain) between worlds; slopes, trees and richer terrain.

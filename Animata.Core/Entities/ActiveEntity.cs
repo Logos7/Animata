@@ -35,6 +35,12 @@ public abstract class ActiveEntity : Entity
     /// <summary>Warunki nauki tego stwora; null — ogólny rig z rejestru (<see cref="SeekRigs.For"/>).</summary>
     public virtual SeekRig? TrainingRig => null;
 
+    /// <summary>
+    /// Warunki nauki jednego uczonego modułu mózgu (np. sieć stania i sieć chodu uczą się na różnych próbach); domyślnie
+    /// <see cref="TrainingRig"/>.
+    /// </summary>
+    public virtual SeekRig? TrainingRigFor(Brains.Modules.BrainModule aModule) => TrainingRig;
+
     /// <summary>Jednolinijkowy opis ciała do UI.</summary>
     public virtual string Describe() => GetType().Name;
 }

@@ -63,6 +63,26 @@ public sealed record SeekTargetOptions
 
     /// <summary>Długość ciała za głową w chwili startu (wąż leży wzdłuż −X) — klocki nie mogą leżeć pod nim.</summary>
     public float BodyLength { get; init; }
+
+    /// <summary>
+    /// Waga członu dojścia do celu (1 — zwykle; 0 — próba nie jest o dojściu, np. stanie w miejscu, gdzie liczy się tylko
+    /// postawa i wysiłek).
+    /// </summary>
+    public float DistanceWeight { get; init; } = 1;
+
+    /// <summary>
+    /// Kara za odejście z miejsca startu: waga · całka z poziomej odległości od startu (m) / T. Dla stania — bez niej
+    /// regulator „stoi”, kołysząc się i drobiąc w tył (kilka metrów w 40 s).
+    /// </summary>
+    public float DriftWeight { get; init; }
+
+    /// <summary>
+    /// Pchnięcie w próbie: w chwili <see cref="PushAtSeconds"/> stwór dostaje prędkość o losowym kierunku w poziomie
+    /// i wielkości z zakresu (m/s). <see cref="MaxPushSpeed"/> 0 — bez pchnięć.
+    /// </summary>
+    public float PushAtSeconds { get; init; } = 1.5f;
+    public float MinPushSpeed { get; init; }
+    public float MaxPushSpeed { get; init; }
 }
 
 public readonly record struct ObstacleSpec(Vector2 Position, float Radius);
@@ -70,8 +90,11 @@ public readonly record struct ObstacleSpec(Vector2 Position, float Radius);
 /// <summary>Klocek terenu: środek spodu, wymiary (X, Y), wysokość, obrót wokół pionu.</summary>
 public readonly record struct SlabSpec(Vector2 Position, Vector2 Size, float Height, float Yaw);
 
-/// <summary>Jedna próba: stwór w (0,0) obrócony o Yaw, cel w TargetOffset (na terenie), cylindry i klocki na drodze.</summary>
-public readonly record struct SeekEpisode(float Yaw, Vector2 TargetOffset, ObstacleSpec[] Obstacles, SlabSpec[]? Slabs = null);
+/// <summary>
+/// Jedna próba: stwór w (0,0) obrócony o Yaw, cel w TargetOffset (na terenie), cylindry i klocki na drodze, opcjonalne
+/// pchnięcie (prędkość w poziomie, m/s — patrz <see cref="SeekTargetOptions.MaxPushSpeed"/>).
+/// </summary>
+public readonly record struct SeekEpisode(float Yaw, Vector2 TargetOffset, ObstacleSpec[] Obstacles, SlabSpec[]? Slabs = null, Vector2? Push = null);
 
 /// <summary>
 /// Wynik jednej próby: Cost — składnik fitness (mniejszy = lepszy), FinalGap — szczelina do celu na końcu,
@@ -267,6 +290,49 @@ public static class SeekRigs
         SpiderPosture);
 
     /// <summary>
+    /// Humanoid stoi w miejscu: 10 s, w 1.5 s pchnięcie 0.3–1.0 m/s w losowym kierunku (bez sterowania stoi do ok. 0.4 m/s);
+    /// liczy się postawa (upadek, pochylenie), odejście z miejsca i wysiłek — dojście do celu nie (DistanceWeight 0).
+    /// </summary>
+    public static readonly SeekRig HumanoidStand = new(
+        "humanoid · stanie",
+        (aTargetId, aController) => WorldObjectCatalog.CreateHumanoid(System.Numerics.Vector3.Zero, 0, aTargetId, aController),
+        AverageCommand,
+        new SeekTargetOptions
+        {
+            EpisodesPerGeneration = 6,
+            EpisodeSeconds = 10,
+            MinDistance = 2,
+            MaxDistance = 4,
+            ValidationEpisodes = 8,
+            DistanceWeight = 0,
+            DriftWeight = 1,
+            PushAtSeconds = 1.5f,
+            MinPushSpeed = 0.3f,
+            MaxPushSpeed = 1.0f,
+            PostureWeight = 1
+        },
+        AddFloor,
+        Humanoid.Posture);
+
+    /// <summary>Humanoid idzie do celu 2–5 m, 12 s, kara za upadek i pochylenie.</summary>
+    public static readonly SeekRig HumanoidWalk = new(
+        "humanoid · chód",
+        (aTargetId, aController) => WorldObjectCatalog.CreateHumanoid(System.Numerics.Vector3.Zero, 0, aTargetId, aController),
+        AverageCommand,
+        new SeekTargetOptions
+        {
+            EpisodesPerGeneration = 6,
+            EpisodeSeconds = 12,
+            MinDistance = 2,
+            MaxDistance = 5,
+            ValidationEpisodes = 8,
+            BodyLength = 0.3f,
+            PostureWeight = 1
+        },
+        AddFloor,
+        Humanoid.Posture);
+
+    /// <summary>
     /// Zła postawa pająka: 1, gdy tułów leży na ziemi albo pająk jest przewrócony (tułów pochylony o 60° i więcej),
     /// pomiędzy — rośnie z przechyleniem.
     /// </summary>
@@ -286,10 +352,12 @@ public static class SeekRigs
     /// od ciała budowanego przez rig, trafiają do każdego ciała w próbach — kopia z chwili wywołania. Cele (Id encji)
     /// się nie kopiują: w próbie oko patrzy na cel próby. Gdy nic się nie różni, zwraca rig bez zmian (ten sam obiekt).
     /// </summary>
-    public static SeekRig For(Entity aCreature)
+    public static SeekRig For(Entity aCreature, BrainModule? aModule = null)
     {
-        var rig = (aCreature as ActiveEntity)?.TrainingRig ?? Generic(aCreature);
-        var tuning = SlotTuning(aCreature, rig);
+        var active = aCreature as ActiveEntity;
+        aModule ??= active is null ? null : TrainingController.FindTrainable(active);
+        var rig = (aModule is not null ? active?.TrainingRigFor(aModule) : active?.TrainingRig) ?? Generic(aCreature);
+        var tuning = SlotTuning(aCreature, rig, aModule);
         if (tuning.Count == 0)
             return rig;
         var create = rig.CreateCreature;
@@ -305,11 +373,10 @@ public static class SeekRigs
     }
 
     /// <summary>Ustawienia slotów stwora różne od ciała z rigu (slot → nazwa → wartość); cele pominięte.</summary>
-    private static Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>> SlotTuning(Entity aCreature, SeekRig aRig)
+    private static Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>> SlotTuning(Entity aCreature, SeekRig aRig, BrainModule? aModule)
     {
         var tuning = new Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>>();
-        if (aCreature is not ActiveEntity active || TrainingController.FindTrainable(active) is not { } module ||
-            module.CaptureState() is not { } shape)
+        if (aCreature is not ActiveEntity active || aModule is not { } module || module.CaptureState() is not { } shape)
             return tuning;
         ActiveEntity reference;
         try
@@ -432,7 +499,14 @@ public sealed class SeekTargetTask
             var yaw = random.NextSingle() * MathF.Tau;
             var obstacles = PlaceObstacles(aOptions, target, random);
             var slabs = aOptions.MaxSlabs > 0 ? PlaceSlabs(aOptions, target, yaw, random) : null;
-            episodes[index] = new SeekEpisode(yaw, target, obstacles, slabs);
+            Vector2? push = null;
+            if (aOptions.MaxPushSpeed > 0)
+            {
+                var direction = random.NextSingle() * MathF.Tau;
+                var speed = aOptions.MinPushSpeed + random.NextSingle() * (aOptions.MaxPushSpeed - aOptions.MinPushSpeed);
+                push = new Vector2(MathF.Cos(direction), MathF.Sin(direction)) * speed;
+            }
+            episodes[index] = new SeekEpisode(yaw, target, obstacles, slabs, push);
         }
         return episodes;
     }
@@ -552,8 +626,13 @@ public sealed class SeekTargetTask
             var energy = 0f;
             var contact = 0f;
             var posture = 0f;
+            var drift = 0f;
+            var start = new Vector2(creature.Body.Position.X, creature.Body.Position.Y);
+            var pushTick = episode.Push is null ? -1 : (int)MathF.Round(aOptions.PushAtSeconds / aOptions.Delta);
             for (var tick = 0; tick < ticks; tick++)
             {
+                if (tick == pushTick && creature is ArticulatedCreature pushed)
+                    pushed.Push(new Vector3(episode.Push!.Value, 0));
                 world.Update(aOptions.Delta);
                 distanceCost += MathF.Max(Gap(creature, target), 0) * aOptions.Delta;
                 energy += Effort(aRig, drives) * aOptions.Delta;
@@ -561,12 +640,16 @@ public sealed class SeekTargetTask
                     contact += aOptions.Delta;
                 if (aRig.Posture is { } bad)
                     posture += Math.Clamp(bad(creature), 0, 1) * aOptions.Delta;
+                if (aOptions.DriftWeight > 0)
+                    drift += Vector2.Distance(new Vector2(creature.Body.Position.X, creature.Body.Position.Y), start) * aOptions.Delta;
             }
 
-            var cost = distanceCost / (initialGap * aOptions.EpisodeSeconds)
+            var cost = aOptions.DistanceWeight * distanceCost / (initialGap * aOptions.EpisodeSeconds)
                 + aOptions.EnergyWeight * energy / aOptions.EpisodeSeconds
                 + aOptions.ContactWeight * contact / aOptions.EpisodeSeconds
                 + aOptions.PostureWeight * posture / aOptions.EpisodeSeconds;
+            if (aOptions.DriftWeight > 0)
+                cost += aOptions.DriftWeight * drift / aOptions.EpisodeSeconds;
             var finalGap = Gap(creature, target);
             results[index] = new EpisodeResult(cost, finalGap, contact, finalGap <= aOptions.ReachGap, posture);
         }

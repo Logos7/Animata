@@ -22,6 +22,8 @@ public static class TrainableModules
         NeuralNetworkState network => network.ParameterCount,
         CpgState => CpgModule.Parameters,
         GaitState => GaitModule.Parameters,
+        BalanceState => BalanceModule.Parameters,
+        BipedGaitState => BipedGaitModule.Parameters,
         _ => throw new NotSupportedException($"{aShape.GetType().Name} is not a trainable module state.")
     };
 
@@ -30,6 +32,8 @@ public static class TrainableModules
         NeuralNetworkState network => NeuralNetworkModule.Create(network, aParameters, aName),
         CpgState cpg => CpgModule.Create(cpg, aParameters, aName),
         GaitState => GaitModule.Create(aParameters, aName),
+        BalanceState => BalanceModule.Create(aParameters, aName),
+        BipedGaitState => BipedGaitModule.Create(aParameters, aName),
         _ => throw new NotSupportedException($"{aShape.GetType().Name} is not a trainable module state.")
     };
 }

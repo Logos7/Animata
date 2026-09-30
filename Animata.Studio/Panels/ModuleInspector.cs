@@ -165,6 +165,9 @@ public sealed class ModuleInspector
             case SubgraphInputModule or SubgraphOutputModule when _owner is not null && _ownerParent is not null:
                 PortsSection(aPanel, _owner, _ownerParent, aModule is SubgraphInputModule, aModule is SubgraphOutputModule);
                 break;
+            case StateMachineModule machine:
+                StateMachineSection(aPanel, machine);
+                break;
             case RouterModule router:
                 var active = Ui.MonoText("0", 12.5);
                 _updaters.Add(() => active.Text = router.ActiveChannel.ToString());
@@ -246,6 +249,25 @@ public sealed class ModuleInspector
         section.Children.Add(Ui.Row("Porty", aModule.InputPorts.Count.ToString(), true));
         foreach (var row in SettingsEditor.SlotRows(_session, _creature, aModule.Slot, _ => Changed?.Invoke()))
             section.Children.Add(row);
+        aPanel.Children.Add(section);
+    }
+
+    /// <summary>Automat stanów: bieżący stan i wagi mieszanki (na żywo), przejścia, czasy przejścia i pobytu.</summary>
+    private void StateMachineSection(StackPanel aPanel, StateMachineModule aMachine)
+    {
+        var current = Ui.MonoText(aMachine.CurrentName, 12.5);
+        var weights = Ui.MonoText(string.Empty, 12);
+        _updaters.Add(() =>
+        {
+            current.Text = aMachine.CurrentName;
+            weights.Text = string.Join("  ", aMachine.States.Select((aState, aIndex) => $"{aState} {aMachine.Weights[aIndex]:0.00}"));
+        });
+        var section = Ui.VStack(2, Ui.Header("Automat stanów"), Ui.Row("Stan", current), Ui.Row("Mieszanka", weights),
+            Ui.Row("Warunki", aMachine.Conditions.Count > 0 ? string.Join(", ", aMachine.Conditions) : "—", true),
+            Ui.Row("Przejście", $"{aMachine.BlendSeconds:0.##} s", true), Ui.Row("Min. pobyt", $"{aMachine.MinDwellSeconds:0.##} s", true));
+        foreach (var transition in aMachine.Transitions)
+            section.Children.Add(Ui.MonoText(transition.ToString(), 11.5, "Studio.Text2"));
+        section.Children.Add(Ui.Text("Wejścia „stan.port” podłącz do modułów, które sterują w danym stanie.", 11.5, "Studio.Text3"));
         aPanel.Children.Add(section);
     }
 
@@ -456,12 +478,28 @@ public sealed class ModuleInspector
         var actuatorPorts = aCreature.Body.Actuators.FirstOrDefault()?.InputPorts.ToArray() ?? ["V"];
         yield return ("Logika", "Sieć neuronowa", Icons.Neural, NewNetwork, null);
         yield return ("Logika", "Router", Icons.Router, () => new RouterModule(2, actuatorPorts) { Name = "Router" }, null);
+        yield return ("Logika", "Automat stanów", Icons.States, () => NewStateMachine(aCreature, actuatorPorts), null);
         yield return ("Logika", "Stała", Icons.Constant, () => new ConstantModule("Value", 0) { Name = "Stała" }, null);
         // Sterowniki dopasowane do tego ciała (te same co w menu „Mózg”, ale wstawiane obok istniejących modułów).
-        foreach (var preset in aCreature.BrainPresets)
+        // Gotowce budujące kilka modułów naraz (np. automat stanów z dwiema sieciami) są tylko w menu „Mózg”.
+        foreach (var preset in aCreature.BrainPresets.Where(aPreset => aPreset.Build is null))
             yield return ("Dla tego ciała", preset.Name, Icons.Brain, preset.Create, null);
 
         yield return ("Struktura", "Podgraf", Icons.Composite, () => new CompositeModule { Name = "Podgraf" }, null);
+    }
+
+    /// <summary>
+    /// Automat dwóch stanów „A”/„B” na portach pierwszego napędu; warunki — Found i Gap z oka, jeśli ciało je ma
+    /// (A → B, gdy cel daleko; B → A, gdy blisko). Wejścia stanów „A.port”, „B.port” podpina się do dwóch modułów.
+    /// </summary>
+    private static StateMachineModule NewStateMachine(ActiveEntity aCreature, string[] aPorts)
+    {
+        var eye = aCreature.Body.Sensors.Any(aSensor => aSensor.OutputPorts.Contains(TargetSensor.GapPort));
+        return eye
+            ? new StateMachineModule(["A", "B"], [TargetSensor.FoundPort, TargetSensor.GapPort], aPorts,
+                [new StateTransition("A", "B", "Found * Gap", true, 0.8f), new StateTransition("B", "A", "Gap + 10 * (1 - Found)", false, 0.4f)])
+            { Name = "Automat" }
+            : new StateMachineModule(["A", "B"], [], aPorts) { Name = "Automat" };
     }
 
     /// <summary>Mała sieć 2-4-2 z losowymi wagami; porty i wyrażenia zmienia się w inspektorze.</summary>

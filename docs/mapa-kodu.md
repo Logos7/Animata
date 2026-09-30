@@ -316,6 +316,12 @@ classDiagram
     <<static>>
     +Design
   }
+  class Humanoid {
+    <<static>>
+    +Design
+    +Ports
+    +Posture()
+  }
   class Box {
     +Size
     +Color
@@ -339,6 +345,7 @@ classDiagram
   Disc ..> CreatureDesign : definiuje
   Snake ..> CreatureDesign : definiuje
   Spider ..> CreatureDesign : definiuje
+  Humanoid ..> CreatureDesign : definiuje
   StaticEntity <|-- PhysicalStaticEntity
   StaticEntity <|-- Sphere
   PhysicalStaticEntity <|-- Box
@@ -653,6 +660,7 @@ Mózg łączy się z ciałem po nazwie gniazda (`Slot`), nie po Id. Ten sam móz
 | Walec | Eye: TargetSensor | Wheels: DiskDriveActuator | sieć, sieć z ręcznymi wagami, Approach | Disk |
 | Wąż | Eye: TargetSensor · Joints: JointSensor · Clock: ClockSensor (1.2 Hz) · Feel: FeelSensor | Spine: SpineActuator | sieć, CPG pełzanie, CPG toczenie | SnakeWith(n) · ClimbWith(n) |
 | Pająk | Eye: TargetSensor · Joints: JointSensor (12 osi) · Clock: ClockSensor (2.5 Hz) · Feel: FeelSensor · Touch: TouchSensor | Legs: SpineActuator (12 osi: zamach, uniesienie, kolano × 4 nogi) | sieć, kłus | Spider |
+| Humanoid | Eye: TargetSensor · Joints: JointSensor (18 osi) · Clock: ClockSensor (1 Hz) · Balance: BalanceSensor · Touch: TouchSensor (stopy, tułów) | Body: SpineActuator (18 osi: talia, biodra, kolana, kostki, barki, łokcie) | stój i idź (dwie sieci + automat), stój i idź ręcznie, sieć stania, stanie ręczne, chód ręczny | moduł stania: HumanoidStand · reszta: HumanoidWalk (`ModuleRig`) |
 | Nowy stwór | dowolne, w `CreatureBlueprint.Sensors` | dowolne, także kilka | `CreatureDesign.Presets` (domyślnie ogólna sieć) | `TrainingRig` ?? Generic |
 
 <a id="mozg"></a>
@@ -736,6 +744,9 @@ classDiagram
   BrainModule <|-- NeuralNetworkModule
   BrainModule <|-- CpgModule
   BrainModule <|-- GaitModule
+  BrainModule <|-- BalanceModule
+  BrainModule <|-- BipedGaitModule
+  BrainModule <|-- StateMachineModule
   BrainModule <|-- ApproachTargetModule
   BrainModule <|-- AvoidAndSeekModule
   BrainModule <|-- RouterModule
@@ -746,6 +757,10 @@ classDiagram
   ITrainableModule <|.. NeuralNetworkModule
   ITrainableModule <|.. CpgModule
   ITrainableModule <|.. GaitModule
+  ITrainableModule <|.. BalanceModule
+  ITrainableModule <|.. BipedGaitModule
+  StateMachineModule "1" *-- "*" StateTransition
+  StateTransition ..> SensorExpression : warunek
   TrainableModules ..> ITrainableModule
   NeuralNetworkModule *-- NeuralNetwork
   NeuralNetworkModule "1" *-- "*" NeuralInput
@@ -757,6 +772,8 @@ classDiagram
   BrainGraphEditing ..> BrainGraph
   BrainGraph ..> BrainException : błąd kompilacji i działania
 ```
+
+*Automat stanów (`StateMachineModule`) ma dla każdego stanu osobne wejścia „stan.port” (np. „Stoję.Pitch3”, „Idę.Pitch3”) i jedno wyjście na port. Przejścia to warunki nad portami warunków (np. `Found * Gap > 0.8`); wyjście miesza stany płynnie przez `BlendSeconds`, a nowe przejście czeka `MinDwellSeconds`. Humanoid ma tak dwie sieci: stania i chodu.*
 
 *Graf kompiluje się leniwie: sortowanie topologiczne, porty, cykle, jedno wejście na port, każdy napęd sterowany raz. Błąd niesie Id winnego modułu, więc Studio może go podświetlić.*
 
@@ -802,6 +819,9 @@ classDiagram
   ModuleState <|-- NeuralNetworkState
   ModuleState <|-- CpgState
   ModuleState <|-- GaitState
+  ModuleState <|-- BalanceState
+  ModuleState <|-- BipedGaitState
+  ModuleState <|-- StateMachineState
   ModuleState <|-- ApproachTargetState
   ModuleState <|-- AvoidAndSeekState
   ModuleState <|-- ConstantState
@@ -903,15 +923,17 @@ classDiagram
     +SnakeWith(n)
     +ClimbWith(n)
     +Spider
+    +HumanoidStand
+    +HumanoidWalk
     +Generic()
-    +For(creature)
+    +For(creature, module)
   }
   class TrainingProgress {
     +Generation
     +Champion
     +ChampionScore
   }
-  TrainingController "1" *-- "*" BackgroundTrainer : jedna nauka na stwora
+  TrainingController "1" *-- "*" BackgroundTrainer : jedna nauka na moduł
   BackgroundTrainer *-- Evolution
   Evolution *-- EvolutionOptions
   BackgroundTrainer ..> SeekTargetTask : fitness i walidacja

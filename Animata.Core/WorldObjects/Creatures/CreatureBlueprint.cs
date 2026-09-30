@@ -77,6 +77,7 @@ public static class SlotTypes
         [nameof(JointSensor)] = (_, aPlan) => new JointSensor(aPlan),
         [nameof(ClockSensor)] = (_, _) => new ClockSensor(),
         [nameof(FeelSensor)] = (_, _) => new FeelSensor(),
+        [nameof(BalanceSensor)] = (_, _) => new BalanceSensor(),
         [nameof(TouchSensor)] = (aSpec, _) => new TouchSensor([.. (aSpec.Touch ?? []).Select(aPoint => (aPoint.Port, aPoint.Part))])
     };
 

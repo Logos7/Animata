@@ -457,6 +457,9 @@ public sealed class CreaturePanel : StudioPanel
             NeuralNetworkModule => "sieć neuronowa",
             CpgModule => "CPG",
             GaitModule => "generator chodu",
+            BalanceModule => "regulator równowagi",
+            BipedGaitModule => "generator kroku",
+            StateMachineModule => "automat stanów",
             AvoidAndSeekModule or ApproachTargetModule => "sterownik",
             _ => null
         }).OfType<string>().Distinct().ToList();

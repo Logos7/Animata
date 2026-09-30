@@ -51,6 +51,9 @@ public sealed class CreatureDesign
     /// <summary>Warunki nauki; null albo brak — ogólny rig z rejestru (<see cref="SeekRigs.Generic"/>).</summary>
     public Func<Creature, SeekRig?>? TrainingRig { get; init; }
 
+    /// <summary>Warunki nauki jednego modułu mózgu (np. stanie i chód na różnych próbach); null — <see cref="TrainingRig"/>.</summary>
+    public Func<Creature, BrainModule, SeekRig?>? ModuleRig { get; init; }
+
     /// <summary>Jednolinijkowy opis ciała do UI; brak — nazwa, liczba części i stawów.</summary>
     public Func<Creature, string>? Describe { get; init; }
 
@@ -185,6 +188,8 @@ public sealed class Creature : ArticulatedCreature, ISettingsProvider
     public override IReadOnlyList<BrainPreset> BrainPresets => Design.Presets(this);
 
     public override SeekRig? TrainingRig => Design.TrainingRig?.Invoke(this);
+
+    public override SeekRig? TrainingRigFor(BrainModule aModule) => Design.ModuleRig?.Invoke(this, aModule) ?? TrainingRig;
 
     public override string Describe() =>
         Design.Describe?.Invoke(this) ?? $"{Design.Name} · {Plan.Parts.Count} części · {JointCount} stawów · fizyka Bepu";

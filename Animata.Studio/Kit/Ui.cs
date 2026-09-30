@@ -20,6 +20,7 @@ public static class Icons
         "disk" or "target" => Target,
         "snake" => Snake,
         "spider" => Spider,
+        "humanoid" => Humanoid,
         "pillar" => Pillar,
         "slab" => Slab,
         _ => Brain
@@ -52,6 +53,8 @@ public static class Icons
     public const string Minus = "M3 8H13";
     public const string Tree = "M8 14.5V9M5.5 14.5H10.5M8 1.5C5.5 1.5 4 3.5 4 5.5C4 7.5 5.8 9 8 9C10.2 9 12 7.5 12 5.5C12 3.5 10.5 1.5 8 1.5Z";
     public const string Spider = "M8 6.5A1.8 1.5 0 1 1 8 9.5A1.8 1.5 0 1 1 8 6.5M6.5 7L4 5L2 7M9.5 7L12 5L14 7M6.5 9L4 11L2 9.5M9.5 9L12 11L14 9.5";
+    public const string Humanoid = "M9.5 2.8A1.5 1.5 0 1 1 6.5 2.8A1.5 1.5 0 1 1 9.5 2.8M8 4.5V9.5M4.5 6L8 5.5L11.5 6M8 9.5L6 14M8 9.5L10 14";
+    public const string States = "M6 5A2.5 2.5 0 1 1 1 5A2.5 2.5 0 1 1 6 5M15 11A2.5 2.5 0 1 1 10 11A2.5 2.5 0 1 1 15 11M5.5 6.5L10.5 9.5M9 9.8L10.5 9.5L10 8";
     public const string Slab = "M1.5 10L5 7H14.5L11 10ZM1.5 10V12H11V10M11 12L14.5 9V7";
     public const string Magnet = "M4 2.5V8A4 4 0 0 0 12 8V2.5M4 2.5H6.5V8A1.5 1.5 0 0 0 9.5 8V2.5H12M4 5H6.5M9.5 5H12M8 14V12.5M3 13.5L4.5 12.3M13 13.5L11.5 12.3";
     public const string Trash = "M3 4.5H13M6 4.5V3H10V4.5M4.5 4.5L5.2 13.5H10.8L11.5 4.5";

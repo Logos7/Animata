@@ -79,6 +79,23 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     public IReadOnlyList<Quaternion> PartOrientations => _orientations;
 
     /// <summary>Czy część czegoś dotykała w ostatnim kroku fizyki (klocka, cylindra, innej części).</summary>
+    /// <summary>
+    /// Pchnięcie: dodaje prędkość (m/s) wszystkim częściom — jak uderzenie w cały stwór. Działa tylko w świecie z fizyką;
+    /// zwraca false, gdy stwór nie jest w fizyce.
+    /// </summary>
+    public bool Push(Vector3 aVelocity)
+    {
+        if (_physics is not { } physics)
+            return false;
+        foreach (var handle in _bodies)
+        {
+            var body = physics.Body(handle);
+            body.Velocity.Linear += aVelocity;
+            body.Awake = true;
+        }
+        return true;
+    }
+
     public bool IsPartTouching(int aPart) => _physics is { } physics && aPart < _bodies.Length && physics.IsTouching(_bodies[aPart]);
 
     /// <summary>Zmierzony skręt stawu (rad, wokół osi Z dziecka w pozie spoczynkowej).</summary>
