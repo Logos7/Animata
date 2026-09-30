@@ -111,6 +111,11 @@ public class CompositeModuleTests
 
         Assert.Throws<ArgumentException>(() => BrainGraphEditing.Group(graph, [eye]));
         Assert.Equal(count, graph.Modules.Count);
+
+        // Wstawiony do podgrafu ręcznie — mózg się nie kompiluje, bo podgraf nie ma fazy Act.
+        var composite = graph.Add(new CompositeModule());
+        composite.Inner.Add(new SensorModule(owner.Body.Sensors[0]));
+        Assert.Throws<BrainException>(graph.Validate);
     }
 
     [Fact]

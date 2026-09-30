@@ -7,82 +7,21 @@ using Animata.Studio.Kit;
 namespace Animata.Studio.Navigation;
 
 /// <summary>
-/// Rama panelu: pasek u góry (logo → menu, wstecz, breadcrumb, narzędzia panelu) i treść.
-/// Pasek jest częścią panelu, więc przy przejściu leci razem z nim — całe okno „zamienia się” w następny ekran.
+/// Rama panelu. Pasek u góry (logo, wstecz, breadcrumb, narzędzia) należy do okna (<see cref="NavigationBar"/>)
+/// i stoi w miejscu przy przejściach — panel oddaje mu tylko swoje narzędzia, a sam zwraca treść.
 /// </summary>
 public static class PanelFrame
 {
     public const double BarHeight = 56;
 
+    /// <summary>
+    /// Rejestruje narzędzia panelu w pasku okna (obok tytułu, na środku, z prawej) i zwraca treść bez zmian.
+    /// </summary>
     public static Control Create(StudioPanel aPanel, Control aBody, Control? aTitleExtra = null,
         Control? aCenter = null, Control? aRight = null)
     {
-        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,*,Auto"), Height = BarHeight };
-        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-
-        var navigator = aPanel.Navigator!;
-        var home = Ui.IconButton(Icons.Logo, "Menu główne", () => navigator.PopTo(0));
-        home.Content = Ui.Icon(Icons.Logo, 20, "Studio.Accent", aThickness: 1.8);
-        left.Children.Add(home);
-        var back = Ui.IconButton(Icons.Back, "Wstecz (Esc, Alt+←)", navigator.Back);
-        back.IsEnabled = aPanel.Depth > 0;
-        left.Children.Add(back);
-
-        // Panel buduje się, zanim trafi na stos: poziomy niżej bierzemy ze stosu, ostatni to on sam.
-        // Menu (poziom 0) nie ma okruszka — prowadzi do niego logo.
-        for (var index = 1; index <= aPanel.Depth; index++)
-        {
-            var panel = index < aPanel.Depth && index < navigator.Stack.Count ? navigator.Stack[index] : aPanel;
-            if (index < aPanel.Depth)
-            {
-                var target = index;
-                var crumb = new Button
-                {
-                    Content = Ui.Text(panel.Title, 14, "Studio.Text3"),
-                    Background = Brushes.Transparent,
-                    BorderThickness = new Thickness(0),
-                    Padding = new Thickness(8, 6),
-                    Focusable = false
-                };
-                crumb.Click += (_, _) => navigator.PopTo(target);
-                left.Children.Add(crumb);
-                left.Children.Add(Ui.Icon(Icons.Chevron, 12, "Studio.Text3"));
-            }
-            else
-            {
-                var current = Ui.Text(panel.Title, 14, "Studio.Text", FontWeight.SemiBold);
-                current.Margin = new Thickness(8, 0);
-                left.Children.Add(current);
-            }
-        }
-        if (aTitleExtra is not null)
-            left.Children.Add(aTitleExtra);
-        bar.Children.Add(left);
-
-        if (aCenter is not null)
-        {
-            aCenter.HorizontalAlignment = HorizontalAlignment.Center;
-            aCenter.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(aCenter, 2);
-            bar.Children.Add(aCenter);
-        }
-        if (aRight is not null)
-        {
-            aRight.VerticalAlignment = VerticalAlignment.Center;
-            aRight.Margin = new Thickness(0, 0, 12, 0);
-            Grid.SetColumn(aRight, 4);
-            bar.Children.Add(aRight);
-        }
-
-        var barBorder = new Border { Child = bar, BorderThickness = new Thickness(0, 0, 0, 1) };
-        barBorder.Res(Border.BackgroundProperty, "Studio.Layer");
-        barBorder.Res(Border.BorderBrushProperty, "Studio.Stroke");
-
-        var dock = new DockPanel();
-        DockPanel.SetDock(barBorder, Dock.Top);
-        dock.Children.Add(barBorder);
-        dock.Children.Add(aBody);
-        return dock;
+        aPanel.SetBar(aTitleExtra, aCenter, aRight);
+        return aBody;
     }
 
     /// <summary>Boczny panel z tłem warstwy i linią od strony treści.</summary>

@@ -5,7 +5,8 @@ namespace Animata.Core.Brains.Modules;
 /// <see cref="Input"/> wystawia wejścia kompozytu jako swoje wyjścia, <see cref="Output"/> zbiera wyjścia kompozytu.
 /// Porty kompozytu to więc porty granic; po ich zmianie (dodanie, usunięcie, zmiana nazwy) trzeba unieważnić graf
 /// rodzica — najwygodniej przez <see cref="BrainGraphEditing"/>, które przy okazji poprawia połączenia w rodzicu.
-/// Think kompozytu to Think grafu wnętrza, Act — Act wnętrza (aktuatory mogą siedzieć w środku), Reset — Reset wnętrza.
+/// Think kompozytu to Think grafu wnętrza, Reset — Reset wnętrza. Węzły ciała (zmysły i napędy) są tylko na najwyższym
+/// poziomie mózgu, więc podgraf niczego nie zmienia w świecie — nie ma fazy Act.
 /// Snapshot kompozytu to stany modułów wnętrza (po Id), rekurencyjnie; struktury (modułów i połączeń) nie zapisuje.
 /// </summary>
 public sealed class CompositeModule : BrainModule
@@ -92,8 +93,6 @@ public sealed class CompositeModule : BrainModule
         return Output.Values;
     }
 
-    public override void Commit(BrainContext aContext) => Inner.Act(aContext);
-
     public override void Reset() => Inner.Reset();
 
     public override void Validate()
@@ -105,6 +104,8 @@ public sealed class CompositeModule : BrainModule
         if (Inner.Modules.Count(aModule => aModule is SubgraphInputModule) != 1 ||
             Inner.Modules.Count(aModule => aModule is SubgraphOutputModule) != 1)
             throw new InvalidOperationException("A subgraph needs exactly one input and one output boundary.");
+        if (Inner.Modules.FirstOrDefault(aModule => aModule is SensorModule or ActuatorModule) is { } bodyNode)
+            throw new InvalidOperationException($"{bodyNode} belongs to the body — body nodes live only at the top level of a brain.");
         Inner.Validate();
     }
 

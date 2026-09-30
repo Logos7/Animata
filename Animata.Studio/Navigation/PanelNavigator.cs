@@ -9,8 +9,8 @@ using Animata.Studio.Session;
 namespace Animata.Studio.Navigation;
 
 /// <summary>
-/// Jeden ekran Studia (menu, scena, stwór, mózg, podgraf). Zawartość buduje się leniwie przy pierwszym pokazaniu,
-/// kiedy znana jest już ścieżka (breadcrumb). Panel żyje na stosie <see cref="PanelNavigator"/>.
+/// Jeden ekran Studia (menu, scena, stwór, mózg, podgraf). Zawartość buduje się leniwie przy pierwszym pokazaniu.
+/// Panel żyje na stosie <see cref="PanelNavigator"/>; swoje narzędzia oddaje paskowi okna (<see cref="SetBar"/>).
 /// </summary>
 public abstract class StudioPanel : Border
 {
@@ -30,7 +30,32 @@ public abstract class StudioPanel : Border
     public virtual bool KeepAlive => false;
 
     /// <summary>Nazwa w breadcrumbie.</summary>
-    public string Title { get; protected set; }
+    public string Title
+    {
+        get;
+        protected set
+        {
+            field = value;
+            BarChanged?.Invoke();
+        }
+    }
+
+    /// <summary>Narzędzia panelu w pasku okna: obok tytułu, na środku i z prawej (null = brak).</summary>
+    public Control? BarTitleExtra { get; private set; }
+    public Control? BarCenter { get; private set; }
+    public Control? BarRight { get; private set; }
+
+    /// <summary>Zmienił się tytuł albo narzędzia panelu (np. po przebudowie).</summary>
+    public event Action? BarChanged;
+
+    /// <summary>Ustawia narzędzia panelu w pasku okna (woła to <see cref="PanelFrame.Create"/> w <see cref="Build"/>).</summary>
+    public void SetBar(Control? aTitleExtra, Control? aCenter, Control? aRight)
+    {
+        BarTitleExtra = aTitleExtra;
+        BarCenter = aCenter;
+        BarRight = aRight;
+        BarChanged?.Invoke();
+    }
 
     public PanelNavigator? Navigator { get; private set; }
 
@@ -39,11 +64,9 @@ public abstract class StudioPanel : Border
 
     internal void Attach(PanelNavigator aNavigator, int aDepth)
     {
-        var rebuild = Navigator is null || Depth != aDepth;
         Navigator = aNavigator;
         Depth = aDepth;
-        if (rebuild || Child is null)
-            Child = Build();
+        Child ??= Build();
     }
 
     protected abstract Control Build();

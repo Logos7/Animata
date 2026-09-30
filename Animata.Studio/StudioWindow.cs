@@ -10,7 +10,7 @@ using Animata.Studio.Session;
 namespace Animata.Studio;
 
 /// <summary>
-/// Okno Studia: jeden <see cref="PanelNavigator"/> na całą powierzchnię i kilka scen (demo, wąż), każda z własną
+/// Okno Studia: pasek (<see cref="NavigationBar"/>) i pod nim jeden <see cref="PanelNavigator"/> i kilka scen (demo, wąż), każda z własną
 /// sesją i własnym panelem. Zegar (~30 Hz) przesuwa tylko otwarte sceny (symulację i naukę) i odświeża aktywny panel.
 /// Klawisze idą najpierw do aktywnego panelu; nieobsłużone Esc i Alt+← (poza polami tekstowymi) cofają o poziom.
 /// </summary>
@@ -30,7 +30,13 @@ public sealed class StudioWindow : Window
         Height = 900;
         MinWidth = 1100;
         MinHeight = 700;
-        Content = _navigator;
+        // Pasek stoi nad nawigatorem, poza przejściami — lecą tylko panele.
+        var bar = new NavigationBar(_navigator);
+        var shell = new DockPanel();
+        DockPanel.SetDock(bar, Dock.Top);
+        shell.Children.Add(bar);
+        shell.Children.Add(_navigator);
+        Content = shell;
 
         AddScene(new StudioSession("Scena demo", WorldObjectCatalog.CreateDemo)
         {

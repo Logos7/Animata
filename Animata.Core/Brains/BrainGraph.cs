@@ -200,8 +200,8 @@ public class BrainGraph
             }
         }
 
-        // Także w podgrafach: jeden aktuator może być sterowany tylko z jednego miejsca całego mózgu.
-        var driven = Descendants().OfType<ActuatorModule>().GroupBy(aModule => aModule.Slot)
+        // Jeden aktuator = jeden węzeł (węzły ciała są tylko na najwyższym poziomie — podgraf ich nie przyjmie).
+        var driven = modules.OfType<ActuatorModule>().GroupBy(aModule => aModule.Slot)
             .FirstOrDefault(aGroup => aGroup.Count() > 1);
         if (driven is not null)
             throw new BrainException($"Actuator {driven.Key} is driven by more than one module.", driven.First().Id);
