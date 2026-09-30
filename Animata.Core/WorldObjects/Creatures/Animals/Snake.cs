@@ -161,9 +161,9 @@ public static class Snake
                 aSnake.SetValue(SegmentsSetting, aSegments);
                 aSnake.Reshape();
                 foreach (var actuator in aSnake.Body.Actuators.OfType<SpineActuator>())
-                    actuator.SetJointCount(joints);
+                    actuator.SetJoints(aSnake.Plan);
                 foreach (var sensor in aSnake.Body.Sensors.OfType<JointSensor>())
-                    sensor.SetJointCount(joints);
+                    sensor.SetJoints(aSnake.Plan);
                 foreach (var module in aGraphs.SelectMany(aGraph => aGraph.Modules))
                     if (module is CpgModule cpg)
                         cpg.SetJointCount(joints);

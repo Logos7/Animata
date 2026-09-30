@@ -34,12 +34,13 @@ public class SpiderTests
         world.Add(spider);
         for (var tick = 0; tick < 90; tick++)
             world.Update(Delta);
-        Assert.InRange(spider.PartPositions[0].Z, 0.18f, 0.24f);
-        Assert.Equal(8, spider.JointCount);
+        Assert.InRange(spider.PartPositions[0].Z, 0.11f, Spider.BodyHeight);
+        Assert.False(spider.IsPartTouching(0));
+        Assert.Equal(12, spider.JointCount);
     }
 
     [Fact]
-    public void HipPitch_LiftsTheLeg_AndYawSwingsIt()
+    public void Lift_RaisesTheLeg_AndSwingMovesItForward()
     {
         using var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(10, 10));
@@ -49,17 +50,17 @@ public class SpiderTests
             world.Update(Delta);
         var shin = spider.Plan.IndexOf("GoleńPP");
         var before = spider.PartPositions[shin].Z - spider.PartPositions[0].Z;
-        spider.SetJointTarget(2, 0, -1);   // biodro przedniej prawej nogi w górę
+        spider.SetJointTarget(Spider.LiftJoint(1), 0, -1);   // udo przedniej prawej nogi w górę
         for (var tick = 0; tick < 20; tick++)
             world.Update(Delta);
         var raised = spider.PartPositions[shin].Z - spider.PartPositions[0].Z;
-        Assert.True(raised > before + 0.03f, $"{before} → {raised}");
+        Assert.True(raised > before + 0.02f, $"{before} → {raised}");
         var lifted = spider.PartPositions[shin].X - spider.PartPositions[0].X;
-        spider.SetJointTarget(2, 1, -1);   // i zamach: prawa noga, dodatni skręt → do przodu
+        spider.SetJointTarget(Spider.SwingJoint(1), 1, 0);   // i zamach: prawa noga, dodatni skręt → do przodu
         for (var tick = 0; tick < 20; tick++)
             world.Update(Delta);
         var swung = spider.PartPositions[shin].X - spider.PartPositions[0].X;
-        Assert.True(swung > lifted + 0.05f, $"{lifted} → {swung}, {spider.JointYaw(2)}");
+        Assert.True(swung > lifted + 0.05f, $"{lifted} → {swung}, {spider.JointYaw(Spider.SwingJoint(1))}");
     }
 
     [Fact]
@@ -109,7 +110,6 @@ public class SpiderTests
     }
 
     [Fact]
-    [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void HandGait_KeepsItsBellyOffTheGround()
     {
         var rig = SeekRigs.Spider;
@@ -150,5 +150,51 @@ public class SpiderTests
         Assert.InRange(feel[FeelSensor.TouchPort], 0.5f, 1);
         var network = snake.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
         Assert.Contains(FeelSensor.AheadPort, network.Ports);
+    }
+}
+
+/// <summary>Noga pająka z trzech członów: kolano zgina się tylko w jedną stronę.</summary>
+public class SpiderLegTests
+{
+    private const float Delta = 1f / 30f;
+
+    [Fact]
+    public void Knee_BendsOnlyOneWay()
+    {
+        using var world = new World();
+        world.Add(WorldObjectCatalog.CreateFloor(10, 10));
+        var spider = new Creature(Spider.Design);
+        world.Add(spider);
+        for (var tick = 0; tick < 30; tick++)
+            world.Update(Delta);
+        var knee = Spider.KneeJoint(1);
+        var shin = spider.Plan.IndexOf("GoleńPP");
+        float Reach() => Vector2.Distance(new Vector2(spider.PartPositions[shin].X, spider.PartPositions[shin].Y),
+            new Vector2(spider.PartPositions[0].X, spider.PartPositions[0].Y));
+        var rest = Reach();
+
+        spider.SetJointTarget(knee, 0, 1);    // zgięcie: stopa pod tułów
+        for (var tick = 0; tick < 20; tick++)
+            world.Update(Delta);
+        Assert.InRange(spider.JointPitch(knee), Spider.KneeFlex - 0.15f, Spider.KneeFlex + 0.05f);
+        Assert.True(Reach() < rest - 0.05f, $"{rest} → {Reach()}");
+
+        spider.SetJointTarget(knee, 0, -1);   // „wyprost wstecz”: kolano zostaje na granicy
+        for (var tick = 0; tick < 20; tick++)
+            world.Update(Delta);
+        Assert.InRange(spider.JointPitch(knee), -0.05f, 0.05f);
+    }
+
+    [Fact]
+    public void LegJoints_ExposeOnlyTheirMovingAxes()
+    {
+        var spider = (Creature)Spider.Design.Type.Create();
+        var legs = spider.Body.FindActuator("Legs")!;
+        Assert.Equal(Spider.Joints, legs.InputPorts.Count);
+        Assert.Contains("Yaw0", legs.InputPorts);         // zamach: skręt
+        Assert.DoesNotContain("Pitch0", legs.InputPorts);  // zamach nie ma pochylenia
+        Assert.DoesNotContain("Yaw2", legs.InputPorts);    // kolano nie ma skrętu
+        Assert.Equal(legs.InputPorts, spider.Body.FindSensor("Joints")!.OutputPorts);
+        Assert.Equal(legs.InputPorts.OrderBy(aPort => aPort), GaitModule.Outputs.OrderBy(aPort => aPort));
     }
 }

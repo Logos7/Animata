@@ -31,7 +31,12 @@ public sealed class PhysicsWorld : IDisposable
     private bool _disposed;
 
     /// <param name="aSubsteps">Podkroki solvera na jeden krok świata (stawy i kontakty są sztywniejsze przy większej liczbie).</param>
-    public PhysicsWorld(int aSubsteps = 4, int aVelocityIterations = 2)
+    /// <param name="aVelocityIterations">
+    /// Iteracje prędkości na podkrok. 4 (było 2): noga pająka z trzech członów przy 2 iteracjach nie zbiegała się — tułów
+    /// drgał ±5 cm i siadał o 7 cm; przy 4 stoi spokojnie. Pomiar na walidacji rigów przy 2 i 4 iteracjach: walec 16/16
+    /// i 16/16, autko 13/16 i 12/16, wąż CPG 3/8 i 3/8, wspinaczka 5/6 i 6/6 (beta.29) — bez istotnej różnicy; czas próby +0–40%.
+    /// </param>
+    public PhysicsWorld(int aSubsteps = 4, int aVelocityIterations = 4)
     {
         Simulation = Simulation.Create(_pool, new NarrowPhase(_tags), new PoseIntegrator(Gravity, 0.05f, 0.2f),
             new SolveDescription(aVelocityIterations, aSubsteps));

@@ -1,6 +1,6 @@
 # Mapa kodu Animaty
 
-Projekty i ich zależności, kto kogo posiada w działającym programie, hierarchie klas, gniazda ciała każdego stwora oraz przebieg ticku, budowy obiektu, nauki i zapisu. Stan: krok 33. Diagramy są w Mermaid, więc GitHub rysuje je bezpośrednio w tym pliku. Przy zmianach w strukturze kodu (nowe klasy, inna własność, nowy krok budowy) aktualizuj odpowiedni diagram.
+Projekty i ich zależności, kto kogo posiada w działającym programie, hierarchie klas, gniazda ciała każdego stwora oraz przebieg ticku, budowy obiektu, nauki i zapisu. Stan: krok 34. Diagramy są w Mermaid, więc GitHub rysuje je bezpośrednio w tym pliku. Przy zmianach w strukturze kodu (nowe klasy, inna własność, nowy krok budowy) aktualizuj odpowiedni diagram.
 
 **Legenda strzałek w diagramach klas**
 
@@ -142,6 +142,8 @@ classDiagram
   Entity *-- Body
   Entity <|-- ActiveEntity
   ActiveEntity <|-- ArticulatedCreature
+  ArticulatedCreature <|-- Creature
+  Creature --> CreatureDesign : projekt
   ActiveEntity "1" *-- "0..1" Brain
   Body "1" *-- "*" Sensor
   Body "1" *-- "*" Actuator
@@ -282,16 +284,38 @@ classDiagram
     +PlaceBent()
     +PlaceParts()
   }
-  class CarCreature {
-    +Whiskers
+  class Creature {
+    +Design
+    +Values
+    +Blueprint()
+    +Reshape()
   }
-  class CylinderCreature
-  class SnakeCreature {
-    +Segments
-    +Climber
-    +WrapAround(cylinder)
+  class CreatureDesign {
+    +Id
+    +Name
+    +Blueprint(values)
+    +Settings
+    +Presets
+    +TrainingRig
   }
-  class SpiderCreature
+  class Car {
+    <<static>>
+    +Design
+  }
+  class Disc {
+    <<static>>
+    +Design
+  }
+  class Snake {
+    <<static>>
+    +Design
+    +SetSegments()
+    +WrapAround()
+  }
+  class Spider {
+    <<static>>
+    +Design
+  }
   class Box {
     +Size
     +Color
@@ -309,10 +333,12 @@ classDiagram
   Entity <|-- ActiveEntity
   Entity <|-- StaticEntity
   ActiveEntity <|-- ArticulatedCreature
-  ArticulatedCreature <|-- CarCreature
-  ArticulatedCreature <|-- CylinderCreature
-  ArticulatedCreature <|-- SnakeCreature
-  ArticulatedCreature <|-- SpiderCreature
+  ArticulatedCreature <|-- Creature
+  Creature --> CreatureDesign : Design
+  Car ..> CreatureDesign : definiuje
+  Disc ..> CreatureDesign : definiuje
+  Snake ..> CreatureDesign : definiuje
+  Spider ..> CreatureDesign : definiuje
   StaticEntity <|-- PhysicalStaticEntity
   StaticEntity <|-- Sphere
   PhysicalStaticEntity <|-- Box
@@ -320,13 +346,13 @@ classDiagram
   IPhysicalEntity <|.. ArticulatedCreature
   IPhysicalEntity <|.. PhysicalStaticEntity
   IPhysicalEntity ..> PhysicsWorld
-  SnakeCreature ..> SnakeWrap : owijanie
-  SnakeCreature ..> PortRewiring : zmiana segmentów
-  CarCreature ..> WhiskerRewiring : zmiana wąsów
+  Snake ..> SnakeWrap : owijanie
+  Snake ..> PortRewiring : zmiana segmentów
+  Car ..> WhiskerRewiring : zmiana wąsów
   WhiskerRewiring ..> PortRewiring
 ```
 
-*Podłoga nie ma własnej klasy: to `Box` z `Locked = true`. Ustawienia oznaczone `[Setting]` (np. `Segments`, `Whiskers`, `Grip`) edytuje jeden wspólny edytor i zapisuje plik świata.*
+*Każdy stwór to jedna klasa `Creature` z projektem (`CreatureDesign`); autko, walec, wąż i pająk to projekty, nie klasy. Własna podklasa `ArticulatedCreature` nadal działa, ale nie jest potrzebna. Podłoga nie ma własnej klasy: to `Box` z `Locked = true`. Ustawienia — właściwości z `[Setting]` (np. `Grip`) i ustawienia projektu (np. `Segments`, `Whiskers`) — edytuje jeden wspólny edytor i zapisuje plik świata.*
 
 <a id="budowa"></a>
 
@@ -350,8 +376,44 @@ classDiagram
     +Name
     +Icon
     +ClrType
+    +Design
     +Create()
     +IsCreature
+  }
+  class CreatureDesign {
+    +Blueprint(values)
+    +Settings
+    +Presets
+    +TrainingRig
+    +Type
+    +FromBlueprint()
+  }
+  class CreatureBlueprint {
+    +Plan
+    +Sensors
+    +Actuators
+    +ServoFrequency
+    +BoundingRadius
+    +ToJson()
+    +FromJson()
+  }
+  class SlotSpec {
+    +Slot
+    +Type
+    +Settings
+    +Touch
+  }
+  class SlotTypes {
+    <<static>>
+    +CreateSensor(spec, plan)
+    +CreateActuator(spec, plan)
+    +Register()
+  }
+  class DesignSetting {
+    +Name
+    +Default
+    +Get
+    +Set
   }
   class Spawn {
     +Type
@@ -375,6 +437,7 @@ classDiagram
   class Settings {
     <<static>>
     +Describe(type)
+    +Of(owner)
     +Capture()
     +Apply()
     +Copy()
@@ -404,6 +467,11 @@ classDiagram
   }
 
   EntityTypes "1" *-- "*" EntityType
+  EntityType o-- CreatureDesign : stwór z projektu
+  CreatureDesign ..> CreatureBlueprint : ciało z wartości ustawień
+  CreatureDesign "1" *-- "*" DesignSetting
+  CreatureBlueprint "1" *-- "*" SlotSpec
+  SlotTypes ..> SlotSpec : zmysł albo napęd z gniazda
   Spawn --> EntityType
   Spawn ..> Entity : Build()
   WorldObjectCatalog ..> Spawn
@@ -413,6 +481,7 @@ classDiagram
   Settings ..> SettingInfo
   SettingInfo *-- SettingAttribute
   ActiveEntity ..> BrainPreset : BrainPresets
+  CreatureDesign ..> BrainPreset : Presets
 ```
 
 *Fabryki katalogu, plik świata, schowek, rigi nauki i Studio składają `Spawn`; nikt poza nim nie woła konstruktorów obiektów.*
@@ -461,7 +530,11 @@ classDiagram
     +Kind
     +MaxYaw
     +MaxPitch
+    +MinYaw
+    +MinPitch
     +Strength
+    +HasYaw
+    +HasPitch
   }
   class PartShape {
     <<enum>>
@@ -474,6 +547,8 @@ classDiagram
   class BodyPlanBuilder {
     +Part()
     +Joint()
+    +Hinge()
+    +Swivel()
     +Weld()
     +Wheel()
     +Build()
@@ -494,7 +569,7 @@ classDiagram
   ArticulatedCreature ..> PhysicsWorld : część = bryła, staw = serwo
 ```
 
-*Staw kulowy to BallSocket + AngularServo (skręt i pochylenie w osiach dziecka); koło to zawieszenie, prowadnica, zawias i opcjonalnie silnik. Części 1–2 stawy od siebie się nie zderzają.*
+*Staw kulowy to BallSocket + AngularServo (skręt i pochylenie w osiach dziecka), z zakresem od Min do Max wokół pozy spoczynkowej — może być jednokierunkowy (kolano pająka: tylko zgięcie). Zawias (`Hinge`) i obrotnica (`Swivel`) to staw kulowy z zablokowaną jedną osią; porty kręgosłupa i czucia stawów są tylko dla ruchomych osi. Koło to zawieszenie, prowadnica, zawias i opcjonalnie silnik. Części 1–2 stawy od siebie się nie zderzają.*
 
 <a id="zmysly"></a>
 
@@ -570,15 +645,15 @@ classDiagram
 
 ## Gniazda ciała każdego stwora
 
-Mózg łączy się z ciałem po nazwie gniazda (`Slot`), nie po Id. Ten sam mózg pasuje do każdego ciała z tymi gniazdami i portami.
+Mózg łączy się z ciałem po nazwie gniazda (`Slot`), nie po Id. Ten sam mózg pasuje do każdego ciała z tymi gniazdami i portami. Gniazda opisuje projekt ciała (`CreatureBlueprint`): nazwa, rodzaj z `SlotTypes` i ustawienia.
 
 | Stwór | Zmysły (gniazdo: klasa) | Napędy | Gotowe mózgi | Rig nauki |
 |---|---|---|---|---|
 | Autko | Eye: TargetSensor · Whiskers: RaySensor (1–25, domyślnie 5) | Wheels: SteeringDriveActuator | sieć, AvoidAndSeek | CarWith(n) |
 | Walec | Eye: TargetSensor | Wheels: DiskDriveActuator | sieć, sieć z ręcznymi wagami, Approach | Disk |
 | Wąż | Eye: TargetSensor · Joints: JointSensor · Clock: ClockSensor (1.2 Hz) · Feel: FeelSensor | Spine: SpineActuator | sieć, CPG pełzanie, CPG toczenie | SnakeWith(n) · ClimbWith(n) |
-| Pająk | Eye: TargetSensor · Joints: JointSensor (8) · Clock: ClockSensor (2.5 Hz) · Feel: FeelSensor · Touch: TouchSensor | Legs: SpineActuator (8) | sieć, kłus | Spider |
-| Nowy stwór | dowolne, z `Equip()` | dowolne, także kilka | `BrainPresets` | TrainingRig ?? Generic |
+| Pająk | Eye: TargetSensor · Joints: JointSensor (12 osi) · Clock: ClockSensor (2.5 Hz) · Feel: FeelSensor · Touch: TouchSensor | Legs: SpineActuator (12 osi: zamach, uniesienie, kolano × 4 nogi) | sieć, kłus | Spider |
+| Nowy stwór | dowolne, w `CreatureBlueprint.Sensors` | dowolne, także kilka | `CreatureDesign.Presets` (domyślnie ogólna sieć) | `TrainingRig` ?? Generic |
 
 <a id="mozg"></a>
 

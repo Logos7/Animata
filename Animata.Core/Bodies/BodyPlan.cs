@@ -70,7 +70,11 @@ public sealed record PartPlan(
 
 /// <summary>
 /// Staw łączący rodzica z dzieckiem w punkcie <see cref="Anchor"/> (układ stwora, poza spoczynkowa).
-/// Kąty graniczne w radianach; <see cref="Strength"/> — największy moment serwa albo silnika koła (N·m).
+/// Kąty graniczne w radianach, liczone od pozy spoczynkowej: skręt od <see cref="YawMin"/> do <see cref="MaxYaw"/>, pochylenie
+/// od <see cref="PitchMin"/> do <see cref="MaxPitch"/>. Bez <see cref="MinYaw"/>/<see cref="MinPitch"/> zakres jest symetryczny
+/// (±Max); podane — staw może być jednokierunkowy (np. kolano: zgina się tylko w jedną stronę, 0 = do wyprostu). Oś
+/// o zakresie 0–0 jest zablokowana: staw z samym pochyleniem to zawias. <see cref="Strength"/> — największy moment serwa
+/// albo silnika koła (N·m).
 /// Pola kół: <see cref="Steerable"/>, <see cref="Driven"/>, <see cref="Suspension"/> (skok zawieszenia, m),
 /// <see cref="SuspensionFrequency"/> (sztywność sprężyny, Hz).
 /// </summary>
@@ -86,7 +90,29 @@ public sealed record JointPlan(
     bool Steerable = false,
     bool Driven = false,
     float Suspension = 0.04f,
-    float SuspensionFrequency = 6);
+    float SuspensionFrequency = 6,
+    float? MinYaw = null,
+    float? MinPitch = null)
+{
+    /// <summary>Najmniejszy skręt (≤ 0): <see cref="MinYaw"/> albo −<see cref="MaxYaw"/>.</summary>
+    public float YawMin => MinYaw ?? -MaxYaw;
+
+    /// <summary>Najmniejsze pochylenie (≤ 0): <see cref="MinPitch"/> albo −<see cref="MaxPitch"/>.</summary>
+    public float PitchMin => MinPitch ?? -MaxPitch;
+
+    /// <summary>Czy skręt jest ruchomy (niezerowy zakres).</summary>
+    public bool HasYaw => Kind == JointKind.Ball && (MaxYaw > 0 || YawMin < 0);
+
+    /// <summary>Czy pochylenie jest ruchome (niezerowy zakres).</summary>
+    public bool HasPitch => Kind == JointKind.Ball && (MaxPitch > 0 || PitchMin < 0);
+
+    /// <summary>Komenda [-1, 1] → kąt: ujemna część skaluje się dolną granicą, dodatnia górną (0 = poza spoczynkowa).</summary>
+    public static float Angle(float aCommand, float aMin, float aMax) => aCommand >= 0 ? aCommand * aMax : aCommand * -aMin;
+
+    /// <summary>Kąt → komenda [-1, 1] (odwrotność <see cref="Angle"/>); oś bez zakresu w danym kierunku daje 0.</summary>
+    public static float Command(float aAngle, float aMin, float aMax) =>
+        aAngle >= 0 ? (aMax > 0 ? aAngle / aMax : 0) : (aMin < 0 ? aAngle / -aMin : 0);
+}
 
 /// <summary>
 /// Plan ciała z klocków: części i stawy (drzewo — każda część poza pierwszą ma dokładnie jednego rodzica).
@@ -162,6 +188,23 @@ public sealed class BodyPlanBuilder
         return this;
     }
 
+    /// <summary>
+    /// Zawias: samo pochylenie dziecka (wokół jego osi Y w pozie spoczynkowej) od <paramref name="aMinPitch"/> (≤ 0) do
+    /// <paramref name="aMaxPitch"/> (≥ 0) — np. kolano zginane tylko w jedną stronę; skręt zablokowany.
+    /// </summary>
+    public BodyPlanBuilder Hinge(string aName, string aParent, string aChild, Vector3 aAnchor, float aMinPitch, float aMaxPitch, float aStrength)
+    {
+        _joints.Add(new JointPlan(aName, aParent, aChild, aAnchor, JointKind.Ball, 0, aMaxPitch, aStrength, MinYaw: 0, MinPitch: aMinPitch));
+        return this;
+    }
+
+    /// <summary>Obrotnica: sam skręt dziecka (wokół jego osi Z w pozie spoczynkowej) od <paramref name="aMinYaw"/> do <paramref name="aMaxYaw"/>; pochylenie zablokowane.</summary>
+    public BodyPlanBuilder Swivel(string aName, string aParent, string aChild, Vector3 aAnchor, float aMinYaw, float aMaxYaw, float aStrength)
+    {
+        _joints.Add(new JointPlan(aName, aParent, aChild, aAnchor, JointKind.Ball, aMaxYaw, 0, aStrength, MinYaw: aMinYaw, MinPitch: 0));
+        return this;
+    }
+
     /// <summary>Stawy z gotowych opisów (np. plan wczytany z pliku).</summary>
     public BodyPlanBuilder Joints(IEnumerable<JointPlan> aJoints)
     {
@@ -198,8 +241,8 @@ public sealed class BodyPlanBuilder
                 throw new ArgumentException($"Joint \"{joint.Name}\": the root part \"{joint.Child}\" cannot have a parent.");
             if (!parents.TryAdd(joint.Child, joint.Parent))
                 throw new ArgumentException($"Part \"{joint.Child}\" has more than one parent.");
-            if (joint.MaxYaw < 0 || joint.MaxPitch < 0 || !(joint.Strength > 0))
-                throw new ArgumentException($"Joint \"{joint.Name}\" needs non-negative limits and positive strength.");
+            if (joint.MaxYaw < 0 || joint.MaxPitch < 0 || joint.YawMin > 0 || joint.PitchMin > 0 || !(joint.Strength > 0))
+                throw new ArgumentException($"Joint \"{joint.Name}\" needs limits around the rest pose (min ≤ 0 ≤ max) and positive strength.");
             if (joint.Kind == JointKind.Wheel &&
                 (_parts.Find(aPart => aPart.Name == joint.Child)!.Shape != PartShape.Cylinder || !(joint.Suspension > 0) || !(joint.SuspensionFrequency > 0)))
                 throw new ArgumentException($"Wheel joint \"{joint.Name}\" needs a cylinder part, a positive suspension and spring frequency.");

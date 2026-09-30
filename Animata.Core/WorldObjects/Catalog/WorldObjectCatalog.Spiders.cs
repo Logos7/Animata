@@ -12,8 +12,9 @@ public static partial class WorldObjectCatalog
 {
 
     /// <summary>
-    /// Pająk: oko „Eye” (tułów), czucie stawów „Joints”, zegar „Clock”, czucie terenu „Feel”, nogi „Legs” (8 stawów:
-    /// biodro, kolano × 4). Mózg sensory → controller → nogi; controller musi mieć wyjścia Yaw/Pitch 0–7 (np. <see cref="GaitModule"/>).
+    /// Pająk: oko „Eye” (tułów), czucie stawów „Joints”, zegar „Clock”, czucie terenu „Feel”, dotyk „Touch”, nogi „Legs”
+    /// (12 osi: zamach, uniesienie, kolano × 4). Mózg sensory → controller → nogi; controller musi mieć wyjścia wszystkich
+    /// 12 portów nóg (np. <see cref="GaitModule"/>).
     /// </summary>
     public static Creature CreateSpider(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController)
     {
@@ -38,15 +39,18 @@ public static partial class WorldObjectCatalog
 
     /// <summary>
     /// Sieć pająka: wejścia Sin, Cos (zegar), kierunek do celu (bok, przód), szczelina/4, a z <paramref name="aSenses"/> —
-    /// dotyk czterech stóp i brzucha oraz pochylenie i przechył tułowia (równowaga); warstwa ukryta 10; wyjścia
-    /// Yaw/Pitch 0–7 (skręt kolan jest ignorowany przez ciało). Wagi losowe.
+    /// dotyk czterech stóp i brzucha oraz pochylenie i przechył tułowia (równowaga); warstwa ukryta 10; wyjścia — po trzy
+    /// na nogę: zamach (Yaw), uniesienie i kolano (Pitch). Wagi losowe.
     /// </summary>
     public static NeuralNetworkModule CreateSpiderNeuralModule(bool aSenses = false, params int[] aHidden)
     {
         string[] basic = [ClockSensor.SinPort, ClockSensor.CosPort, "Found * DirectionY", "Found * DirectionX", "Found * Gap / 4"];
         string[] senses = aSenses ? [.. SpiderTouchPorts, FeelSensor.HeadPitchPort, FeelSensor.HeadRollPort] : [];
         string[] inputs = [.. basic, .. senses];
-        var outputs = JointNetworkOutputs(GaitModule.Joints);
+        var outputs = Enumerable.Range(0, Spider.Legs).SelectMany(aLeg => new[]
+        {
+            SpineActuator.YawPort(Spider.SwingJoint(aLeg)), SpineActuator.PitchPort(Spider.LiftJoint(aLeg)), SpineActuator.PitchPort(Spider.KneeJoint(aLeg))
+        }).ToArray();
         int[] hidden = aHidden.Length > 0 ? aHidden : [10];
         var module = new NeuralNetworkModule(new NeuralNetwork([inputs.Length, .. hidden, outputs.Length])) { Name = "Neural" };
         module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetSensor.SteeringPorts, .. senses]);

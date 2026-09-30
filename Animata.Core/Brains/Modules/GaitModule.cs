@@ -4,13 +4,15 @@ using Animata.Core.Sensors;
 namespace Animata.Core.Brains.Modules;
 
 /// <summary>
-/// Generator chodu (CPG) czworonoga: kłus — przekątne pary nóg (przednia lewa z tylną prawą i odwrotnie) w przeciwfazie.
-/// Noga n ma staw biodra 2n (Yaw = zamach przód–tył wokół pionu, Pitch = uniesienie) i kolana 2n+1 (Pitch = zgięcie).
+/// Generator chodu (CPG) czworonoga z nogami z trzech członów (<see cref="WorldObjects.Spider"/>): kłus — przekątne pary nóg
+/// (przednia lewa z tylną prawą i odwrotnie) w przeciwfazie. Noga n ma staw zamachu 3n (Yaw — przód–tył wokół pionu),
+/// uniesienia 3n+1 (Pitch — ujemne unosi udo) i kolana 3n+2 (Pitch — dodatnie zgina, kolano jest jednokierunkowe).
 /// Faza nogi θ = φ + (0 albo π); φ rośnie o 2π·f na sekundę:
-/// - zamach: Yaw = strona · krok · sin θ (strona +1 dla prawych nóg, −1 dla lewych — dodatni skręt biodra prawej nogi
-///   niesie stopę do przodu, lewej do tyłu); krok = A · napęd · (1 + skręt · strona), więc przy skręcie w lewo prawe nogi
+/// - zamach: Yaw = strona · krok · sin θ (strona +1 dla prawych nóg, −1 dla lewych — dodatni skręt prawej nogi niesie
+///   stopę do przodu, lewej do tyłu); krok = A · napęd · (1 + skręt · strona), więc przy skręcie w lewo prawe nogi
 ///   stawiają dłuższe kroki;
-/// - noga przenoszona do przodu (cos θ &gt; 0) jest uniesiona: Pitch biodra = −L · max(0, cos θ), kolano = K + Kz · max(0, cos θ);
+/// - noga przenoszona do przodu (cos θ &gt; 0) jest uniesiona i zgięta: uniesienie = −L · max(0, cos θ),
+///   kolano = K + Kz · max(0, cos θ) (ujemne wartości kolano obcina — nie wygina się wstecz);
 /// - skręt = TurnGain · (kąt do celu / π): cel po lewej → dłuższe kroki prawych nóg; napęd słabnie przy celu.
 /// Uczone parametry (6): krok A, uniesienie L, zgięcie kolana K, dodatkowe zgięcie przy przenoszeniu Kz, częstotliwość f, TurnGain.
 /// Stan chwilowy: faza φ (Reset).
@@ -19,7 +21,7 @@ public sealed class GaitModule : BrainModule, ITrainableModule
 {
     public const int Parameters = 6;
     public const int Legs = 4;
-    public const int Joints = Legs * 2;
+    public const int Joints = Legs * 3;
 
     /// <summary>Szczelina do celu, poniżej której napęd maleje do zera.</summary>
     public const float ArrivalGap = 0.4f;
@@ -30,14 +32,20 @@ public sealed class GaitModule : BrainModule, ITrainableModule
     /// <summary>Przesunięcie fazy nogi — kłus: przekątne razem.</summary>
     public static readonly float[] Offset = [0, MathF.PI, MathF.PI, 0];
 
-    private static readonly string[] Outputs = SpineActuator.PortsFor(Joints);
+    /// <summary>Porty ruchomych osi nóg, w kolejności portów nóg pająka: zamachy, potem uniesienia i kolana.</summary>
+    public static readonly string[] Outputs =
+    [
+        .. Enumerable.Range(0, Legs).Select(aLeg => SpineActuator.YawPort(3 * aLeg)),
+        .. Enumerable.Range(0, Legs).SelectMany(aLeg => new[] { SpineActuator.PitchPort(3 * aLeg + 1), SpineActuator.PitchPort(3 * aLeg + 2) })
+    ];
+
     private readonly Dictionary<string, float> _outputs = Outputs.ToDictionary(aPort => aPort, _ => 0f);
     private float _phase;
 
     public float Stride { get; set; } = 0.6f;
     public float Lift { get; set; } = 0.6f;
     public float Knee { get; set; }
-    public float KneeSwing { get; set; } = -0.4f;
+    public float KneeSwing { get; set; } = 0.5f;
     public float Frequency { get; set; } = 2.5f;
     public float TurnGain { get; set; } = 1.5f;
 
@@ -60,10 +68,9 @@ public sealed class GaitModule : BrainModule, ITrainableModule
             var theta = _phase + Offset[leg];
             var swing = MathF.Max(0, MathF.Cos(theta)) * drive;
             var stride = Math.Clamp(Stride * drive * (1 + turn * Side[leg]), 0, 1);
-            _outputs[SpineActuator.YawPort(2 * leg)] = Math.Clamp(Side[leg] * stride * MathF.Sin(theta), -1, 1);
-            _outputs[SpineActuator.PitchPort(2 * leg)] = Math.Clamp(-Lift * swing, -1, 1);
-            _outputs[SpineActuator.YawPort(2 * leg + 1)] = 0;
-            _outputs[SpineActuator.PitchPort(2 * leg + 1)] = Math.Clamp(Knee + KneeSwing * swing, -1, 1);
+            _outputs[SpineActuator.YawPort(3 * leg)] = Math.Clamp(Side[leg] * stride * MathF.Sin(theta), -1, 1);
+            _outputs[SpineActuator.PitchPort(3 * leg + 1)] = Math.Clamp(-Lift * swing, -1, 1);
+            _outputs[SpineActuator.PitchPort(3 * leg + 2)] = Math.Clamp(Knee + KneeSwing * swing, -1, 1);
         }
         return _outputs;
     }

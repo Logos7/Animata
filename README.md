@@ -38,9 +38,13 @@ and let it run on.
   locked box — selectable, but it cannot be moved or deleted until unlocked. Every creature is built from blocks
   (parts and joints, a `BodyPlan`) and lives in real 3D rigid-body physics (BepuPhysics 2). Four creatures:
   a **car** (box body on four wheel bodies with suspension, front-wheel steering, rear-wheel drive), a **cylinder**
-  (disc on two driven side wheels and two support balls, turns in place), a **snake** and a **spider**. A creature
-  defines itself in one class (body plan, senses and drives, settings, ready-made brains, training setup) plus one
-  line in the type registry; saving, copying, the insert menu and training pick it up from there. Every setting —
+  (disc on two driven side wheels and two support balls, turns in place), a **snake** and a **spider**. There is one
+  creature class; what makes a snake a snake is its **design** — data, not code: the body plan (parts and joints),
+  the sensor and drive slots, the settings, the ready-made brains and the training setup. A body blueprint can be
+  written to JSON and read back, and a creature made from a blueprint alone gets a general neural network that
+  connects every sense to every drive. Joints can be one-way (a knee bends only one way) or single-axis (hinge,
+  swivel); only moving axes show up as ports. Saving, copying, the insert menu and training pick a design up from the
+  type registry. Every setting —
   drive speeds and torque, whisker range and count, snake length, colours, eye target — is described by the class and
   edited in one generic editor (scene properties, creature view, graph inspector).
 - **A snake that learns to crawl.** Any number of capsule segments (2–24, changeable on a living snake) linked by
@@ -51,11 +55,13 @@ and let it run on.
   for every joint comes out, and evolution has to discover the travelling wave and the steering by itself. It also
   feels the ground (`Feel`: height of the step 30 cm ahead of the head, head pitch, how much of the body touches
   something), so it can learn to lift its head at an edge.
-- **A spider.** A four-legged walker built from the same blocks: a flat trunk and four legs (hip: swing and lift,
-  knee: bend). A trot generator (diagonal legs in step, six learnable parameters: stride, lift, knee bend, knee swing,
+- **A spider.** A four-legged walker built from the same blocks: a flat trunk and four three-segment legs — coxa, femur
+  and tibia — with a swivel (swing forward and back), a hinge (lift) and a one-way knee (bends only inwards, never
+  backwards). A trot generator (diagonal legs in step, six learnable parameters: stride, lift, knee bend, knee swing,
   frequency, turning) walks it to the target — the hand-tuned gait reaches 8/8 targets on terrain with low boxes, and
-  evolution teaches a random gait the same in about ten generations. A second spider has a neural network (clock and
-  eye in, sixteen joint commands out) and has to find a gait on its own. Spiders feel **touch** (each foot and the
+  evolution from a random gait gets there in ten generations for some seeds (8/8) but not others (2/8). A second
+  spider has a neural network (clock and eye in, twelve joint commands out — one per moving axis) and has to find a
+  gait on its own (6/8 after 30 generations). Spiders feel **touch** (each foot and the
   belly) and **balance** (trunk pitch and roll); training punishes lying on the belly or falling over, which removed the
   belly-crawling "gaits" evolution used to find (bad posture 30–38 % of the time → about 1–10 %).
 - **Bodies that don't pass through themselves.** Parts of one creature collide with each other unless they are

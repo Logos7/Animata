@@ -142,7 +142,6 @@ public class SnakeTests
     }
 
     [Fact]
-    [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void HandCpg_TurnsTowardsATargetOnTheSide()
     {
         using var world = FloorWorld();

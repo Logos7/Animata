@@ -15,6 +15,8 @@ public sealed class JointSensor : Sensor
 
     public JointSensor(int aJoints) => SetJointCount(aJoints);
 
+    public JointSensor(Bodies.BodyPlan aPlan) => SetJoints(aPlan);
+
     public int Joints { get; private set; }
 
     public override IReadOnlyList<string> OutputPorts => _ports;
@@ -23,7 +25,19 @@ public sealed class JointSensor : Sensor
     {
         ArgumentOutOfRangeException.ThrowIfNegative(aJoints);
         Joints = aJoints;
-        _ports = SpineActuator.PortsFor(aJoints);
+        SetPorts(SpineActuator.PortsFor(aJoints));
+    }
+
+    /// <summary>Stawy i porty z planu ciała (tylko ruchome osie — zawias nie ma portu skrętu).</summary>
+    public void SetJoints(Bodies.BodyPlan aPlan)
+    {
+        Joints = aPlan.Joints.Count;
+        SetPorts(SpineActuator.PortsFor(aPlan));
+    }
+
+    private void SetPorts(string[] aPorts)
+    {
+        _ports = aPorts;
         _readings.Clear();
         foreach (var port in _ports)
             _readings[port] = 0;
@@ -37,8 +51,10 @@ public sealed class JointSensor : Sensor
         for (var joint = 0; joint < joints; joint++)
         {
             var plan = creature.Plan.Joints[joint];
-            _readings[SpineActuator.YawPort(joint)] = plan.MaxYaw > 0 ? creature.JointYaw(joint) / plan.MaxYaw : 0;
-            _readings[SpineActuator.PitchPort(joint)] = plan.MaxPitch > 0 ? creature.JointPitch(joint) / plan.MaxPitch : 0;
+            if (plan.HasYaw)
+                _readings[SpineActuator.YawPort(joint)] = Bodies.JointPlan.Command(creature.JointYaw(joint), plan.YawMin, plan.MaxYaw);
+            if (plan.HasPitch)
+                _readings[SpineActuator.PitchPort(joint)] = Bodies.JointPlan.Command(creature.JointPitch(joint), plan.PitchMin, plan.MaxPitch);
         }
         return _readings;
     }

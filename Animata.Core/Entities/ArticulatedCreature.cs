@@ -101,14 +101,17 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         _wheelTorque[aJoint] = joint.Driven && float.IsFinite(aTorque) ? MathF.Max(0, aTorque) : 0;
     }
 
-    /// <summary>Zadaje staw kulowy: ułamki [-1, 1] zakresu (MaxYaw, MaxPitch z planu). Działa od następnego kroku fizyki.</summary>
+    /// <summary>
+    /// Zadaje staw kulowy: ułamki [-1, 1] zakresu z planu (ujemne — do dolnej granicy, dodatnie — do górnej; 0 = poza
+    /// spoczynkowa). Staw jednokierunkowy nie wychodzi poza swój zakres. Działa od następnego kroku fizyki.
+    /// </summary>
     public void SetJointTarget(int aJoint, float aYaw, float aPitch)
     {
         var joint = Plan.Joints[aJoint];
         if (joint.Kind != JointKind.Ball)
             return;
-        _targetYaw[aJoint] = Math.Clamp(float.IsFinite(aYaw) ? aYaw : 0, -1, 1) * joint.MaxYaw;
-        _targetPitch[aJoint] = Math.Clamp(float.IsFinite(aPitch) ? aPitch : 0, -1, 1) * joint.MaxPitch;
+        _targetYaw[aJoint] = JointPlan.Angle(Math.Clamp(float.IsFinite(aYaw) ? aYaw : 0, -1, 1), joint.YawMin, joint.MaxYaw);
+        _targetPitch[aJoint] = JointPlan.Angle(Math.Clamp(float.IsFinite(aPitch) ? aPitch : 0, -1, 1), joint.PitchMin, joint.MaxPitch);
     }
 
     public override void Place(Vector3 aPosition, Quaternion aRotation)
@@ -147,8 +150,8 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                     continue;
                 var plan = Plan.Joints[joint];
                 var (yaw, pitch) = plan.Kind == JointKind.Ball ? aBend(joint) : (0f, 0f);
-                yaw = Math.Clamp(yaw, -plan.MaxYaw, plan.MaxYaw);
-                pitch = Math.Clamp(pitch, -plan.MaxPitch, plan.MaxPitch);
+                yaw = Math.Clamp(yaw, plan.YawMin, plan.MaxYaw);
+                pitch = Math.Clamp(pitch, plan.PitchMin, plan.MaxPitch);
                 var parentPart = Plan.Parts[parent];
                 var childPart = Plan.Parts[child];
                 var toAnchor = Vector3.Transform(plan.Anchor - parentPart.Position, Quaternion.Inverse(parentPart.Orientation));

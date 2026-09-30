@@ -65,8 +65,8 @@ public sealed record CreatureBlueprint(BodyPlan Plan, IReadOnlyList<SlotSpec> Se
 }
 
 /// <summary>
-/// Rodzaje zmysłów i napędów, które projekt ciała może wskazać po nazwie. Czucie stawów i kręgosłup dostają tyle stawów,
-/// ile ma plan. Nowy rodzaj (np. z testu albo innego projektu) dopisuje się przez <see cref="Register"/>.
+/// Rodzaje zmysłów i napędów, które projekt ciała może wskazać po nazwie. Czucie stawów i kręgosłup dostają stawy planu
+/// (porty tylko ruchomych osi). Nowy rodzaj (np. z testu albo innego projektu) dopisuje się przez <see cref="Register"/>.
 /// </summary>
 public static class SlotTypes
 {
@@ -74,7 +74,7 @@ public static class SlotTypes
     {
         [nameof(TargetSensor)] = (_, _) => new TargetSensor(),
         [nameof(RaySensor)] = (_, _) => new RaySensor(WorldObjectCatalog.WhiskerAnglesFor(WorldObjectCatalog.DefaultWhiskers), WorldObjectCatalog.WhiskerRange),
-        [nameof(JointSensor)] = (_, aPlan) => new JointSensor(aPlan.Joints.Count),
+        [nameof(JointSensor)] = (_, aPlan) => new JointSensor(aPlan),
         [nameof(ClockSensor)] = (_, _) => new ClockSensor(),
         [nameof(FeelSensor)] = (_, _) => new FeelSensor(),
         [nameof(TouchSensor)] = (aSpec, _) => new TouchSensor([.. (aSpec.Touch ?? []).Select(aPoint => (aPoint.Port, aPoint.Part))])
@@ -84,7 +84,7 @@ public static class SlotTypes
     {
         [nameof(DiskDriveActuator)] = (_, _) => new DiskDriveActuator(),
         [nameof(SteeringDriveActuator)] = (_, _) => new SteeringDriveActuator(),
-        [nameof(SpineActuator)] = (_, aPlan) => new SpineActuator(aPlan.Joints.Count)
+        [nameof(SpineActuator)] = (_, aPlan) => new SpineActuator(aPlan)
     };
 
     public static IEnumerable<string> Sensors
