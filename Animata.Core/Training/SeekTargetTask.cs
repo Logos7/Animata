@@ -281,21 +281,16 @@ public static class SeekRigs
     }
 
     /// <summary>
-    /// Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów, wąż — z tą samą liczbą segmentów). Jeśli napęd stwora
-    /// ma inne ustawienia niż domyślne (prędkość, skręt, moment), ciało w próbach dostaje ich kopię z chwili wywołania.
+    /// Rig pasujący do ciała stwora (autko — z tą samą liczbą wąsów, wąż — z tą samą liczbą segmentów). Ustawienia zmysłów
+    /// i napędów stwora (<see cref="SettingAttribute"/>: prędkości, zasięg wąsów, częstotliwość zegara…), które różnią się
+    /// od ciała budowanego przez rig, trafiają do każdego ciała w próbach — kopia z chwili wywołania. Cele (Id encji)
+    /// się nie kopiują: w próbie oko patrzy na cel próby. Gdy nic się nie różni, zwraca rig bez zmian (ten sam obiekt).
     /// </summary>
     public static SeekRig For(Entity aCreature)
     {
         var rig = (aCreature as ActiveEntity)?.TrainingRig ?? Generic(aCreature);
-        var steering = aCreature.Body.Actuators.OfType<SteeringDriveActuator>().FirstOrDefault() is { } sourceSteering &&
-            !SameSettings(sourceSteering, new SteeringDriveActuator())
-                ? Copy(sourceSteering)
-                : null;
-        var disk = aCreature.Body.Actuators.OfType<DiskDriveActuator>().FirstOrDefault() is { } sourceDisk &&
-            !SameSettings(sourceDisk, new DiskDriveActuator())
-                ? Copy(sourceDisk)
-                : null;
-        if (steering is null && disk is null)
+        var tuning = SlotTuning(aCreature, rig);
+        if (tuning.Count == 0)
             return rig;
         var create = rig.CreateCreature;
         return rig with
@@ -303,20 +298,57 @@ public static class SeekRigs
             CreateCreature = (aTargetId, aController) =>
             {
                 var creature = create(aTargetId, aController);
-                foreach (var actuator in creature.Body.Actuators)
-                    switch (actuator)
-                    {
-                        case SteeringDriveActuator target when steering is not null:
-                            target.CopySettingsFrom(steering);
-                            break;
-                        case DiskDriveActuator target when disk is not null:
-                            target.CopySettingsFrom(disk);
-                            break;
-                    }
+                ApplySlotTuning(creature, tuning);
                 return creature;
             }
         };
     }
+
+    /// <summary>Ustawienia slotów stwora różne od ciała z rigu (slot → nazwa → wartość); cele pominięte.</summary>
+    private static Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>> SlotTuning(Entity aCreature, SeekRig aRig)
+    {
+        var tuning = new Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>>();
+        if (aCreature is not ActiveEntity active || TrainingController.FindTrainable(active) is not { } module ||
+            module.CaptureState() is not { } shape)
+            return tuning;
+        ActiveEntity reference;
+        try
+        {
+            var controller = TrainableModules.Create(shape, new float[TrainableModules.ParameterCount(shape)], module.Name);
+            reference = aRig.CreateCreature(Guid.Empty, controller);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or BrainException or NotSupportedException)
+        {
+            return tuning; // mózg nie pasuje do ciała rigu — powie o tym budowa zadania nauki
+        }
+        foreach (var (slot, source) in Slots(active))
+        {
+            if (Slots(reference).FirstOrDefault(aPair => aPair.Slot == slot).Owner is not { } target || target.GetType() != source.GetType())
+                continue;
+            var mine = Settings.Capture(source);
+            var theirs = Settings.Capture(target);
+            var differing = mine.Where(aPair => !IsTarget(source, aPair.Key) && (!theirs.TryGetValue(aPair.Key, out var other) ||
+                    aPair.Value.GetRawText() != other.GetRawText()))
+                .ToDictionary(aPair => aPair.Key, aPair => aPair.Value);
+            if (differing.Count > 0)
+                tuning[slot] = differing;
+        }
+        return tuning;
+    }
+
+    private static void ApplySlotTuning(ActiveEntity aCreature, Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>> aTuning)
+    {
+        foreach (var (slot, owner) in Slots(aCreature))
+            if (aTuning.TryGetValue(slot, out var values))
+                Settings.Apply(owner, values);
+    }
+
+    private static IEnumerable<(string Slot, object Owner)> Slots(ActiveEntity aCreature) =>
+        aCreature.Body.Sensors.Select(aSensor => (aSensor.Slot, (object)aSensor))
+            .Concat(aCreature.Body.Actuators.Select(aActuator => (aActuator.Slot, (object)aActuator)));
+
+    private static bool IsTarget(object aOwner, string aSetting) =>
+        Settings.Describe(aOwner.GetType()).First(aInfo => aInfo.Name == aSetting).Type == typeof(Guid?);
 
     /// <summary>
     /// Rig dla stwora bez własnego (<see cref="ActiveEntity.TrainingRig"/>): nowy stwór tego samego rodzaju z rejestru
@@ -337,27 +369,6 @@ public static class SeekRigs
             AverageCommand,
             new SeekTargetOptions(),
             AddFloor);
-    }
-
-    private static bool SameSettings(SteeringDriveActuator aA, SteeringDriveActuator aB) =>
-        aA.MaxSpeed == aB.MaxSpeed && aA.MaxReverseSpeed == aB.MaxReverseSpeed && aA.MaxSteerAngle == aB.MaxSteerAngle &&
-        aA.DriveTorque == aB.DriveTorque;
-
-    private static bool SameSettings(DiskDriveActuator aA, DiskDriveActuator aB) =>
-        aA.MaxSpeed == aB.MaxSpeed && aA.MaxTurnSpeed == aB.MaxTurnSpeed && aA.DriveTorque == aB.DriveTorque;
-
-    private static SteeringDriveActuator Copy(SteeringDriveActuator aSource)
-    {
-        var copy = new SteeringDriveActuator();
-        copy.CopySettingsFrom(aSource);
-        return copy;
-    }
-
-    private static DiskDriveActuator Copy(DiskDriveActuator aSource)
-    {
-        var copy = new DiskDriveActuator();
-        copy.CopySettingsFrom(aSource);
-        return copy;
     }
 }
 
@@ -533,7 +544,7 @@ public sealed class SeekTargetTask
                 creature.Place(Vector3.Zero, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, episode.Yaw));
             world.Add(creature);
             var brain = creature.Brain!;
-            var wheels = brain.Graph.Modules.OfType<ActuatorModule>().Single();
+            var drives = brain.Graph.Modules.OfType<ActuatorModule>().ToArray();
             brain.Reset();
 
             var initialGap = MathF.Max(Gap(creature, target), 1e-3f);
@@ -545,7 +556,7 @@ public sealed class SeekTargetTask
             {
                 world.Update(aOptions.Delta);
                 distanceCost += MathF.Max(Gap(creature, target), 0) * aOptions.Delta;
-                energy += aRig.Effort(wheels.LastCommand) * aOptions.Delta;
+                energy += Effort(aRig, drives) * aOptions.Delta;
                 if (obstacles.Count > 0 && Touches(creature, obstacles))
                     contact += aOptions.Delta;
                 if (aRig.Posture is { } bad)
@@ -562,12 +573,25 @@ public sealed class SeekTargetTask
         return results;
     }
 
+    /// <summary>Wysiłek z komend wszystkich napędów (jeden napęd — wprost jego komenda).</summary>
+    private static float Effort(SeekRig aRig, ActuatorModule[] aDrives)
+    {
+        if (aDrives.Length == 1)
+            return aRig.Effort(aDrives[0].LastCommand);
+        var command = new Dictionary<string, float>();
+        foreach (var drive in aDrives)
+            foreach (var (port, value) in drive.LastCommand)
+                command[drive.Slot + "." + port] = value;
+        return aRig.Effort(command);
+    }
+
     private BrainModule CreateModule(float[] aParameters) => TrainableModules.Create(_template, aParameters, _moduleName);
 
+    /// <summary>Kontakt z przeszkodą: w fizyce — dotyk którejkolwiek części; stwór bez części — obrys.</summary>
     private static bool Touches(Entity aCreature, List<Cylinder> aObstacles)
     {
         foreach (var obstacle in aObstacles)
-            if (Gap(aCreature, obstacle) < 0.01f)
+            if (aCreature is ArticulatedCreature body ? body.Touches(obstacle) : Gap(aCreature, obstacle) < 0.01f)
                 return true;
         return false;
     }

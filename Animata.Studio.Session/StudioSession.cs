@@ -89,8 +89,16 @@ public sealed class StudioSession : IDisposable
         _ => EntityTypes.Of(aEntity)?.Name ?? aEntity.GetType().Name
     };
 
-    /// <summary>Wywoływane co klatkę UI: przenosi mistrzów z nauki, notuje postęp i przesuwa symulację.</summary>
-    public void Tick()
+    /// <summary>Najwięcej kroków symulacji na jedno wywołanie <see cref="Tick"/> — długa klatka spowalnia scenę zamiast ją zamrozić.</summary>
+    public const int MaxStepsPerTick = 8;
+
+    /// <summary>
+    /// Wywoływane co klatkę UI: przenosi mistrzów z nauki, notuje postęp i przesuwa symulację o tyle kroków
+    /// <see cref="Delta"/>, ile wynosi czas rzeczywisty od poprzedniej klatki (<paramref name="aElapsed"/>) razy
+    /// <see cref="Speed"/> — prędkość sceny nie zależy od tego, jak równo odpala zegar okna. Najwyżej
+    /// <see cref="MaxStepsPerTick"/> kroków naraz (reszta przepada). Bez argumentu — jedna klatka 1/30 s.
+    /// </summary>
+    public void Tick(float aElapsed = Delta)
     {
         if (Training.Poll(out var trainingError) && trainingError is not null)
             Status = trainingError;
@@ -99,6 +107,8 @@ public sealed class StudioSession : IDisposable
             {
                 if (!_progress.TryGetValue(brain, out var list))
                     _progress[brain] = list = [];
+                if (list.Count > 0 && progress.Generation < list[^1].Generation)
+                    list.Clear(); // nauka ruszyła od nowa (np. po zmianie ustawień ciała)
                 if (list.Count == 0 || list[^1].Generation != progress.Generation)
                 {
                     list.Add(progress);
@@ -110,12 +120,16 @@ public sealed class StudioSession : IDisposable
         SnapStatics();
         if (Paused || Hold)
             return;
-        _pending += Speed;
-        while (_pending >= 1 && !Paused)
+        _pending += Math.Clamp(aElapsed, 0, 1) / Delta * Speed;
+        var steps = 0;
+        while (_pending >= 1 && !Paused && steps < MaxStepsPerTick)
         {
             _pending -= 1;
+            steps++;
             Advance();
         }
+        if (_pending >= 1)
+            _pending %= 1;
     }
 
     /// <summary>Jeden krok symulacji (przycisk „krok” w pauzie).</summary>
@@ -186,9 +200,8 @@ public sealed class StudioSession : IDisposable
                 error = Training.Stop(creature.Brain!) ?? error;
             return Status = error ?? "nauka zatrzymana — mistrz zapisany w snapshocie";
         }
-        foreach (var creature in aScope)
-            Training.Start(creature);
-        return Status = "nauka wznowiona";
+        var started = aScope.Count(aCreature => Training.Start(aCreature));
+        return Status = started > 0 ? "nauka wznowiona" : "nauka nie ruszyła — brak uczonego modułu";
     }
 
     public string StopTraining(Brain aBrain) => Status = Training.Stop(aBrain) ?? "nauka zatrzymana";
@@ -353,7 +366,15 @@ public sealed class StudioSession : IDisposable
     /// <summary>„1 wąs”, „3 wąsy”, „5 wąsów”, „23 wąsy”.</summary>
     public static string Whiskers(int aCount) => Plural(aCount, "wąs", "wąsy", "wąsów");
 
-    private static string Plural(int aCount, string aOne, string aFew, string aMany)
+    /// <summary>Podsumowanie sceny do paska stanu, np. „2 stwory · 1 kula · 5 cylindrów · 3 klocki”.</summary>
+    public string Counts() => string.Join(" · ",
+        Plural(Creatures.Count(), "stwór", "stwory", "stworów"),
+        Plural(World.Entities.OfType<Sphere>().Count(), "kula", "kule", "kul"),
+        Plural(World.Entities.OfType<Cylinder>().Count(), "cylinder", "cylindry", "cylindrów"),
+        Plural(World.Entities.OfType<Box>().Count(), "klocek", "klocki", "klocków"));
+
+    /// <summary>Liczba z rzeczownikiem w odpowiedniej formie: „1 kula”, „3 kule”, „5 kul”, „22 kule”.</summary>
+    public static string Plural(int aCount, string aOne, string aFew, string aMany)
     {
         var word = aCount == 1 ? aOne
             : aCount % 10 is >= 2 and <= 4 && aCount % 100 is not (>= 12 and <= 14) ? aFew
@@ -361,10 +382,6 @@ public sealed class StudioSession : IDisposable
         return $"{aCount} {word}";
     }
 
-    /// <summary>
-    /// Wstawia zwierzątko w punkcie podłoża: patrzy na najbliższą kulę i na nią poluje; ma losowe parametry i nie uczy się, dopóki użytkownik nie włączy nauki
-    /// (autko i walec — sieć neuronowa, wąż — CPG). Liczbę wąsów i segmentów zmienia się potem we właściwościach.
-    /// </summary>
     /// <summary>
     /// Nowy stwór danego rodzaju w punkcie: patrzy na najbliższą kulę, dostaje pierwszy z gotowych mózgów swojego ciała
     /// (sieć z losowymi wagami — uczy się dopiero po L), losowy kolor i unikalną nazwę.

@@ -67,7 +67,7 @@ public sealed record SettingInfo(PropertyInfo Property, SettingAttribute Attribu
     public object? Get(object aOwner) => Property.GetValue(aOwner);
 
     /// <summary>Liczba w jednostkach edytora (× <see cref="SettingAttribute.Scale"/>).</summary>
-    public double GetNumber(object aOwner) => System.Convert.ToDouble(Get(aOwner)) * Attribute.Scale;
+    public double GetNumber(object aOwner) => System.Convert.ToDouble(Get(aOwner), System.Globalization.CultureInfo.InvariantCulture) * Attribute.Scale;
 
     /// <summary>
     /// Nadaje wartość. Liczbę sprawdza z zakresem i krokiem (<see cref="ArgumentOutOfRangeException"/>), resztę sprawdza
@@ -79,7 +79,7 @@ public sealed record SettingInfo(PropertyInfo Property, SettingAttribute Attribu
             throw new InvalidOperationException($"Ustawienie „{Label}” jest tylko do odczytu w edytorze.");
         if (Type == typeof(float) || Type == typeof(int) || Type == typeof(double))
         {
-            var shown = System.Convert.ToDouble(aValue);
+            var shown = System.Convert.ToDouble(aValue, System.Globalization.CultureInfo.InvariantCulture);
             var attribute = Attribute;
             if (!double.IsFinite(shown) || shown < attribute.Min || shown > attribute.Max ||
                 (attribute.Step > 0 && Math.Abs((shown - (double.IsNaN(attribute.Min) ? 0 : attribute.Min)) / attribute.Step % 1) > 1e-9))

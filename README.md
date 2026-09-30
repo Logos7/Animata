@@ -8,19 +8,20 @@ and whatever else evolution and curiosity come up with. The world runs, the crea
 at any time pause it, step inside any creature, look at what it sees and thinks, change its body or its brain,
 and let it run on.
 
-> **Status: early and experimental.** Animata grows step by step. Today's creatures are simple wheeled bodies moving
-> on a flat ground: the first, smallest testbed for the ideas below, not the limit of the project. APIs and formats
-> change as experiments are tried, measured and kept or thrown away.
+> **Status: early and experimental.** Animata grows step by step. Today there are four creatures built from blocks
+> in 3D rigid-body physics — a car, a disc robot, a snake that crawls and climbs, and a four-legged spider — on
+> terrain with low boxes: a testbed for the ideas below, not the limit of the project. APIs and formats change as
+> experiments are tried, measured and kept or thrown away.
 
 ---
 
 ## The vision
 
 - **A world, not a demo.** Many kinds of creatures sharing one space: terrain, plants, trees to climb, food to find,
-  obstacles and each other. Physics grows with the creatures: from sliding discs today to articulated bodies with
-  joints, limbs and full 3D movement.
+  obstacles and each other. Physics grows with the creatures: articulated bodies with joints and limbs in full 3D
+  today, more body plans and a richer world tomorrow.
 - **Bodies are hardware.** A creature is built from parts: sensors (eyes, whiskers, touch, balance), actuators
-  (wheels today; muscles, joints and grippers tomorrow) and the body that carries them. Any body plan should be
+  (wheels and joint servos today; grippers and more tomorrow) and the body that carries them. Any body plan should be
   expressible, whether it is a snake, a five-legged walker or something without a name.
 - **Brains are software.** A brain is a graph of modules wired port to port: hand-written reflexes, neural networks,
   routers, memories, and subgraphs that contain whole graphs of their own. The brain only talks to the body through
@@ -35,10 +36,13 @@ and let it run on.
 
 - **World and bodies.** Simple shapes are geometric: `Box`, `Cylinder` and `Sphere` (the target). The floor is just a
   locked box — selectable, but it cannot be moved or deleted until unlocked. Every creature is built from blocks
-  (parts and joints, a `BodyPlan`) and lives in real 3D rigid-body physics (BepuPhysics 2). Three creatures:
+  (parts and joints, a `BodyPlan`) and lives in real 3D rigid-body physics (BepuPhysics 2). Four creatures:
   a **car** (box body on four wheel bodies with suspension, front-wheel steering, rear-wheel drive), a **cylinder**
-  (disc on two driven side wheels and two support balls, turns in place) and a **snake**. Drive settings — top speed,
-  reverse speed, maximum steering angle, turn rate, wheel torque — are editable per creature.
+  (disc on two driven side wheels and two support balls, turns in place), a **snake** and a **spider**. A creature
+  defines itself in one class (body plan, senses and drives, settings, ready-made brains, training setup) plus one
+  line in the type registry; saving, copying, the insert menu and training pick it up from there. Every setting —
+  drive speeds and torque, whisker range and count, snake length, colours, eye target — is described by the class and
+  edited in one generic editor (scene properties, creature view, graph inspector).
 - **A snake that learns to crawl.** Any number of capsule segments (2–24, changeable on a living snake) linked by
   ball joints with servos (yaw and pitch — full 3D). Scales give it more grip sideways than forwards, so a wave
   running from head to tail pushes it along. A CPG module (a travelling wave with six learnable parameters) drives
@@ -82,8 +86,14 @@ and let it run on.
   marks the snapshot matching the brain's state, adding a „zapis” snapshot if none does). A genetic algorithm trains
   the parameters on its own thread, starting from the creature's current ones. The scene only receives the
   *champion*, the best candidate on a fixed validation set, so creatures change rarely and only for the better.
-- **Snapshots.** Any brain's parameters can be captured, compared and restored. Training writes its own snapshots and
-  undo walks back through them.
+- **Training follows the scene.** Training uses the creature's own sensor and drive settings (speed, whisker range,
+  clock…), and if you change the trained module (inputs, ports) or those settings while it learns, training restarts
+  on the new setup instead of evolving for the old one. Contact with obstacles is measured by the physics engine.
+- **Swappable brains.** Each body lists ready-made brains (e.g. the snake: network, crawling CPG, rolling CPG); a brain
+  can be swapped in place, saved to a `.brain.json` file and loaded into another creature — slots and connections the
+  new body lacks are reported and dropped.
+- **Snapshots.** Any brain's parameters can be captured, compared, renamed and restored (atomically: a snapshot that
+  doesn't fit the brain changes nothing). Training writes its own snapshots and undo walks back through them.
 - **Saving worlds.** A whole world goes to JSON and back: entities, bodies, target links and complete brains
   (modules, wiring, subgraphs, node positions, parameters and snapshots). Brains connect to bodies by slot name
   (`Eye`, `Whiskers`, `Spine`), not by id. Sense and actuator nodes in the brain graph are not stored — they are a
@@ -122,11 +132,10 @@ their way along the posts.
 Roughly in this direction, one experiment at a time:
 
 - more senses and richer brain modules (memory, timing, learning inside a lifetime, not only across generations);
-- articulated bodies: joints, limbs and muscles, starting with simple walkers;
-- full 3D movement: climbing, falling, balance; terrain and trees;
+- neural brains that learn what hand-tuned ones already do — climbing is the open case;
+- more body plans (five legs, grippers) and a body editor for building creatures from blocks in the Studio;
 - a living ecosystem: food, energy, reproduction and inheritance of body and brain;
-- moving creatures (body and brain) between worlds; a body editor for building creatures from blocks;
-- climbing: snakes on slopes and trees.
+- moving creatures (body and brain) between worlds; slopes, trees and richer terrain.
 
 ## Projects
 
@@ -134,8 +143,9 @@ Roughly in this direction, one experiment at a time:
 | --- | --- |
 | `Animata.Core` | Model, bodies (incl. bodies from blocks), sensors, actuators, brains, physics (BepuPhysics 2), training, snapshots, graph editing, saving. No UI. |
 | `Animata.Rendering.HelixToolkit` | 3D scene: meshes, picking, dragging, whisker rays, fly camera. |
+| `Animata.Studio.Session` | Studio's scene logic without UI: simulation clock, training, snapshots, clipboard, saving. |
 | `Animata.Studio` | Desktop app: zoomable panels, scene, creature view, brain graph editor, themes. |
-| `Animata.Tests` | xUnit tests for the core. |
+| `Animata.Tests` | xUnit tests for the core and the Studio session. |
 
 ## Running
 
@@ -149,7 +159,11 @@ dotnet test Animata.Tests
 dotnet run --project Animata.Studio
 ```
 
-CI (GitHub Actions, `.github/workflows/build.yml`) builds the whole solution and runs the tests on Windows and Linux for every push.
+CI (GitHub Actions, `.github/workflows/build.yml`) builds the whole solution (warnings are errors) and runs the tests
+on Windows and Linux for every push. A few tests are known to fail with the current BepuPhysics package (creature
+motion was tuned on Bepu's master, which has friction fixes the package lacks); they are marked in
+`Animata.Tests/KnownFailures.cs`, run in a separate non-blocking step, and the main step stays green — so a red
+build always means a new failure. Locally: `dotnet test --filter "Znane!=Bepu-beta29"`.
 
 ### Studio controls
 

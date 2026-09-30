@@ -104,6 +104,9 @@ public sealed class PhysicsWorld : IDisposable
     /// <summary>Czy ciało miało w ostatnim kroku kontakt (z podłożem, przeszkodą albo innym ciałem).</summary>
     public bool IsTouching(BodyHandle aHandle) => _tags.IsTouching(aHandle.Value);
 
+    /// <summary>Czy ciało miało w ostatnim kroku kontakt z tym statykiem (np. część autka z cylindrem).</summary>
+    public bool IsTouching(BodyHandle aBody, StaticHandle aStatic) => _tags.IsTouching(aBody.Value, aStatic.Value);
+
     public void Step(float aDelta)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -198,7 +201,18 @@ public sealed class PhysicsWorld : IDisposable
 
         public bool IsTouching(int aBody) => aBody < _touching.Length && _touching[aBody] != 0;
 
-        public void ClearTouching() => Array.Clear(_touching);
+        // Pary ciało–statyk w kontakcie w ostatnim kroku. Krok idzie na jednym wątku, więc zbiór zmienia się bez blokad.
+        private readonly HashSet<long> _staticContacts = [];
+
+        public void MarkTouching(int aBody, int aStatic) => _staticContacts.Add(((long)aBody << 32) | (uint)aStatic);
+
+        public bool IsTouching(int aBody, int aStatic) => _staticContacts.Contains(((long)aBody << 32) | (uint)aStatic);
+
+        public void ClearTouching()
+        {
+            Array.Clear(_touching);
+            _staticContacts.Clear();
+        }
 
         private void Ensure(int aBody)
         {
@@ -244,6 +258,10 @@ public sealed class PhysicsWorld : IDisposable
                     continue;
                 Mark(aPair.A);
                 Mark(aPair.B);
+                if (aPair.A.Mobility == CollidableMobility.Dynamic && aPair.B.Mobility == CollidableMobility.Static)
+                    _tags.MarkTouching(aPair.A.BodyHandle.Value, aPair.B.StaticHandle.Value);
+                else if (aPair.B.Mobility == CollidableMobility.Dynamic && aPair.A.Mobility == CollidableMobility.Static)
+                    _tags.MarkTouching(aPair.B.BodyHandle.Value, aPair.A.StaticHandle.Value);
                 break;
             }
             return true;

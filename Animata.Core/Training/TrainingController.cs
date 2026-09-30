@@ -13,9 +13,13 @@ namespace Animata.Core.Training;
 /// </summary>
 public sealed class TrainingController : IDisposable
 {
-    private sealed class Session(Brain aBrain, BrainModule aModule, BackgroundTrainer aTrainer, string aRig)
+    private sealed class Session(ActiveEntity aCreature, Brain aBrain, BrainModule aModule, BackgroundTrainer aTrainer, string aRig,
+        string aSetup)
     {
+        public ActiveEntity Creature { get; } = aCreature;
         public Brain Brain { get; } = aBrain;
+        public string Setup { get; } = aSetup;
+        public int SetupCheck;
         public BrainModule Module { get; } = aModule;
         public ITrainableModule Trainable { get; } = (ITrainableModule)aModule;
         public BackgroundTrainer Trainer { get; } = aTrainer;
@@ -80,7 +84,7 @@ public sealed class TrainingController : IDisposable
         _history.Capture(brain, "przed nauką", module);
 
         var trainer = new BackgroundTrainer(evolution, task.Evaluate, _maxGenerations, task.Validate);
-        _sessions.Add(new Session(brain, module, trainer, rig.Name));
+        _sessions.Add(new Session(aCreature, brain, module, trainer, rig.Name, Setup(aCreature, module)));
         trainer.Paused = _paused;
         trainer.Start();
         return true;
@@ -117,23 +121,61 @@ public sealed class TrainingController : IDisposable
     }
 
     /// <summary>
-    /// Przenosi nowych mistrzów do sieci w scenie i sprząta zakończone nauki.
-    /// Zwraca true, jeśli coś się zmieniło; <paramref name="aError"/> — błąd zakończonej nauki albo null.
+    /// Przenosi nowych mistrzów do sieci w scenie i sprząta zakończone nauki. Pilnuje też, żeby nauka uczyła tego, co jest
+    /// w scenie: gdy zmieni się konfiguracja uczonego modułu (porty, wyrażenia wejść sieci…), ustawienia zmysłów i napędów
+    /// (prędkość, zasięg wąsów…) albo rig stwora (np. wąż stał się wspinaczem), nauka rusza od nowa na nowych warunkach
+    /// (mistrz dotychczasowej trafia do snapshotu); gdy uczony moduł zniknął z mózgu — staje.
+    /// Zwraca true, jeśli coś się zmieniło; <paramref name="aMessage"/> — co się stało (błąd, restart) albo null.
     /// </summary>
-    public bool Poll(out string? aError)
+    public bool Poll(out string? aMessage)
     {
-        aError = null;
+        aMessage = null;
         var changed = false;
         foreach (var session in _sessions.ToArray())
         {
             changed |= Poll(session);
             if (!session.Trainer.IsRunning)
             {
-                aError = Stop(session.Brain) ?? aError;
+                aMessage = Stop(session.Brain) ?? aMessage;
+                changed = true;
+                continue;
+            }
+            if (++session.SetupCheck % SetupCheckInterval != 0)
+                continue;
+            if (!ReferenceEquals(FindTrainable(session.Creature), session.Module))
+            {
+                aMessage = Stop(session.Brain, aSnapshot: false) ?? $"{session.Rig}: uczony moduł zniknął z mózgu — nauka zatrzymana";
+                changed = true;
+            }
+            else if (Setup(session.Creature, session.Module) != session.Setup)
+            {
+                var error = Stop(session.Brain);
+                Start(session.Creature);
+                aMessage = error ?? $"{session.Rig}: zmiana modułu albo ustawień ciała — nauka od nowa na nowych warunkach";
                 changed = true;
             }
         }
         return changed;
+    }
+
+    /// <summary>Co ile odpytań sprawdzać, czy warunki nauki się zmieniły (~3 razy na sekundę przy 30 Hz).</summary>
+    private const int SetupCheckInterval = 10;
+
+    /// <summary>
+    /// Warunki nauki stwora jako tekst: rig, konfiguracja uczonego modułu bez parametrów (kształt, porty, wyrażenia)
+    /// i ustawienia zmysłów i napędów bez celów. Inny tekst = nauka uczy czegoś innego niż to, co jest w scenie.
+    /// </summary>
+    private static string Setup(ActiveEntity aCreature, BrainModule aModule)
+    {
+        var builder = new System.Text.StringBuilder(aCreature.TrainingRig?.Name ?? aCreature.GetType().Name);
+        if (aModule.CaptureState() is { } state)
+            builder.Append('|').Append(TrainableModules.Create(state, new float[TrainableModules.ParameterCount(state)], aModule.Name)
+                .CaptureState()?.ToJson());
+        foreach (var owner in aCreature.Body.Sensors.Cast<object>().Concat(aCreature.Body.Actuators))
+            foreach (var (name, value) in Settings.Capture(owner))
+                if (Settings.Describe(owner.GetType()).First(aInfo => aInfo.Name == name).Type != typeof(Guid?))
+                    builder.Append('|').Append(name).Append('=').Append(value.GetRawText());
+        return builder.ToString();
     }
 
     /// <summary>Krótki opis nauk do paska tytułu, np. „autko gen 12, mistrz z gen 9 (-0,31)”.</summary>

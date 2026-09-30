@@ -153,7 +153,7 @@ public static class WorldFile
     }
 
     /// <summary>Ustawienia slotów (tylko tych, które je mają) albo null, gdy żaden nie ma.</summary>
-    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>>? SlotSettings(IEnumerable<(string Slot, object Item)> aSlots)
+    private static Dictionary<string, IReadOnlyDictionary<string, JsonElement>>? SlotSettings(IEnumerable<(string Slot, object Item)> aSlots)
     {
         var slots = new Dictionary<string, IReadOnlyDictionary<string, JsonElement>>();
         foreach (var (slot, item) in aSlots)

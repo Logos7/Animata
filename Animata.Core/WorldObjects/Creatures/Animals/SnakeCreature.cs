@@ -207,7 +207,7 @@ public sealed class SnakeCreature : ArticulatedCreature
     }
 
     private static (string Kind, int Joint) SplitSpinePort(string aPort) =>
-        aPort.StartsWith("Yaw", StringComparison.Ordinal) ? ("Yaw", int.Parse(aPort.AsSpan(3))) : ("Pitch", int.Parse(aPort.AsSpan(5)));
+        aPort.StartsWith("Yaw", StringComparison.Ordinal) ? ("Yaw", int.Parse(aPort.AsSpan(3), System.Globalization.CultureInfo.InvariantCulture)) : ("Pitch", int.Parse(aPort.AsSpan(5), System.Globalization.CultureInfo.InvariantCulture));
 
     /// <summary>Port stawu: Yaw{i} albo Pitch{i}.</summary>
     public static bool IsSpinePort(string aPort) =>

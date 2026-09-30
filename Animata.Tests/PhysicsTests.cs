@@ -45,6 +45,7 @@ public class PhysicsTests
     }
 
     [Fact]
+    [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void Car_DrivesStraightAtItsMaxSpeed()
     {
         using var world = FloorWorld();
@@ -70,6 +71,7 @@ public class PhysicsTests
     }
 
     [Fact]
+    [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void Cylinder_TurnsInPlaceToTheLeft()
     {
         using var world = FloorWorld();

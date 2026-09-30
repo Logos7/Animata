@@ -27,6 +27,7 @@ public class SeekTargetTaskTests
     }
 
     [Fact]
+    [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void CarController_ReachesTargetOnRandomRoutes()
     {
         var rig = SeekRigs.Car;

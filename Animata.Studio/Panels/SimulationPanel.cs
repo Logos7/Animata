@@ -206,7 +206,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         _renderer.UpdateCamera(Math.Min(aDelta, 0.1f));
 
         if (_time is not null)
-            _time.Text = $"t {Session.World.Time:0.0} s · 30 Hz · {Session.Speed:0.##}×" + (Session.Paused ? " · pauza" : string.Empty);
+            _time.Text = $"t {Session.World.Time:0.0} s · krok 1/30 s · {Session.Speed:0.##}×" + (Session.Paused ? " · pauza" : string.Empty);
         if (_speed is not null)
             _speed.Text = $"{Session.Speed:0.##}×";
         if (_pause is not null && _pausedShown != Session.Paused)
@@ -228,8 +228,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         if (_status is not null)
             _status.Text = Session.Status ?? string.Empty;
         if (_counts is not null)
-            _counts.Text = $"{Session.Creatures.Count()} stwory · {Session.World.Entities.OfType<Sphere>().Count()} kule · " +
-                $"{Session.World.Entities.OfType<Cylinder>().Count()} cylindry · {Session.World.Entities.OfType<Box>().Count()} klocki";
+            _counts.Text = Session.Counts();
 
         RefreshList();
         if (_propertiesOf is not null && !Session.World.Contains(_propertiesOf) || !_propertiesBuilt)
@@ -725,12 +724,16 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     {
         try
         {
-            var document = Session.Save();
             if (await WorldFiles.PickSaveAsync(this, Session.Name) is not { } file)
                 return;
+            var document = Session.Save();
             await using (var stream = await file.OpenWriteAsync())
             await using (var writer = new StreamWriter(stream))
+            {
+                if (stream.CanSeek)
+                    stream.SetLength(0); // nadpisanie dłuższego pliku nie może zostawić jego końcówki
                 await writer.WriteAsync(WorldFile.ToJson(document));
+            }
             if (WorldFiles.LocalPath(file) is { } path)
                 RecentFiles.Add(path);
             Session.Status = $"zapisano: {file.Name}";

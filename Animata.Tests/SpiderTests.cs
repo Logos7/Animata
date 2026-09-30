@@ -109,6 +109,7 @@ public class SpiderTests
     }
 
     [Fact]
+    [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void HandGait_KeepsItsBellyOffTheGround()
     {
         var rig = SeekRigs.Spider;

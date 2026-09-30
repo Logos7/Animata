@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Animata.Core/Animata.Core.csproj" />
+    <ProjectReference Include="../Animata.Studio.Session/Animata.Studio.Session.csproj" />
     <ProjectReference Include="../Animata.Rendering.HelixToolkit/Animata.Rendering.HelixToolkit.csproj" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.21" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.21" />

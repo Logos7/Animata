@@ -7,5 +7,6 @@
   <Project Path="Animata.Core/Animata.Core.csproj" />
   <Project Path="Animata.Rendering.HelixToolkit/Animata.Rendering.HelixToolkit.csproj" />
   <Project Path="Animata.Studio/Animata.Studio.csproj" />
+  <Project Path="Animata.Studio.Session/Animata.Studio.Session.csproj" />
   <Project Path="Animata.Tests/Animata.Tests.csproj" />
 </Solution>

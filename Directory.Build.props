@@ -1,0 +1,6 @@
+<Project>
+  <!-- W CI (GitHub Actions ustawia CI=true) ostrzeżenia kompilatora są błędami — nie zbierają się niezauważone. -->
+  <PropertyGroup Condition="'$(CI)' == 'true'">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

@@ -114,7 +114,11 @@ public static class PanelParts
                 return;
             await using (var stream = await file.OpenWriteAsync())
             await using (var writer = new StreamWriter(stream))
+            {
+                if (stream.CanSeek)
+                    stream.SetLength(0); // nadpisanie dłuższego pliku nie może zostawić jego końcówki
                 await writer.WriteAsync(BrainFile.ToJson(document));
+            }
             aSession.Status = $"zapisano mózg: {file.Name}";
         }
         catch (Exception exception) when (exception is IOException or NotSupportedException or UnauthorizedAccessException)

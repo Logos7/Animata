@@ -32,7 +32,12 @@ public sealed class SensorModule : BrainModule
     public override IReadOnlyDictionary<string, float> Evaluate(
         IReadOnlyDictionary<string, float> aInputs, BrainContext aContext) => Sensor.Read(aContext.Owner, aContext.World);
 
-    /// <summary>Stałe Id węzła ciała: z rodzaju („sensor”, „actuator”) i slotu.</summary>
+    /// <summary>
+    /// Stałe Id węzła ciała: z rodzaju („sensor”, „actuator”) i slotu. MD5 nie służy tu bezpieczeństwu — to tylko stabilny
+    /// skrót; innym algorytmem zmieniłyby się Id węzłów w zapisanych plikach.
+    /// </summary>
+#pragma warning disable CA5351
     internal static Guid BodyNodeId(string aKind, string aSlot) =>
         new(MD5.HashData(Encoding.UTF8.GetBytes($"animata:{aKind}:{aSlot}")));
+#pragma warning restore CA5351
 }

@@ -21,6 +21,12 @@ public sealed record EvolutionOptions
     public float[] MutationScales { get; init; } = [0.25f, 0.5f, 1, 2];
 
     public int Seed { get; init; } = 1;
+
+    /// <summary>
+    /// Ile osobników oceniać naraz. Domyślnie o jeden rdzeń mniej niż ma komputer — rdzeń zostaje dla sceny i UI
+    /// (kilka stworów uczących się naraz nie zagłodzi symulacji). Wynik nie zależy od tej liczby.
+    /// </summary>
+    public int MaxParallelism { get; init; } = Math.Max(1, Environment.ProcessorCount - 1);
 }
 
 /// <summary>
@@ -59,7 +65,7 @@ public sealed class Evolution
     public float Step(Func<float[], int, float> aFitness)
     {
         var generation = Generation;
-        Parallel.For(0, _population.Length, aIndex =>
+        Parallel.For(0, _population.Length, new ParallelOptions { MaxDegreeOfParallelism = _options.MaxParallelism }, aIndex =>
         {
             var fitness = aFitness(_population[aIndex], generation);
             _fitness[aIndex] = float.IsFinite(fitness) ? fitness : float.NegativeInfinity;

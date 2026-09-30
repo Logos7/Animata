@@ -25,24 +25,15 @@ jobs:
           if ($IsWindows) { (Get-CimInstance Win32_Processor).Name } else { (Select-String -Path /proc/cpuinfo -Pattern 'model name' | Select-Object -First 1).Line }
           Write-Output "::notice::$([System.Runtime.InteropServices.RuntimeInformation]::OSDescription) · AVX512F $([System.Runtime.Intrinsics.X86.Avx512F]::IsSupported) · FMA $([System.Runtime.Intrinsics.X86.Fma]::IsSupported)"
       - name: Build
+        id: build
         run: dotnet build Animata.slnx -c Release
       - name: Test
         shell: pwsh
-        run: |
-          dotnet test Animata.slnx -c Release --no-build --logger "console;verbosity=normal" 2>&1 | Tee-Object -FilePath test.log
-          if ($LASTEXITCODE -ne 0) {
-            $lines = Get-Content test.log
-            for ($i = 0; $i -lt $lines.Count; $i++) {
-              if ($lines[$i] -match '^\s*Failed (\S+)') {
-                $block = @($lines[$i].Trim())
-                for ($j = $i + 1; $j -lt [Math]::Min($i + 25, $lines.Count); $j++) {
-                  if ($lines[$j] -match '^\s*(Failed |Passed )') { break }
-                  if ($lines[$j].Trim()) { $block += $lines[$j].Trim() }
-                }
-                Write-Output ("::error::" + ($block -join ' | '))
-              }
-            }
-            $tail = (Get-Content test.log -Tail 40 | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ' | '
-            Write-Output "::error::tail: $tail"
-            exit 1
-          }
+        run: ./.github/workflows/test.ps1 -Filter "Znane!=Bepu-beta29" -Level error
+      # Znane porażki (Animata.Tests/KnownFailures.cs) — osobno, nie blokują; adnotacje jako ostrzeżenia.
+      # Gdy wszystkie przejdą, krok to zgłasza: wtedy usunąć znacznik z testów.
+      - name: Known failures (Bepu beta.29)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        shell: pwsh
+        run: ./.github/workflows/test.ps1 -Filter "Znane=Bepu-beta29" -Level warning -ReportPass

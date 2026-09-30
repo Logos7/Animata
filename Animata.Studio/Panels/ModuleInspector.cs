@@ -258,7 +258,7 @@ public sealed class ModuleInspector
             Ui.Row("Aktywacja", "tanh", true));
         if (_creature.Brain is { } brain && _session.Training.IsTraining(brain) && Core.Training.TrainingController.FindTrainable(_creature) == aModule)
         {
-            var note = Ui.Text("Uczy się — wagi mistrza podmieniają się same.", 12, "Studio.Accent");
+            var note = Ui.Text("Uczy się — wagi mistrza podmieniają się same. Zmiana portów albo wyrażeń zaczyna naukę od nowa.", 12, "Studio.Accent");
             note.TextWrapping = TextWrapping.Wrap;
             section.Children.Add(note);
         }

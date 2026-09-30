@@ -21,18 +21,18 @@ public static partial class WorldObjectCatalog
         Pose = Spawn.At(aPosition)
     }.Build<Sphere>();
 
-
     /// <summary>
-    /// Mózg: sensory ciała → controller → jedyny napęd ciała (węzły ciała daje <see cref="Brain.SyncBody"/>). Każde wejście
-    /// controllera musi pochodzić z któregoś sensora (literówka w nazwie portu to błąd, a nie ciche zero), a controller
-    /// musi mieć wszystkie wyjścia napędu.
+    /// Mózg: sensory ciała → controller → napędy ciała (węzły ciała daje <see cref="Brain.SyncBody"/>). Każde wejście
+    /// controllera musi pochodzić z któregoś sensora (literówka w nazwie portu to błąd, a nie ciche zero). Napęd, którego
+    /// porty controller wystawia, dostaje wszystkie (częściowo — błąd); napęd bez żadnego z nich zostaje wolny, ale controller
+    /// musi sterować przynajmniej jednym.
     /// </summary>
     public static void BuildBrain(Brain aBrain, BrainModule aController)
     {
         aBrain.SyncBody();
         var graph = aBrain.Graph;
         var sources = graph.Modules.OfType<SensorModule>().ToList();
-        var wheels = graph.Modules.OfType<ActuatorModule>().Single();
+        var drives = graph.Modules.OfType<ActuatorModule>().ToList();
         graph.Modules.Insert(sources.Count, aController);
         var controller = aController;
 
@@ -49,7 +49,25 @@ public static partial class WorldObjectCatalog
             throw new ArgumentException(
                 $"{controller} has inputs no sensor provides: {string.Join(", ", missing)}.", nameof(aController));
 
-        graph.Connect(controller, wheels, wheels.InputPorts.ToArray());
+        // Każdy napęd, którego porty sterownik wystawia, dostaje je wszystkie; napęd częściowo pokryty to błąd,
+        // napęd bez żadnego portu sterownika zostaje wolny (np. drugi napęd dla innego modułu).
+        var driven = 0;
+        foreach (var drive in drives)
+        {
+            var provided = drive.InputPorts.Where(controller.OutputPorts.Contains).ToList();
+            if (provided.Count == 0)
+                continue;
+            if (provided.Count < drive.InputPorts.Count)
+                throw new ArgumentException(
+                    $"{controller} drives {drive.Slot} only partly; missing outputs: {string.Join(", ", drive.InputPorts.Except(provided))}.",
+                    nameof(aController));
+            graph.Connect(controller, drive, [.. provided]);
+            driven++;
+        }
+        if (driven == 0 && drives.Count > 0)
+            throw new ArgumentException(
+                $"{controller} has no outputs for any actuator ({string.Join(", ", drives.SelectMany(aDrive => aDrive.InputPorts))}).",
+                nameof(aController));
         graph.Validate();
     }
 

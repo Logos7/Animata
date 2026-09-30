@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Logika sceny Studia (symulacja, nauka, snapshoty, schowek, zapis) bez UI — testowana w Animata.Tests. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Animata.Studio.Session</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Animata.Core/Animata.Core.csproj" />
+  </ItemGroup>
+</Project>

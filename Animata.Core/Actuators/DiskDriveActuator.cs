@@ -24,14 +24,6 @@ public sealed class DiskDriveActuator : Actuator
     [Setting("Moment koła", Unit = "N·m", Min = 0.1, Max = 50)]
     public float DriveTorque { get; set; } = 3;
 
-    /// <summary>Kopiuje ustawienia (nie stan) z innego napędu.</summary>
-    public void CopySettingsFrom(DiskDriveActuator aOther)
-    {
-        MaxSpeed = aOther.MaxSpeed;
-        MaxTurnSpeed = aOther.MaxTurnSpeed;
-        DriveTorque = aOther.DriveTorque;
-    }
-
     public override IReadOnlyList<string> InputPorts => Ports;
 
     public override void Apply(Entity aOwner, IReadOnlyDictionary<string, float> aCommands, float aDelta)

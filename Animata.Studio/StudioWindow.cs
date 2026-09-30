@@ -80,12 +80,22 @@ public sealed class StudioWindow : Window
 
     /// <summary>
     /// Otwiera plik świata jako scenę (nazwa = nazwa pliku) i wchodzi do niej. Plik otwarty już wcześniej w tej sesji
-    /// programu otwiera tę samą scenę. Błąd odczytu — komunikat w oknie z pliku, scena nie powstaje.
+    /// programu otwiera tę samą scenę — chyba że plik na dysku się od tamtej pory zmienił: wtedy scena powstaje od nowa
+    /// z nowej wersji. Błąd odczytu — komunikat w oknie z pliku, scena nie powstaje.
     /// </summary>
     private void OpenFile(string aPath)
     {
         var path = Path.GetFullPath(aPath);
-        if (!_files.TryGetValue(path, out var session))
+        var written = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
+        if (_files.TryGetValue(path, out var opened) && opened.Written != written)
+        {
+            CloseScene(opened.Session);
+            _files.Remove(path);
+        }
+        StudioSession session;
+        if (_files.TryGetValue(path, out opened))
+            session = opened.Session;
+        else
         {
             try
             {
@@ -98,7 +108,7 @@ public sealed class StudioWindow : Window
                 _ = Kit.Dialogs.ShowAsync(this, "Nie udało się otworzyć pliku", $"{path}\n\n{exception.Message}");
                 return;
             }
-            _files[path] = session;
+            _files[path] = (session, written);
             AddScene(session);
         }
         RecentFiles.Add(path);
@@ -107,7 +117,17 @@ public sealed class StudioWindow : Window
         _navigator.Push(panel, null);
     }
 
-    private readonly Dictionary<string, StudioSession> _files = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (StudioSession Session, DateTime Written)> _files =
+        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+    /// <summary>Zamyka scenę z pliku (nieotwartą): jej panel, naukę i świat.</summary>
+    private void CloseScene(StudioSession aSession)
+    {
+        _scenes.RemoveAll(aScene => aScene.Session == aSession);
+        if (_panels.Remove(aSession, out var panel))
+            panel.Dispose();
+        aSession.Dispose();
+    }
 
     private void AddScene(StudioSession aSession)
     {
@@ -137,7 +157,7 @@ public sealed class StudioWindow : Window
             if (session.Visible != open)
                 session.Visible = open;
             if (open)
-                session.Tick();
+                session.Tick(delta);
         }
         _navigator.Active?.Refresh(delta);
     }

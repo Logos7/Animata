@@ -29,15 +29,6 @@ public sealed class SteeringDriveActuator : Actuator
     [Setting("Moment koła", Unit = "N·m", Min = 0.1, Max = 50)]
     public float DriveTorque { get; set; } = 3;
 
-    /// <summary>Kopiuje ustawienia (nie stan) z innego napędu — np. do ciała w ukrytej próbie nauki.</summary>
-    public void CopySettingsFrom(SteeringDriveActuator aOther)
-    {
-        MaxSpeed = aOther.MaxSpeed;
-        MaxReverseSpeed = aOther.MaxReverseSpeed;
-        MaxSteerAngle = aOther.MaxSteerAngle;
-        DriveTorque = aOther.DriveTorque;
-    }
-
     /// <summary>Ostatni kąt kół (rad) — do rysowania.</summary>
     public float SteerAngle { get; private set; }
 

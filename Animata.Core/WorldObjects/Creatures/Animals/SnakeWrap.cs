@@ -90,7 +90,7 @@ public static class SnakeWrap
     }
 
     /// <summary>Środek okręgu najlepiej pasującego do punktów (spadek gradientu od średniej).</summary>
-    private static Vector2 CircleCenter(IReadOnlyList<Vector2> aPoints)
+    private static Vector2 CircleCenter(List<Vector2> aPoints)
     {
         var center = aPoints.Aggregate(Vector2.Zero, (aSum, aPoint) => aSum + aPoint) / aPoints.Count;
         for (var iteration = 0; iteration < 300; iteration++)

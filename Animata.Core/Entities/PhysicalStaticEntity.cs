@@ -27,6 +27,9 @@ public abstract class PhysicalStaticEntity(Body aBody) : StaticEntity(aBody), IP
         aPhysics.AddStatic(new Cylinder(aRadius, aHeight),
             new RigidPose(aFoot + new Vector3(0, 0, aHeight / 2), Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2)), aGrip);
 
+    /// <summary>Uchwyt bryły w fizyce świata albo null (świat bez fizyki).</summary>
+    internal StaticHandle? StaticHandle => _static;
+
     bool IPhysicalEntity.IsDynamic => false;
 
     void IPhysicalEntity.AttachPhysics(PhysicsWorld aPhysics)
