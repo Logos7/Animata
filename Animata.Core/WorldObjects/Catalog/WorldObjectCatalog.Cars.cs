@@ -53,17 +53,17 @@ public static partial class WorldObjectCatalog
     /// Mózg: eye + whiskers → controller → wheels. Controller może czytać dowolne porty celu i Ray{i},
     /// więc musi być zrobiony dla tej samej liczby wąsów (inaczej <see cref="BuildBrain"/> wymieni brakujące porty).
     /// </summary>
-    public static CarCreature CreateCar(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController,
+    public static Creature CreateCar(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController,
         int aWhiskers = DefaultWhiskers)
     {
         var angles = WhiskerAnglesFor(aWhiskers);
-        return new Spawn(EntityTypes.Of<CarCreature>())
+        return new Spawn(Car.Design.Type)
         {
-            Settings = Spawn.Configure<CarCreature>(aCar => aCar.Color = aColor),
+            Settings = Spawn.Configure<Creature>(aCar => aCar.Color = aColor),
             Slots = Spawn.Then(aCar => aCar.Body.Sensors.OfType<RaySensor>().Single().SetAngles(angles), Spawn.Aim(aTargetId)),
             Brain = Spawn.Controller(aController),
             Pose = Spawn.At(aPosition, aYaw)
-        }.Build<CarCreature>();
+        }.Build<Creature>();
     }
 
     public static AvoidAndSeekModule CreateAvoidController(int aWhiskers = DefaultWhiskers) =>
@@ -90,9 +90,9 @@ public static partial class WorldObjectCatalog
         return module;
     }
 
-    public static CarCreature CreateControllerCar(Vector3 aPosition, float aYaw, Guid? aTargetId, int aWhiskers = DefaultWhiskers) =>
+    public static Creature CreateControllerCar(Vector3 aPosition, float aYaw, Guid? aTargetId, int aWhiskers = DefaultWhiskers) =>
         CreateCar(aPosition, aYaw, RandomColor(), aTargetId, CreateAvoidController(aWhiskers), aWhiskers);
 
-    public static CarCreature CreateNeuralCar(Vector3 aPosition, float aYaw, Guid? aTargetId, int aWhiskers = DefaultWhiskers) =>
+    public static Creature CreateNeuralCar(Vector3 aPosition, float aYaw, Guid? aTargetId, int aWhiskers = DefaultWhiskers) =>
         CreateCar(aPosition, aYaw, RandomColor(), aTargetId, CreateCarNeuralModule(aWhiskers), aWhiskers);
 }

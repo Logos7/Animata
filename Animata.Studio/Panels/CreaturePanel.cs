@@ -444,7 +444,7 @@ public sealed class CreaturePanel : StudioPanel
 
     /// <summary>Wartości ustawień zmieniających kształt ciała (<see cref="SettingAttribute.Reshapes"/>) i liczby portów slotów.</summary>
     private string Shape() => string.Join("|",
-        Settings.Describe(_creature.GetType()).Where(aSetting => aSetting.Attribute.Reshapes).Select(aSetting => aSetting.Get(_creature))
+        Settings.Of(_creature).Where(aSetting => aSetting.Attribute.Reshapes).Select(aSetting => aSetting.Get(_creature))
             .Concat(_creature.Body.Sensors.Select(aSensor => (object)aSensor.OutputPorts.Count))
             .Concat(_creature.Body.Actuators.Select(aActuator => (object)aActuator.InputPorts.Count)));
 

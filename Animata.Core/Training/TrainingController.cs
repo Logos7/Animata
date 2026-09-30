@@ -173,7 +173,7 @@ public sealed class TrainingController : IDisposable
                 .CaptureState()?.ToJson());
         foreach (var owner in aCreature.Body.Sensors.Cast<object>().Concat(aCreature.Body.Actuators))
             foreach (var (name, value) in Settings.Capture(owner))
-                if (Settings.Describe(owner.GetType()).First(aInfo => aInfo.Name == name).Type != typeof(Guid?))
+                if (Settings.Find(owner, name)?.Type != typeof(Guid?))
                     builder.Append('|').Append(name).Append('=').Append(value.GetRawText());
         return builder.ToString();
     }

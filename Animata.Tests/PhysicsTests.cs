@@ -18,7 +18,7 @@ public class PhysicsTests
     }
 
     /// <summary>Jazda przez fizykę: autko z napędem, komenda co tick (bez mózgu).</summary>
-    private static List<Vector2> Drive(CarCreature aCar, World aWorld, float aSteer, float aThrottle, float aSeconds)
+    private static List<Vector2> Drive(Creature aCar, World aWorld, float aSteer, float aThrottle, float aSeconds)
     {
         var drive = aCar.Body.Actuators.OfType<SteeringDriveActuator>().Single();
         var command = new Dictionary<string, float>
@@ -36,9 +36,9 @@ public class PhysicsTests
         return path;
     }
 
-    private static CarCreature PhysicalCar(World aWorld)
+    private static Creature PhysicalCar(World aWorld)
     {
-        var car = new CarCreature();
+        var car = new Creature(Car.Design);
         car.Body.Actuators.Add(new SteeringDriveActuator());
         aWorld.Add(car);
         return car;
@@ -75,7 +75,7 @@ public class PhysicsTests
     public void Cylinder_TurnsInPlaceToTheLeft()
     {
         using var world = FloorWorld();
-        var cylinder = new CylinderCreature();
+        var cylinder = new Creature(Disc.Design);
         var drive = new DiskDriveActuator();
         cylinder.Body.Actuators.Add(drive);
         world.Add(cylinder);
@@ -103,14 +103,14 @@ public class PhysicsTests
 
         Assert.Equal(Vector3.Zero, obstacle.Body.Position);
         var distance = new Vector2(creature.Body.Position.X, creature.Body.Position.Y).Length();
-        Assert.True(distance >= obstacle.Radius + creature.Radius - 0.05f, $"distance {distance:0.00}");
+        Assert.True(distance >= obstacle.Radius + Disc.Radius - 0.05f, $"distance {distance:0.00}");
     }
 
     [Fact]
     public void Whiskers_ReportProximity_AndIgnoreTargets()
     {
         var world = new World();
-        var car = new CarCreature();
+        var car = new Creature(Car.Design);
         var whiskers = new RaySensor([0f], aRange: 3);
         car.Body.Sensors.Add(whiskers);
         world.Add(car);

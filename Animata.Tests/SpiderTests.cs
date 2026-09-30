@@ -13,7 +13,7 @@ public class SpiderTests
 {
     private const float Delta = 1f / 30f;
 
-    private static SpiderCreature Walk(World aWorld, Vector3 aTarget, float aSeconds)
+    private static Creature Walk(World aWorld, Vector3 aTarget, float aSeconds)
     {
         aWorld.Add(WorldObjectCatalog.CreateFloor(30, 30));
         var target = WorldObjectCatalog.CreateSphere(aTarget);
@@ -30,7 +30,7 @@ public class SpiderTests
     {
         using var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(10, 10));
-        var spider = new SpiderCreature();
+        var spider = new Creature(Spider.Design);
         world.Add(spider);
         for (var tick = 0; tick < 90; tick++)
             world.Update(Delta);
@@ -43,7 +43,7 @@ public class SpiderTests
     {
         using var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(10, 10));
-        var spider = new SpiderCreature();
+        var spider = new Creature(Spider.Design);
         world.Add(spider);
         for (var tick = 0; tick < 30; tick++)
             world.Update(Delta);
@@ -78,9 +78,9 @@ public class SpiderTests
         var json = WorldFile.ToJson(WorldFile.Capture(world, "t"));
         using var restored = WorldFile.Restore(WorldFile.FromJson(json)).World;
         Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "t")));
-        Assert.Equal(2, restored.Entities.OfType<SpiderCreature>().Count());
-        Assert.Single(restored.Entities.OfType<SpiderCreature>().SelectMany(aSpider => aSpider.Brain!.Graph.Modules.OfType<GaitModule>()));
-        Assert.Same(SeekRigs.Spider, SeekRigs.For(restored.Entities.OfType<SpiderCreature>().First()));
+        Assert.Equal(2, restored.Entities.OfDesign(Spider.Design).Count());
+        Assert.Single(restored.Entities.OfDesign(Spider.Design).SelectMany(aSpider => aSpider.Brain!.Graph.Modules.OfType<GaitModule>()));
+        Assert.Same(SeekRigs.Spider, SeekRigs.For(restored.Entities.OfDesign(Spider.Design).First()));
         restored.Update(Delta);
     }
 
@@ -123,7 +123,7 @@ public class SpiderTests
     {
         using var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(20, 20));
-        var snake = new SnakeCreature(12);
+        var snake = TestWorlds.BareSnake(12);
         world.Add(snake);
         for (var joint = 0; joint < snake.JointCount; joint++)
             snake.SetJointTarget(joint, 1, 0);   // wszystkie stawy w lewo do oporu — zwój ciaśniejszy niż pełne koło
@@ -133,7 +133,7 @@ public class SpiderTests
         for (var a = 0; a < snake.PartPositions.Count; a++)
             for (var b = a + 3; b < snake.PartPositions.Count; b++)
                 closest = MathF.Min(closest, Vector3.Distance(snake.PartPositions[a], snake.PartPositions[b]));
-        Assert.True(closest > SnakeCreature.SegmentRadius * 1.6f, $"closest = {closest}");
+        Assert.True(closest > Snake.SegmentRadius * 1.6f, $"closest = {closest}");
     }
 
     [Fact]

@@ -670,7 +670,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 if (!many)
                     menu.Items.Add(Item(entity is ActiveEntity ? "Oczy innych stworów na niego" : "Wszystkie oczy na to",
                         Icons.Eye, () => Session.AimAllEyes(entity), Key.T));
-                if (!many && entity is SnakeCreature snake && Session.World.Entities.OfType<Cylinder>().Any())
+                if (!many && entity is Creature snake && Snake.Is(snake) && Session.World.Entities.OfType<Cylinder>().Any())
                     menu.Items.Add(Item("Owiń wokół cylindra · wspinaczka", Icons.Tree, () =>
                     {
                         Session.WrapAroundNearestCylinder(snake);

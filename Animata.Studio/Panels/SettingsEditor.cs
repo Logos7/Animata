@@ -25,7 +25,7 @@ public static class SettingsEditor
         Action<SettingInfo>? aChanged = null)
     {
         var rows = new List<Control>();
-        foreach (var setting in Settings.Describe(aOwner.GetType()))
+        foreach (var setting in Settings.Of(aOwner))
             if (aWhich?.Invoke(setting) ?? true)
                 rows.Add(Row(aSession, aEntity, aOwner, setting, aChanged));
         return rows;

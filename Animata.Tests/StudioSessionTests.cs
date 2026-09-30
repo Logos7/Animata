@@ -55,14 +55,14 @@ public class StudioSessionTests
     public void ReshapingSettings_WhileTraining_KeepsTrainingInTheNewBody()
     {
         using var session = new StudioSession("t", WorldObjectCatalog.CreateSnakeScene) { Visible = true };
-        var snake = (SnakeCreature)session.AddCreature(EntityTypes.Of<SnakeCreature>(), new Vector3(2, 2, 0));
+        var snake = (Creature)session.AddCreature(Snake.Design.Type, new Vector3(2, 2, 0));
         session.ToggleTraining([snake]);
-        var segments = Settings.Describe(typeof(SnakeCreature)).First(aSetting => aSetting.Name == nameof(SnakeCreature.Segments));
+        var segments = Settings.Find(snake, Snake.SegmentsSetting)!;
         foreach (var count in new[] { 5, 12, 2 })
         {
             Assert.True(session.ChangeSetting(snake, snake, segments, (double)count), session.Status);
             session.Tick();
-            Assert.Equal(count, snake.Segments);
+            Assert.Equal(count, Snake.Segments(snake));
             Assert.True(session.IsTraining(snake));
         }
         Assert.Null(session.Error);
@@ -89,7 +89,7 @@ public class StudioSessionTests
     public void ToggleTraining_SaysWhenNothingCanLearn()
     {
         using var session = new StudioSession("t", WorldObjectCatalog.CreateSnakeScene);
-        var car = session.AddCreature(EntityTypes.Of<CarCreature>(), new Vector3(2, 2, 0));
+        var car = session.AddCreature(Car.Design.Type, new Vector3(2, 2, 0));
         session.InstallBrain(car, car.BrainPresets.First(aPreset => aPreset.HandTuned));
         Assert.Contains("nie ruszyła", session.ToggleTraining([car]));
     }

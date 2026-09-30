@@ -436,7 +436,7 @@ public sealed class StudioSession : IDisposable
     /// Owija węża wokół najbliższego cylindra (jego podstawy) i robi z niego wspinacza — nauka będzie go uczyć wchodzenia
     /// na ten cylinder (trzyma się tylko cylindra z tarciem chwytnym). Zwraca false, gdy w scenie nie ma cylindra.
     /// </summary>
-    public bool WrapAroundNearestCylinder(SnakeCreature aSnake)
+    public bool WrapAroundNearestCylinder(Creature aSnake)
     {
         var tree = World.Entities.OfType<Cylinder>()
             .MinBy(aTree => Vector2.Distance(new Vector2(aTree.Body.Position.X, aTree.Body.Position.Y), new Vector2(aSnake.Body.Position.X, aSnake.Body.Position.Y)));
@@ -447,7 +447,7 @@ public sealed class StudioSession : IDisposable
         }
         if (WithTrainingPaused(aSnake, () =>
             {
-                aSnake.WrapAround(tree);
+                Snake.WrapAround(aSnake, tree);
                 aSnake.Brain?.Reset();
             }) is null)
             return false;

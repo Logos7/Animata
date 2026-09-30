@@ -1,5 +1,6 @@
 using System.Numerics;
 using Animata.Core.Training;
+using Animata.Core.WorldObjects;
 
 namespace Animata.Tests;
 
@@ -20,4 +21,13 @@ internal static class TestWorlds
         EpisodeSeconds = 3,
         ValidationEpisodes = 2
     };
+
+    /// <summary>Wąż bez zmysłów, napędów i mózgu — samo ciało z <paramref name="aSegments"/> segmentami (testy fizyki).</summary>
+    public static Creature BareSnake(int aSegments = Snake.DefaultSegments)
+    {
+        var snake = new Creature(Snake.Design);
+        snake.SetValue(Snake.SegmentsSetting, aSegments);
+        snake.Reshape();
+        return snake;
+    }
 }

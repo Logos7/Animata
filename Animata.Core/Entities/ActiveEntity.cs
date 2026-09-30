@@ -6,9 +6,11 @@ namespace Animata.Core.Entities;
 
 /// <summary>
 /// Encja z mózgiem. Mózg steruje ciałem przez aktuatory.
-/// Stwór definiuje się sam: klasa buduje plan ciała (konstruktor), zmysły i napędy (<see cref="Equip"/>), ma ustawienia
-/// (<see cref="SettingAttribute"/>), gotowe mózgi (<see cref="BrainPresets"/>), rig nauki (<see cref="TrainingRig"/>) i opis.
-/// Żeby był dostępny w Studiu i w zapisie świata, wystarczy dopisać go do <see cref="WorldObjects.EntityTypes"/>.
+/// Stwory w Animacie to <see cref="WorldObjects.Creature"/> z projektem (<see cref="WorldObjects.CreatureDesign"/>): ciało,
+/// gniazda, ustawienia, gotowe mózgi i warunki nauki są danymi projektu, nie klasą. Własna klasa stwora też działa: buduje
+/// plan ciała (konstruktor), zmysły i napędy (<see cref="Equip"/>), ma ustawienia (<see cref="SettingAttribute"/>), gotowe
+/// mózgi (<see cref="BrainPresets"/>), rig nauki (<see cref="TrainingRig"/>) i opis; do rejestru trafia przez
+/// <see cref="WorldObjects.EntityType.Creature{T}"/>.
 /// </summary>
 public abstract class ActiveEntity : Entity
 {

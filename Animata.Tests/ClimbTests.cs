@@ -12,14 +12,14 @@ public class ClimbTests
 {
     private const float Delta = 1f / 30f;
 
-    private static (World World, Cylinder Tree, SnakeCreature Snake) Wrapped(CpgModule? aBrain = null)
+    private static (World World, Cylinder Tree, Creature Snake) Wrapped(CpgModule? aBrain = null)
     {
         var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(20, 20));
         var tree = SeekRigs.CreateClimbCylinder(Vector3.Zero, 4);
         world.Add(tree);
-        var snake = aBrain is null ? new SnakeCreature(8) : WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, null, aBrain);
-        snake.WrapAround(tree, 0.7f);
+        var snake = aBrain is null ? TestWorlds.BareSnake(8) : WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, null, aBrain);
+        Snake.WrapAround(snake, tree, 0.7f);
         world.Add(snake);
         return (world, tree, snake);
     }
@@ -30,8 +30,8 @@ public class ClimbTests
         var (world, tree, snake) = Wrapped();
         using (world)
         {
-            Assert.True(snake.Climber);
-            var contact = tree.Radius + SnakeCreature.SegmentRadius;
+            Assert.True(Snake.IsClimber(snake));
+            var contact = tree.Radius + Snake.SegmentRadius;
             foreach (var part in snake.PartPositions)
                 Assert.InRange(new Vector2(part.X, part.Y).Length(), contact - 0.06f, contact + 0.02f);
             Assert.True(snake.PartPositions[0].Z > snake.PartPositions[^1].Z);
@@ -65,8 +65,8 @@ public class ClimbTests
     public void Climber_ChoosesTheClimbRig_AndSurvivesSaving()
     {
         using var world = WorldObjectCatalog.CreateClimbScene().World;
-        var snakes = world.Entities.OfType<SnakeCreature>().ToList();
-        Assert.All(snakes, aSnake => Assert.Same(SeekRigs.ClimbWith(aSnake.Segments), SeekRigs.For(aSnake)));
+        var snakes = world.Entities.OfDesign(Snake.Design).ToList();
+        Assert.All(snakes, aSnake => Assert.Same(SeekRigs.ClimbWith(Snake.Segments(aSnake)), SeekRigs.For(aSnake)));
         for (var tick = 0; tick < 15; tick++)
             world.Update(Delta);
 
@@ -76,8 +76,8 @@ public class ClimbTests
         Assert.Equal(2, restored.Entities.OfType<Cylinder>().Count());
         foreach (var snake in snakes)
         {
-            var twin = (SnakeCreature)restored.Find(snake.Id)!;
-            Assert.True(twin.Climber);
+            var twin = (Creature)restored.Find(snake.Id)!;
+            Assert.True(Snake.IsClimber(twin));
             // Poza z zapisanych kątów stawów — bez ugięć więzów, więc z dokładnością do kilku cm.
             var errors = snake.PartPositions.Select((aPart, aIndex) => Vector3.Distance(aPart, twin.PartPositions[aIndex])).ToList();
             Assert.True(errors.Max() < 0.12f && errors.Average() < 0.06f, string.Join(" ", errors.Select(aError => aError.ToString("0.00"))));

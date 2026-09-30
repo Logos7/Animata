@@ -51,27 +51,27 @@ public static partial class WorldObjectCatalog
     }
 
     /// <summary>Stwór z okiem namierzającym cel i napędem różnicowym, sterowany podanym modułem.</summary>
-    public static CylinderCreature CreateSeeker(Vector3 aPosition, Vector3 aColor, Guid? aTargetId, BrainModule aController)
+    public static Creature CreateSeeker(Vector3 aPosition, Vector3 aColor, Guid? aTargetId, BrainModule aController)
     {
-        return new Spawn(EntityTypes.Of<CylinderCreature>())
+        return new Spawn(Disc.Design.Type)
         {
-            Settings = Spawn.Configure<CylinderCreature>(aCreature => aCreature.Color = aColor),
+            Settings = Spawn.Configure<Creature>(aCreature => aCreature.Color = aColor),
             Slots = Spawn.Aim(aTargetId),
             Brain = Spawn.Controller(aController),
             Pose = Spawn.At(aPosition)
-        }.Build<CylinderCreature>();
+        }.Build<Creature>();
     }
 
-    public static CylinderCreature CreateControllerSeeker(Vector3 aPosition, Guid? aTargetId) =>
+    public static Creature CreateControllerSeeker(Vector3 aPosition, Guid? aTargetId) =>
         CreateSeeker(aPosition, RandomColor(), aTargetId, new ApproachTargetModule { Name = "Approach" });
 
-    public static CylinderCreature CreateNeuralSeeker(Vector3 aPosition, Guid? aTargetId) =>
+    public static Creature CreateNeuralSeeker(Vector3 aPosition, Guid? aTargetId) =>
         CreateSeeker(aPosition, RandomColor(), aTargetId, CreateCylinderNeuralModule());
 
     /// <summary>
     /// Walec z siecią gotową do nauki: ręczne wagi zapisane w mózgu jako snapshot „ręczne wagi”, sieć wylosowana.
     /// </summary>
-    public static CylinderCreature CreateLearningSeeker(Vector3 aPosition, Guid? aTargetId)
+    public static Creature CreateLearningSeeker(Vector3 aPosition, Guid? aTargetId)
     {
         var creature = CreateNeuralSeeker(aPosition, aTargetId);
         var network = creature.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();

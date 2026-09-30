@@ -56,12 +56,12 @@ public class PersistenceTests
     public void BodyNodes_AreNotSaved_ButComeBackWiredFromTheBody()
     {
         using var world = WorldObjectCatalog.CreateDemo().World;
-        var car = world.Entities.OfType<CarCreature>().First();
+        var car = world.Entities.OfDesign(Car.Design).First();
         var json = RoundTrip(world, out var restored);
         using (restored)
         {
             Assert.DoesNotContain("\"Slot\"", json);
-            var twin = (CarCreature)restored.Find(car.Id)!;
+            var twin = (Creature)restored.Find(car.Id)!;
             var graph = twin.Brain!.Graph;
             Assert.Equal(twin.Body.Sensors.Select(aSensor => aSensor.Slot), graph.Modules.OfType<SensorModule>().Select(aNode => aNode.Slot));
             Assert.Same(twin.Body.Actuators.Single(), graph.Modules.OfType<ActuatorModule>().Single().Actuator);
@@ -80,7 +80,7 @@ public class PersistenceTests
         using (restored)
         {
             Assert.Equal(world.Time, restored.Time);
-            var snake = world.Entities.OfType<SnakeCreature>().First();
+            var snake = world.Entities.OfDesign(Snake.Design).First();
             var clock = snake.Body.Sensors.OfType<ClockSensor>().Single();
             var twinClock = restored.Find(snake.Id)!.Body.Sensors.OfType<ClockSensor>().Single();
             Assert.Equal(clock.Read(snake, world)[ClockSensor.SinPort], twinClock.Read(restored.Find(snake.Id)!, restored)[ClockSensor.SinPort]);
@@ -91,21 +91,21 @@ public class PersistenceTests
     public void SnakeScene_SavesAndLoads_WithCpgAndSnapshots()
     {
         using var world = WorldObjectCatalog.CreateSnakeScene().World;
-        var snake = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż CPG");
-        snake.SetSegments(11);
-        var neural = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż NN");
-        neural.SetSegments(5);
+        var snake = world.Entities.OfDesign(Snake.Design).Single(aSnake => aSnake.Name == "Wąż CPG");
+        Snake.SetSegments(snake, 11);
+        var neural = world.Entities.OfDesign(Snake.Design).Single(aSnake => aSnake.Name == "Wąż NN");
+        Snake.SetSegments(neural, 5);
         var json = RoundTrip(world, out var restored);
         using (restored)
         {
             Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test")));
             Assert.Equal(5, restored.Entities.OfType<Box>().Count(aBox => !aBox.Locked));
-            var neuralTwin = (SnakeCreature)restored.Find(neural.Id)!;
-            Assert.Equal(5, neuralTwin.Segments);
+            var neuralTwin = (Creature)restored.Find(neural.Id)!;
+            Assert.Equal(5, Snake.Segments(neuralTwin));
             Assert.True(neural.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()!
                 .SameAs(neuralTwin.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()));
-            var twin = (SnakeCreature)restored.Find(snake.Id)!;
-            Assert.Equal(11, twin.Segments);
+            var twin = (Creature)restored.Find(snake.Id)!;
+            Assert.Equal(11, Snake.Segments(twin));
             Assert.NotNull(restored.Physics);
             Assert.Contains(twin.Brain!.Snapshots, aSnapshot => aSnapshot.Label == "ręczne parametry");
             var target = restored.Entities.OfType<Sphere>().Single();
@@ -134,7 +134,7 @@ public class PersistenceTests
         using (restored)
         {
             Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test")));
-            var twin = (CarCreature)restored.Find(car.Id)!;
+            var twin = (Creature)restored.Find(car.Id)!;
             Assert.Equal(9, WorldObjectCatalog.WhiskerCountOf(twin));
             var twinGroup = twin.Brain!.Graph.Modules.OfType<CompositeModule>().Single();
             Assert.Equal(group.Id, twinGroup.Id);
@@ -150,12 +150,12 @@ public class PersistenceTests
     public void DriveSettings_SurviveSaving()
     {
         using var world = WorldObjectCatalog.CreateDemo().World;
-        var car = world.Entities.OfType<CarCreature>().First();
+        var car = world.Entities.OfDesign(Car.Design).First();
         var steering = car.Body.Actuators.OfType<Animata.Core.Actuators.SteeringDriveActuator>().Single();
         steering.MaxSpeed = 4;
         steering.MaxSteerAngle = 0.5f;
         steering.DriveTorque = 7;
-        var cylinder = world.Entities.OfType<CylinderCreature>().First();
+        var cylinder = world.Entities.OfDesign(Disc.Design).First();
         cylinder.Body.Actuators.OfType<Animata.Core.Actuators.DiskDriveActuator>().Single().MaxTurnSpeed = 1.25f;
 
         RoundTrip(world, out var restored);
@@ -173,7 +173,7 @@ public class PersistenceTests
     public void File_PointsAtCurrentSnapshot_AndLoadingStartsFromIt()
     {
         using var world = WorldObjectCatalog.CreateSnakeScene().World;
-        var snake = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż CPG");
+        var snake = world.Entities.OfDesign(Snake.Design).Single(aSnake => aSnake.Name == "Wąż CPG");
         var cpg = snake.Brain!.Graph.Modules.OfType<CpgModule>().Single();
         var random = snake.Brain.Capture("losowe", cpg);
         var manual = snake.Brain.Snapshots.Single(aSnapshot => aSnapshot.Label == "ręczne parametry");
@@ -195,7 +195,7 @@ public class PersistenceTests
         };
 
         using var restored = WorldFile.Restore(WorldFile.FromJson(WorldFile.ToJson(edited))).World;
-        var twin = (SnakeCreature)restored.Find(snake.Id)!;
+        var twin = (Creature)restored.Find(snake.Id)!;
         Assert.Equal(manual.Id, twin.Brain!.CurrentSnapshot()!.Id);
         Assert.True(twin.Brain.Graph.Modules.OfType<CpgModule>().Single().CaptureState()!.SameAs(manual.Modules.Single().State));
     }
@@ -204,8 +204,8 @@ public class PersistenceTests
     public void Copies_GetNewIds_OffsetPositions_AndFollowCopiedTargets()
     {
         using var world = WorldObjectCatalog.CreateSnakeScene().World;
-        var neural = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż NN");
-        var cpg = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż CPG");
+        var neural = world.Entities.OfDesign(Snake.Design).Single(aSnake => aSnake.Name == "Wąż NN");
+        var cpg = world.Entities.OfDesign(Snake.Design).Single(aSnake => aSnake.Name == "Wąż CPG");
         var target = world.Entities.OfType<Sphere>().Single();
         var slab = world.Entities.OfType<Box>().First(aBox => !aBox.Locked);
 
@@ -217,7 +217,7 @@ public class PersistenceTests
         foreach (var copy in copies)
             world.Add(copy);
 
-        var neuralCopy = (SnakeCreature)copies[0];
+        var neuralCopy = (Creature)copies[0];
         var targetCopy = (Sphere)copies[1];
         Assert.Equal(neural.Body.Position + offset, neuralCopy.Body.Position);
         Assert.Equal(target.Body.Position + offset, targetCopy.Body.Position);
@@ -225,7 +225,7 @@ public class PersistenceTests
         Assert.Equal(slab.Size, ((Box)copies[2]).Size);
         Assert.True(neural.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()!
             .SameAs(neuralCopy.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState()));
-        Assert.Equal(cpg.Brain!.Snapshots.Count, ((SnakeCreature)copies[3]).Brain!.Snapshots.Count);
+        Assert.Equal(cpg.Brain!.Snapshots.Count, ((Creature)copies[3]).Brain!.Snapshots.Count);
 
         // Kopia sama (bez kulki) poluje na tę samą kulkę co oryginał.
         var alone = WorldFile.RestoreCopies(WorldFile.CaptureEntities([neural]), Vector3.UnitX);

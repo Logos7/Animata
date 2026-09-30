@@ -84,8 +84,8 @@ public class TrainingSetupTests : IDisposable
     public void CreatureWithTwoActuators_GetsItsBrain_AndTrains()
     {
         if (EntityTypes.Find("lampRoller") is null)
-            EntityTypes.Register(EntityType.Creature("lampRoller", "Toczek z lampą", "wheel", aBrain => new LampRoller(aBrain)));
-        var roller = (LampRoller)EntityTypes.Find("lampRoller")!.Create();
+            EntityTypes.Register(LampRoller.Design.Type);
+        var roller = (Creature)EntityTypes.Find("lampRoller")!.Create();
 
         // Sterownik celu wystawia tylko porty kół — lampa zostaje wolna.
         WorldObjectCatalog.BuildBrain(roller.Brain!, new ApproachTargetModule());
@@ -123,20 +123,26 @@ public class TrainingSetupTests : IDisposable
     }
 }
 
-/// <summary>Toczek z dwoma napędami: koła i lampa (port Light) — mózg i nauka nie zakładają jednego napędu.</summary>
-public sealed class LampRoller(Brain? aBrain = null) : ArticulatedCreature(RollerCreature.DefaultPlan(), aBrain)
+/// <summary>Toczek z dwoma napędami: koła i lampa (port Light) — mózg i nauka nie zakładają jednego napędu. Bez własnej klasy.</summary>
+public static class LampRoller
 {
-    public override void Equip()
+    static LampRoller()
     {
-        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
-        Body.Actuators.Add(new DiskDriveActuator { Slot = "Wheels" });
-        Body.Actuators.Add(new LampActuator { Slot = "Lamp" });
-        base.Equip();
+        if (!SlotTypes.IsRegistered(nameof(LampActuator)))
+            SlotTypes.Register(nameof(LampActuator), (SlotSpec _, Animata.Core.Bodies.BodyPlan _) => (Actuator)new LampActuator());
     }
 
     // Rejestr jest wspólny dla testów, więc toczek spełnia ten sam kontrakt co każdy stwór (EntityTypeTests).
-    public override IReadOnlyList<BrainPreset> BrainPresets =>
-        [new("Sterownik celu", "koła do celu, lampa wolna", () => new ApproachTargetModule { Name = "Approach" }, true)];
+    public static CreatureDesign Design { get; } = new()
+    {
+        Id = "lampRoller",
+        Name = "Toczek z lampą",
+        Icon = "wheel",
+        Blueprint = _ => new CreatureBlueprint(Roller.DefaultPlan(),
+            [new SlotSpec("Eye", nameof(TargetSensor))],
+            [new SlotSpec("Wheels", nameof(DiskDriveActuator)), new SlotSpec("Lamp", nameof(LampActuator))]),
+        Presets = _ => [new("Sterownik celu", "koła do celu, lampa wolna", () => new ApproachTargetModule { Name = "Approach" }, true)]
+    };
 }
 
 public sealed class LampActuator : Actuator

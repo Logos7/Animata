@@ -161,7 +161,7 @@ public static class SeekRigs
     /// </summary>
     public static SeekRig SnakeWith(int aSegments)
     {
-        SnakeCreature.CheckLength(aSegments);
+        Snake.CheckLength(aSegments);
         return SnakeRigs.GetOrAdd(aSegments, CreateSnakeRig);
     }
 
@@ -178,7 +178,7 @@ public static class SeekRigs
             MaxDistance = 6,
             ValidationEpisodes = 8,
             MaxSlabs = 3,
-            BodyLength = aSegments * SnakeCreature.SegmentSpacing
+            BodyLength = aSegments * Snake.SegmentSpacing
         },
         AddFloor);
 
@@ -212,7 +212,7 @@ public static class SeekRigs
     /// </summary>
     public static SeekRig ClimbWith(int aSegments)
     {
-        SnakeCreature.CheckLength(aSegments);
+        Snake.CheckLength(aSegments);
         return ClimbRigs.GetOrAdd(aSegments, aCount => new SeekRig(
             $"wspinaczka ×{aCount}",
             (aTargetId, aController) => WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, Vector3.One, aTargetId, aController, aCount),
@@ -237,8 +237,8 @@ public static class SeekRigs
         aWorld.Add(tree);
         aTarget.Radius = ClimbTargetRadius;
         aTarget.Body.Position = new Vector3(0, 0, tree.Height);
-        if (aCreature is SnakeCreature snake)
-            snake.WrapAround(tree, aEpisode.Yaw);
+        if (aCreature is Creature snake && Snake.Is(snake))
+            Snake.WrapAround(snake, tree, aEpisode.Yaw);
     }
 
     /// <summary>
@@ -272,7 +272,7 @@ public static class SeekRigs
     /// </summary>
     public static float SpiderPosture(ActiveEntity aCreature)
     {
-        if (aCreature is not SpiderCreature spider || spider.PartOrientations.Count == 0)
+        if (aCreature is not Creature spider || !WorldObjects.Spider.Is(spider) || spider.PartOrientations.Count == 0)
             return 0;
         if (spider.IsPartTouching(0))
             return 1;
@@ -348,7 +348,7 @@ public static class SeekRigs
             .Concat(aCreature.Body.Actuators.Select(aActuator => (aActuator.Slot, (object)aActuator)));
 
     private static bool IsTarget(object aOwner, string aSetting) =>
-        Settings.Describe(aOwner.GetType()).First(aInfo => aInfo.Name == aSetting).Type == typeof(Guid?);
+        Settings.Find(aOwner, aSetting)?.Type == typeof(Guid?);
 
     /// <summary>
     /// Rig dla stwora bez własnego (<see cref="ActiveEntity.TrainingRig"/>): nowy stwór tego samego rodzaju z rejestru

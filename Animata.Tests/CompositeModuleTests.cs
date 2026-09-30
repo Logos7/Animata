@@ -27,10 +27,10 @@ public class CompositeModuleTests
         public override void Reset() => Resets++;
     }
 
-    private static (World World, CylinderCreature Owner) Stage()
+    private static (World World, Creature Owner) Stage()
     {
         var world = new World();
-        var owner = new CylinderCreature(new Brain());
+        var owner = new Creature(Disc.Design, new Brain());
         world.Add(owner);
         return (world, owner);
     }
@@ -70,7 +70,7 @@ public class CompositeModuleTests
     [Fact]
     public void GroupedController_DrivesTheCarExactlyLikeTheFlatOne()
     {
-        (World, CarCreature) Build()
+        (World, Creature) Build()
         {
             var world = new World();
             var target = WorldObjectCatalog.CreateSphere(new Vector3(7, 1, 0));

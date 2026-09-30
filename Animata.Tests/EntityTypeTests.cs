@@ -65,8 +65,8 @@ public class EntityTypeTests
         world.Add(spider);
 
         using var restored = WorldFile.Restore(WorldFile.FromJson(WorldFile.ToJson(WorldFile.Capture(world)))).World;
-        var twinCar = (CarCreature)restored.Find(car.Id)!;
-        var twinSpider = (SpiderCreature)restored.Find(spider.Id)!;
+        var twinCar = (Creature)restored.Find(car.Id)!;
+        var twinSpider = (Creature)restored.Find(spider.Id)!;
         Assert.Equal(9, WorldObjectCatalog.WhiskerCountOf(twinCar));
         Assert.Equal(2.25f, twinCar.Body.Sensors.OfType<RaySensor>().Single().Range);
         Assert.Equal(0.5f, twinCar.Body.Actuators.OfType<SteeringDriveActuator>().Single().MaxReverseSpeed);
@@ -75,8 +75,8 @@ public class EntityTypeTests
 
         // Kopia pająka razem z autkiem: oko przechodzi na kopię autka.
         var copies = WorldFile.RestoreCopies(WorldFile.CaptureEntities([car, spider]), Vector3.UnitX);
-        var carCopy = copies.OfType<CarCreature>().Single();
-        Assert.Equal(carCopy.Id, copies.OfType<SpiderCreature>().Single().Body.Sensors.OfType<TargetSensor>().Single().TargetId);
+        var carCopy = copies.OfDesign(Car.Design).Single();
+        Assert.Equal(carCopy.Id, copies.OfDesign(Spider.Design).Single().Body.Sensors.OfType<TargetSensor>().Single().TargetId);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class EntityTypeTests
         using var world = WorldFile.Restore(document).World;
         var ball = world.Entities.OfType<Sphere>().Single();
 
-        var car = world.Entities.OfType<CarCreature>().Single(aCar => aCar.Name == "Autko 7");
+        var car = world.Entities.OfDesign(Car.Design).Single(aCar => aCar.Name == "Autko 7");
         Assert.Equal(7, WorldObjectCatalog.WhiskerCountOf(car));
         Assert.Equal(2.5f, car.Body.Sensors.OfType<RaySensor>().Single().Range);
         var steering = car.Body.Actuators.OfType<SteeringDriveActuator>().Single();
@@ -97,18 +97,18 @@ public class EntityTypeTests
         Assert.Single(car.Brain!.Graph.Modules.OfType<AvoidAndSeekModule>());
         Assert.Contains(car.Brain.Snapshots, aSnapshot => aSnapshot.Label == "ręczny 1");
 
-        var disk = world.Entities.OfType<CylinderCreature>().Single();
+        var disk = world.Entities.OfDesign(Disc.Design).Single();
         Assert.Equal(car.Id, disk.Body.Sensors.OfType<TargetSensor>().Single().TargetId);
         Assert.Equal(1.7f, disk.Body.Actuators.OfType<DiskDriveActuator>().Single().MaxTurnSpeed);
 
-        var snake = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wąż 10");
-        Assert.Equal(10, snake.Segments);
+        var snake = world.Entities.OfDesign(Snake.Design).Single(aSnake => aSnake.Name == "Wąż 10");
+        Assert.Equal(10, Snake.Segments(snake));
         Assert.Single(snake.Brain!.Graph.Modules.OfType<CpgModule>());
-        var climber = world.Entities.OfType<SnakeCreature>().Single(aSnake => aSnake.Name == "Wspinacz");
-        Assert.True(climber.Climber);
+        var climber = world.Entities.OfDesign(Snake.Design).Single(aSnake => aSnake.Name == "Wspinacz");
+        Assert.True(Snake.IsClimber(climber));
         Assert.True(climber.PartPositions[0].Z > 0.3f, "owinięty wąż wczytuje się owinięty (głowa nad ziemią)");
 
-        Assert.Single(world.Entities.OfType<SpiderCreature>());
+        Assert.Single(world.Entities.OfDesign(Spider.Design));
         Assert.True(world.Entities.OfType<Box>().Single().Locked);
         Assert.True(world.Time > 0);
 
@@ -123,7 +123,7 @@ public class EntityTypeTests
     {
         var json4 = File.ReadAllText(DataFile("format4.animata.json"));
         using var world = WorldFile.Restore(WorldFile.FromJson(json4)).World;
-        var car = world.Entities.OfType<CarCreature>().Single();
+        var car = world.Entities.OfDesign(Car.Design).Single();
         var graph = car.Brain!.Graph;
         Assert.Equal(0.25f, graph.Modules.OfType<ConstantModule>().Single().Value);
         Assert.Equal("Bias", graph.Modules.OfType<ConstantModule>().Single().Port);
@@ -159,13 +159,13 @@ public class EntityTypeTests
 }
 
 /// <summary>
-/// Nowy stwór od zera — tylko ta klasa i jedna linijka rejestracji: toczek, klocek na dwóch kołach z okiem.
-/// Zapis, kopiowanie, wymiana mózgu i nauka działają bez żadnej zmiany w zapisie świata ani w nauce.
+/// Nowy stwór od zera bez żadnej klasy — sam projekt i jedna linijka rejestracji: toczek, klocek na dwóch kołach z okiem.
+/// Ciało przechodzi przez plik JSON projektu (jak stwór zrobiony poza kodem). Zapis, kopiowanie, wymiana mózgu i nauka
+/// działają bez żadnej zmiany w zapisie świata ani w nauce.
 /// </summary>
-public sealed class RollerCreature(Animata.Core.Brains.Brain? aBrain = null) : ArticulatedCreature(DefaultPlan(), aBrain)
+public static class Roller
 {
-    [Setting]
-    public float Mood { get; set; } = 0.5f;
+    public const string MoodSetting = "Mood";
 
     public static Animata.Core.Bodies.BodyPlan DefaultPlan()
     {
@@ -181,15 +181,19 @@ public sealed class RollerCreature(Animata.Core.Brains.Brain? aBrain = null) : A
         return builder.Build();
     }
 
-    public override void Equip()
-    {
-        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
-        Body.Actuators.Add(new DiskDriveActuator { Slot = "Wheels" });
-        base.Equip();
-    }
+    /// <summary>Projekt ciała zapisany i wczytany z JSON — tak jak stwór opisany w pliku.</summary>
+    public static CreatureBlueprint Blueprint { get; } = CreatureBlueprint.FromJson(new CreatureBlueprint(DefaultPlan(),
+        [new SlotSpec("Eye", nameof(TargetSensor))], [new SlotSpec("Wheels", nameof(DiskDriveActuator))]).ToJson());
 
-    public override IReadOnlyList<Animata.Core.Brains.BrainPreset> BrainPresets =>
-        [new("Sterownik celu", "skręca do celu i jedzie", () => new ApproachTargetModule { Name = "Approach" }, true)];
+    public static CreatureDesign Design { get; } = new()
+    {
+        Id = "roller",
+        Name = "Toczek",
+        Icon = "wheel",
+        Blueprint = _ => Blueprint,
+        Settings = [DesignSetting.Value(MoodSetting, 0.5f, new SettingAttribute("Nastrój") { Min = 0, Max = 1 })],
+        Presets = _ => [new("Sterownik celu", "skręca do celu i jedzie", () => new ApproachTargetModule { Name = "Approach" }, true)]
+    };
 }
 
 public class NewCreatureTests
@@ -197,20 +201,20 @@ public class NewCreatureTests
     static NewCreatureTests()
     {
         if (EntityTypes.Find("roller") is null)
-            EntityTypes.Register(EntityType.Creature("roller", "Toczek", "wheel", aBrain => new RollerCreature(aBrain)));
+            EntityTypes.Register(Roller.Design.Type);
     }
 
     [Fact]
-    public void NewCreature_NeedsOnlyAClassAndARegistryLine()
+    public void NewCreature_NeedsOnlyADesignAndARegistryLine()
     {
         using var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(20, 20));
         var ball = WorldObjectCatalog.CreateSphere(new Vector3(4, 0, 0));
         world.Add(ball);
-        var roller = (RollerCreature)EntityTypes.Find("roller")!.Create();
+        var roller = (Creature)EntityTypes.Find("roller")!.Create();
         WorldObjectCatalog.InstallBrain(roller, roller.BrainPresets[0]);
         WorldObjectCatalog.Aim(roller, ball.Id);
-        roller.Mood = 0.9f;
+        roller.SetValue(Roller.MoodSetting, 0.9f);
         roller.Body.Actuators.OfType<DiskDriveActuator>().Single().MaxSpeed = 1.5f;
         roller.Place(new Vector3(-1, 0, 0), Quaternion.Identity);
         world.Add(roller);
@@ -220,8 +224,9 @@ public class NewCreatureTests
         // Zapis i odczyt: rodzaj, ustawienia stwora i napędu, cel, mózg.
         var json = WorldFile.ToJson(WorldFile.Capture(world));
         using var restored = WorldFile.Restore(WorldFile.FromJson(json)).World;
-        var twin = (RollerCreature)restored.Find(roller.Id)!;
-        Assert.Equal(0.9f, twin.Mood);
+        var twin = (Creature)restored.Find(roller.Id)!;
+        Assert.Same(Roller.Design, twin.Design);
+        Assert.Equal(0.9f, twin.Value<float>(Roller.MoodSetting));
         Assert.Equal(1.5f, twin.Body.Actuators.OfType<DiskDriveActuator>().Single().MaxSpeed);
         Assert.Equal(ball.Id, twin.Body.Sensors.OfType<TargetSensor>().Single().TargetId);
         Assert.Single(twin.Brain!.Graph.Modules.OfType<ApproachTargetModule>());
@@ -234,5 +239,57 @@ public class NewCreatureTests
             rig.DefaultOptions with { EpisodeSeconds = 2 }, rig);
         Assert.Single(result);
         Assert.True(float.IsFinite(result[0].Cost));
+    }
+}
+
+/// <summary>Stwory to projekty: jedna klasa, ciało jako dane, które przechodzi przez JSON bez strat.</summary>
+public class CreatureDesignTests
+{
+    [Fact]
+    public void EveryBuiltInCreature_IsOneClass_WithItsOwnDesign()
+    {
+        var creatures = EntityTypes.Creatures.Where(aType => aType.Id is "car" or "cylinderCreature" or "snake" or "spider")
+            .Select(aType => aType.Create()).ToList();
+        Assert.Equal(4, creatures.Count);
+        Assert.All(creatures, aCreature => Assert.IsType<Creature>(aCreature));
+        Assert.Equal(4, creatures.Cast<Creature>().Select(aCreature => aCreature.Design).Distinct().Count());
+    }
+
+    [Fact]
+    public void Blueprints_SurviveJson()
+    {
+        foreach (var design in new[] { Car.Design, Disc.Design, Snake.Design, Spider.Design })
+        {
+            var blueprint = new Creature(design).Blueprint();
+            var json = blueprint.ToJson();
+            var again = CreatureBlueprint.FromJson(json);
+            Assert.Equal(json, again.ToJson());
+            Assert.Equal(blueprint.Plan.Parts, again.Plan.Parts);
+            Assert.Equal(blueprint.Plan.Joints, again.Plan.Joints);
+        }
+    }
+
+    [Fact]
+    public void DesignFromAJsonBlueprint_GetsAGeneralNetwork_ThatDrivesEveryActuator()
+    {
+        var design = CreatureDesign.FromBlueprint("jsonSpider", "Pająk z pliku", CreatureBlueprint.FromJson(new Creature(Spider.Design).Blueprint().ToJson()));
+        var creature = (Creature)design.Type.Create();
+        WorldObjectCatalog.InstallBrain(creature, creature.BrainPresets[0]);
+        var network = creature.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
+        Assert.Equal(creature.Body.Actuators.SelectMany(aActuator => aActuator.InputPorts), network.OutputPorts);
+
+        using var world = new World();
+        world.Add(WorldObjectCatalog.CreateFloor(10, 10));
+        world.Add(creature);
+        for (var tick = 0; tick < 10; tick++)
+            world.Update(1f / 30);
+    }
+
+    [Fact]
+    public void UnknownSlotType_IsReported()
+    {
+        var blueprint = new CreatureBlueprint(Roller.DefaultPlan(), [new SlotSpec("Eye", "NoSuchSensor")], []);
+        var design = CreatureDesign.FromBlueprint("broken", "Zepsuty", blueprint);
+        Assert.Throws<NotSupportedException>(() => design.Type.Create());
     }
 }

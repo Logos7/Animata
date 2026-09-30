@@ -162,6 +162,13 @@ public sealed class BodyPlanBuilder
         return this;
     }
 
+    /// <summary>Stawy z gotowych opisów (np. plan wczytany z pliku).</summary>
+    public BodyPlanBuilder Joints(IEnumerable<JointPlan> aJoints)
+    {
+        _joints.AddRange(aJoints);
+        return this;
+    }
+
     /// <summary>Sprawdza plan (nazwy, rozmiary, masy, drzewo stawów) i zwraca go. Rzuca <see cref="ArgumentException"/> z powodem.</summary>
     public BodyPlan Build()
     {

@@ -76,11 +76,11 @@ public class SnakeTests
     [InlineData(24)]
     public void SnakePlan_HasSegmentsAndJoints(int aSegments)
     {
-        var plan = SnakeCreature.DefaultPlan(aSegments);
+        var plan = Snake.DefaultPlan(aSegments);
         Assert.Equal(aSegments, plan.Parts.Count);
         Assert.Equal(aSegments - 1, plan.Joints.Count);
-        Assert.Throws<ArgumentOutOfRangeException>(() => SnakeCreature.DefaultPlan(1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => SnakeCreature.DefaultPlan(SnakeCreature.MaxSegments + 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Snake.DefaultPlan(1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Snake.DefaultPlan(Snake.MaxSegments + 1));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class SnakeTests
         foreach (var position in snake.PartPositions)
         {
             Assert.True(float.IsFinite(position.X) && float.IsFinite(position.Y) && float.IsFinite(position.Z));
-            Assert.InRange(position.Z, SnakeCreature.SegmentRadius - 0.03f, SnakeCreature.SegmentRadius + 0.2f);
+            Assert.InRange(position.Z, Snake.SegmentRadius - 0.03f, Snake.SegmentRadius + 0.2f);
         }
     }
 
@@ -168,9 +168,9 @@ public class SnakeTests
         var parameters = cpg.GetParameters();
         world.Update(Delta);
 
-        snake.SetSegments(12);
+        Snake.SetSegments(snake, 12);
 
-        Assert.Equal(12, snake.Segments);
+        Assert.Equal(12, Snake.Segments(snake));
         Assert.Equal(12, snake.PartPositions.Count);
         Assert.Equal(2 * 11, snake.Body.Actuators.OfType<SpineActuator>().Single().InputPorts.Count);
         Assert.Equal(2 * 11, cpg.OutputPorts.Count);
@@ -181,7 +181,7 @@ public class SnakeTests
         for (var tick = 0; tick < 10; tick++)
             world.Update(Delta);
 
-        snake.SetSegments(3);
+        Snake.SetSegments(snake, 3);
         Assert.Equal(2 * 2, snake.Brain.Graph.Connections.Count(aLink => aLink.SourceId == cpg.Id && aLink.TargetId == spine.Id));
         world.Update(Delta);
         Assert.Same(SeekRigs.SnakeWith(3), SeekRigs.For(snake));

@@ -15,19 +15,19 @@ public static partial class WorldObjectCatalog
     /// Pająk: oko „Eye” (tułów), czucie stawów „Joints”, zegar „Clock”, czucie terenu „Feel”, nogi „Legs” (8 stawów:
     /// biodro, kolano × 4). Mózg sensory → controller → nogi; controller musi mieć wyjścia Yaw/Pitch 0–7 (np. <see cref="GaitModule"/>).
     /// </summary>
-    public static SpiderCreature CreateSpider(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController)
+    public static Creature CreateSpider(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController)
     {
-        return new Spawn(EntityTypes.Of<SpiderCreature>())
+        return new Spawn(Spider.Design.Type)
         {
-            Settings = Spawn.Configure<SpiderCreature>(aSpider => aSpider.Color = aColor),
+            Settings = Spawn.Configure<Creature>(aSpider => aSpider.Color = aColor),
             Slots = Spawn.Aim(aTargetId),
             Brain = Spawn.Controller(aController),
             Pose = Spawn.At(aPosition, aYaw)
-        }.Build<SpiderCreature>();
+        }.Build<Creature>();
     }
 
     /// <summary>Pająk z generatorem kłusa: ręczne parametry jako snapshot „ręczne parametry”, chód wylosowany.</summary>
-    public static SpiderCreature CreateLearningSpider(Vector3 aPosition, float aYaw, Guid? aTargetId)
+    public static Creature CreateLearningSpider(Vector3 aPosition, float aYaw, Guid? aTargetId)
     {
         var gait = new GaitModule { Name = "Chód" };
         var spider = CreateSpider(aPosition, aYaw, RandomColor(), aTargetId, gait);
@@ -56,13 +56,8 @@ public static partial class WorldObjectCatalog
     }
 
     /// <summary>Porty dotyku pająka: stopy (FootPL, FootPP, FootTL, FootTP) i brzuch (Belly).</summary>
-    public static readonly string[] SpiderTouchPorts =
-        [.. SpiderCreature.LegNames.Select(aLeg => "Foot" + aLeg), "Belly"];
+    public static IReadOnlyList<string> SpiderTouchPorts => Spider.TouchPorts;
 
-    /// <summary>Dotyk pająka (slot „Touch”): golenie jako stopy i tułów jako brzuch.</summary>
-    public static TouchSensor CreateSpiderTouch() => new(
-        [.. SpiderCreature.LegNames.Select(aLeg => ("Foot" + aLeg, "Goleń" + aLeg)), ("Belly", "Tułów")]) { Slot = "Touch" };
-
-    public static SpiderCreature CreateNeuralSpider(Vector3 aPosition, float aYaw, Guid? aTargetId) =>
+    public static Creature CreateNeuralSpider(Vector3 aPosition, float aYaw, Guid? aTargetId) =>
         CreateSpider(aPosition, aYaw, RandomColor(), aTargetId, CreateSpiderNeuralModule());
 }

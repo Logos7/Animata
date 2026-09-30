@@ -52,19 +52,33 @@ public sealed class SettingAttribute(string aLabel = "") : Attribute
     public bool Derived { get; set; }
 }
 
-/// <summary>Ustawienie obiektu z opisem do edytora: właściwość i jej <see cref="SettingAttribute"/>.</summary>
-public sealed record SettingInfo(PropertyInfo Property, SettingAttribute Attribute)
+/// <summary>
+/// Ustawienie obiektu z opisem do edytora: nazwa, typ, opis (<see cref="SettingAttribute"/>) i dostęp do wartości.
+/// Zwykle to publiczna właściwość z atrybutem (<see cref="FromProperty"/>); obiekt może też podać ustawienia spoza swoich
+/// właściwości (<see cref="ISettingsProvider"/> — np. parametry projektu stwora, <see cref="WorldObjects.CreatureDesign"/>).
+/// </summary>
+public sealed class SettingInfo(string aName, Type aType, SettingAttribute aAttribute, Func<object, object?> aGet, Action<object, object?> aSet)
 {
-    public string Name => Property.Name;
-    public string Label => Attribute.Label.Length > 0 ? Attribute.Label : Property.Name;
-    public Type Type => Property.PropertyType;
+    private readonly Func<object, object?> _get = aGet;
+    private readonly Action<object, object?> _set = aSet;
+
+    public static SettingInfo FromProperty(PropertyInfo aProperty, SettingAttribute aAttribute) =>
+        new(aProperty.Name, aProperty.PropertyType, aAttribute, aProperty.GetValue, aProperty.SetValue);
+
+    public string Name { get; } = aName;
+    public Type Type { get; } = aType;
+    public SettingAttribute Attribute { get; } = aAttribute;
+    public string Label => Attribute.Label.Length > 0 ? Attribute.Label : Name;
     public bool IsReadOnly => Type == typeof(float[]);
 
     /// <summary>Czy ustawienie stwora dotyczy slotu (<see cref="SettingAttribute.Slots"/>).</summary>
     public bool Concerns(string aSlot) =>
         Attribute.Slots.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Contains(aSlot);
 
-    public object? Get(object aOwner) => Property.GetValue(aOwner);
+    public object? Get(object aOwner) => _get(aOwner);
+
+    /// <summary>Nadaje wartość bez sprawdzania zakresu edytora (odczyt pliku, kopiowanie); resztę sprawdza setter.</summary>
+    public void SetRaw(object aOwner, object? aValue) => _set(aOwner, aValue);
 
     /// <summary>Liczba w jednostkach edytora (× <see cref="SettingAttribute.Scale"/>).</summary>
     public double GetNumber(object aOwner) => System.Convert.ToDouble(Get(aOwner), System.Globalization.CultureInfo.InvariantCulture) * Attribute.Scale;
@@ -86,14 +100,14 @@ public sealed record SettingInfo(PropertyInfo Property, SettingAttribute Attribu
                 throw new ArgumentOutOfRangeException(Name, aValue, $"„{Label}”: {Range()}.");
             var value = shown / attribute.Scale;
             if (Type == typeof(float))
-                Property.SetValue(aOwner, (float)value);
+                _set(aOwner, (float)value);
             else if (Type == typeof(int))
-                Property.SetValue(aOwner, (int)Math.Round(value));
+                _set(aOwner, (int)Math.Round(value));
             else
-                Property.SetValue(aOwner, value);
+                _set(aOwner, value);
             return;
         }
-        Property.SetValue(aOwner, aValue);
+        _set(aOwner, aValue);
     }
 
     /// <summary>Wartości listy liczby całkowitej z krokiem (Min, Min + Step, …, Max) albo null.</summary>
@@ -117,18 +131,34 @@ public sealed record SettingInfo(PropertyInfo Property, SettingAttribute Attribu
     }
 }
 
+/// <summary>
+/// Obiekt z ustawieniami spoza własnych właściwości (np. stwór: parametry swojego projektu). Idą po ustawieniach
+/// z właściwości (<see cref="Settings.Of(object)"/>), w podanej kolejności.
+/// </summary>
+public interface ISettingsProvider
+{
+    IReadOnlyList<SettingInfo> ExtraSettings { get; }
+}
+
 /// <summary>Zapis i odtwarzanie ustawień <see cref="SettingAttribute"/> dowolnego obiektu jako słownik JSON.</summary>
 public static class Settings
 {
     /// <summary>Opcje JSON ustawień: Vector3 jako [x, y, z].</summary>
-    public static readonly JsonSerializerOptions Json = new() { Converters = { new Vector3Converter() } };
+    public static readonly JsonSerializerOptions Json = new() { Converters = { new Vector3Converter(), new QuaternionConverter() } };
 
     private static readonly Dictionary<Type, SettingInfo[]> Cache = [];
 
-    /// <summary>Właściwości-ustawienia typu: najpierw z klas bazowych, w kolejności deklaracji.</summary>
-    public static IReadOnlyList<PropertyInfo> Of(Type aType) => [.. Describe(aType).Select(aSetting => aSetting.Property)];
+    /// <summary>
+    /// Wszystkie ustawienia obiektu: z właściwości jego typu (<see cref="Describe"/>), potem podane przez sam obiekt
+    /// (<see cref="ISettingsProvider"/>, np. parametry projektu stwora).
+    /// </summary>
+    public static IReadOnlyList<SettingInfo> Of(object aOwner) =>
+        aOwner is ISettingsProvider provider ? [.. Describe(aOwner.GetType()), .. provider.ExtraSettings] : Describe(aOwner.GetType());
 
-    /// <summary>Ustawienia typu z opisem do edytora: najpierw z klas bazowych, w kolejności deklaracji.</summary>
+    /// <summary>Ustawienie obiektu o danej nazwie albo null.</summary>
+    public static SettingInfo? Find(object aOwner, string aName) => Of(aOwner).FirstOrDefault(aSetting => aSetting.Name == aName);
+
+    /// <summary>Ustawienia z właściwości typu, z opisem do edytora: najpierw z klas bazowych, w kolejności deklaracji.</summary>
     public static IReadOnlyList<SettingInfo> Describe(Type aType)
     {
         lock (Cache)
@@ -143,7 +173,7 @@ public static class Settings
                     .Select(aProperty => (Property: aProperty, Attribute: aProperty.GetCustomAttribute<SettingAttribute>()))
                     .Where(aPair => aPair.Attribute is not null)
                     .OrderBy(aPair => aPair.Property.MetadataToken)
-                    .Select(aPair => new SettingInfo(aPair.Property, aPair.Attribute!)))
+                    .Select(aPair => SettingInfo.FromProperty(aPair.Property, aPair.Attribute!)))
                 .ToArray();
             Cache[aType] = settings;
             return settings;
@@ -154,7 +184,7 @@ public static class Settings
     public static Dictionary<string, JsonElement> Capture(object aSource)
     {
         var values = new Dictionary<string, JsonElement>();
-        foreach (var setting in Describe(aSource.GetType()))
+        foreach (var setting in Of(aSource))
             if (!setting.Attribute.Derived)
                 values[setting.Name] = JsonSerializer.SerializeToElement(setting.Get(aSource), setting.Type, Json);
         return values;
@@ -168,9 +198,9 @@ public static class Settings
     {
         if (aValues is null)
             return;
-        foreach (var setting in Describe(aTarget.GetType()))
+        foreach (var setting in Of(aTarget))
             if (!setting.Attribute.Derived && aValues.TryGetValue(setting.Name, out var value))
-                setting.Property.SetValue(aTarget, value.Deserialize(setting.Type, Json));
+                setting.SetRaw(aTarget, value.Deserialize(setting.Type, Json));
     }
 
     /// <summary>Kopiuje ustawienia z obiektu na obiekt tego samego typu (z pominięciem podanych nazw).</summary>
@@ -192,5 +222,18 @@ public static class Settings
 
         public override void Write(Utf8JsonWriter aWriter, Vector3 aValue, JsonSerializerOptions aOptions) =>
             JsonSerializer.Serialize(aWriter, new[] { aValue.X, aValue.Y, aValue.Z }, aOptions);
+    }
+
+    /// <summary>Kwaternion jako [x, y, z, w].</summary>
+    private sealed class QuaternionConverter : JsonConverter<Quaternion>
+    {
+        public override Quaternion Read(ref Utf8JsonReader aReader, Type aType, JsonSerializerOptions aOptions)
+        {
+            var values = JsonSerializer.Deserialize<float[]>(ref aReader, aOptions);
+            return values is { Length: 4 } ? new Quaternion(values[0], values[1], values[2], values[3]) : throw new JsonException("Kwaternion musi mieć 4 liczby.");
+        }
+
+        public override void Write(Utf8JsonWriter aWriter, Quaternion aValue, JsonSerializerOptions aOptions) =>
+            JsonSerializer.Serialize(aWriter, new[] { aValue.X, aValue.Y, aValue.Z, aValue.W }, aOptions);
     }
 }

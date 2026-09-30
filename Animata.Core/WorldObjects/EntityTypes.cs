@@ -13,6 +13,9 @@ public sealed record EntityType(string Id, string Name, string Icon, Type ClrTyp
 {
     public bool IsCreature => typeof(ActiveEntity).IsAssignableFrom(ClrType);
 
+    /// <summary>Projekt stwora, gdy rodzaj to <see cref="Creature"/> z projektu (wiele rodzajów dzieli tę klasę), inaczej null.</summary>
+    public CreatureDesign? Design { get; init; }
+
     /// <summary>Rodzaj stwora: budowa przez konstruktor (z nowym mózgiem) i <see cref="ActiveEntity.Equip"/>.</summary>
     public static EntityType Creature<T>(string aId, string aName, string aIcon, Func<Brain, T> aCreate) where T : ActiveEntity =>
         new(aId, aName, aIcon, typeof(T), () =>
@@ -25,16 +28,18 @@ public sealed record EntityType(string Id, string Name, string Icon, Type ClrTyp
 
 /// <summary>
 /// Rejestr wszystkich rodzajów obiektów świata — jedyne miejsce, w którym trzeba dopisać nowy rodzaj, żeby zapis świata,
-/// kopiowanie, menu wstawiania w Studiu i nauka go znały. Kolejność = kolejność w menu.
+/// kopiowanie, menu wstawiania w Studiu i nauka go znały. Kolejność = kolejność w menu. Stwory to projekty
+/// (<see cref="CreatureDesign.Type"/>) — jedna klasa <see cref="Creature"/>; własna klasa stwora (<see cref="EntityType.Creature{T}"/>)
+/// nadal działa.
 /// </summary>
 public static class EntityTypes
 {
     private static readonly List<EntityType> Types =
     [
-        EntityType.Creature("car", "Autko", "wheel", aBrain => new CarCreature(aBrain)),
-        EntityType.Creature("cylinderCreature", "Walec", "disk", aBrain => new CylinderCreature(aBrain)),
-        EntityType.Creature("snake", "Wąż", "snake", aBrain => new SnakeCreature(SnakeCreature.DefaultSegments, aBrain)),
-        EntityType.Creature("spider", "Pająk", "spider", aBrain => new SpiderCreature(aBrain)),
+        Car.Design.Type,
+        Disc.Design.Type,
+        Snake.Design.Type,
+        Spider.Design.Type,
         new("sphere", "Kula", "target", typeof(Sphere), () => new Sphere()),
         new("cylinder", "Cylinder", "pillar", typeof(Cylinder), () => new Cylinder()),
         new("box", "Klocek", "slab", typeof(Box), () => new Box())
@@ -58,7 +63,8 @@ public static class EntityTypes
     {
         lock (Types)
         {
-            if (Types.Any(aExisting => aExisting.Id == aType.Id || aExisting.ClrType == aType.ClrType))
+            if (Types.Any(aExisting => aExisting.Id == aType.Id ||
+                    (aExisting.ClrType == aType.ClrType && aExisting.Design is null && aType.Design is null)))
                 throw new ArgumentException($"Rodzaj „{aType.Id}” ({aType.ClrType.Name}) już jest w rejestrze.", nameof(aType));
             Types.Add(aType);
         }
@@ -71,12 +77,14 @@ public static class EntityTypes
     public static EntityType? Find(string aId) => All.FirstOrDefault(aType => aType.Id == aId);
 
     /// <summary>Rodzaj encji albo null (encja spoza rejestru).</summary>
-    public static EntityType? Of(Entity aEntity) => Of(aEntity.GetType());
+    public static EntityType? Of(Entity aEntity) => aEntity is Creature creature
+        ? All.FirstOrDefault(aType => aType.Design == creature.Design)
+        : Of(aEntity.GetType());
 
     /// <summary>Rodzaj zarejestrowanej klasy; klasa spoza rejestru → <see cref="InvalidOperationException"/>.</summary>
     public static EntityType Of<T>() where T : Entity =>
         Of(typeof(T)) ?? throw new InvalidOperationException($"{typeof(T).Name} nie ma wpisu w rejestrze {nameof(EntityTypes)}.");
 
-    /// <summary>Rodzaj klasy obiektu albo null (klasa spoza rejestru).</summary>
-    public static EntityType? Of(Type aClass) => All.FirstOrDefault(aType => aType.ClrType == aClass);
+    /// <summary>Rodzaj klasy obiektu albo null (klasa spoza rejestru albo <see cref="Creature"/> — tu rodzaj wskazuje projekt).</summary>
+    public static EntityType? Of(Type aClass) => All.FirstOrDefault(aType => aType.ClrType == aClass && aType.Design is null);
 }

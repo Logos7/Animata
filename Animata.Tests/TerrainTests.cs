@@ -77,19 +77,19 @@ public class TerrainTests
         world.Add(WorldObjectCatalog.CreateFloor(20, 20));
         var slab = WorldObjectCatalog.CreateBox(new Vector3(-1, 0, 0), new Vector3(4, 1, 0.1f), 0);
         world.Add(slab);
-        var snake = new SnakeCreature(6);   // bez mózgu: leży, nie pełza
+        var snake = TestWorlds.BareSnake(6);   // bez mózgu: leży, nie pełza
         snake.Place(new Vector3(0.4f, 0, 0.1f), Quaternion.Identity);
         world.Add(snake);
         for (var tick = 0; tick < 60; tick++)
             world.Update(Delta);
         foreach (var position in snake.PartPositions)
-            Assert.InRange(position.Z, 0.1f + SnakeCreature.SegmentRadius - 0.02f, 0.1f + SnakeCreature.SegmentRadius + 0.02f);
+            Assert.InRange(position.Z, 0.1f + Snake.SegmentRadius - 0.02f, 0.1f + Snake.SegmentRadius + 0.02f);
 
         // Przesunięta płyta odtwarza się w fizyce: wąż spada na podłogę.
         slab.Body.Position = new Vector3(8, 8, 0);
         for (var tick = 0; tick < 60; tick++)
             world.Update(Delta);
-        Assert.InRange(snake.PartPositions[0].Z, SnakeCreature.SegmentRadius - 0.02f, SnakeCreature.SegmentRadius + 0.02f);
+        Assert.InRange(snake.PartPositions[0].Z, Snake.SegmentRadius - 0.02f, Snake.SegmentRadius + 0.02f);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class TerrainTests
         var before = (NeuralNetworkState)network.CaptureState()!;
         var snapshot = snake.Brain.Capture("przed");
 
-        snake.SetSegments(7);
+        Snake.SetSegments(snake, 7);
         Assert.Equal(12, network.Outputs.Count);
         Assert.Equal(12, network.Network.Layers[^1]);
         Assert.Equal("Yaw5", network.Outputs[^2].Port);
@@ -118,7 +118,7 @@ public class TerrainTests
         for (var tick = 0; tick < 10; tick++)
             world.Update(Delta);
 
-        snake.SetSegments(3);
+        Snake.SetSegments(snake, 3);
         Assert.Equal("Yaw0,Pitch0,Yaw1,Pitch1", string.Join(",", network.Outputs.Select(aOutput => aOutput.Port)));
         snake.Brain.Restore(snake.Brain.Snapshots.Single(aSnapshot => aSnapshot.Id == snapshot.Id));
         snake.Brain.Graph.Validate();
@@ -138,7 +138,7 @@ public class TerrainTests
             {
                 Assert.InRange(slab.Height, 0.03f, 0.1f);
                 var back = -new Vector2(MathF.Cos(episode.Yaw), MathF.Sin(episode.Yaw));
-                for (var step = 0f; step <= 8 * SnakeCreature.SegmentSpacing; step += 0.1f)
+                for (var step = 0f; step <= 8 * Snake.SegmentSpacing; step += 0.1f)
                     Assert.True(Vector2.Distance(slab.Position, back * step) > slab.Size.Length() / 2);
             }
 

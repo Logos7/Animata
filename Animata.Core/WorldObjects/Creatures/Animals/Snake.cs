@@ -12,11 +12,11 @@ namespace Animata.Core.WorldObjects;
 
 /// <summary>
 /// Wąż: <see cref="Segments"/> kapsuł połączonych przegubami kulowymi (skręt i pochylenie — pełne 3D), głowa to Seg0
-/// z okiem. Kręgosłup (<see cref="SpineActuator"/>, slot „Spine”) zadaje stawy, czucie stawów (<see cref="JointSensor"/>,
-/// slot „Joints”) je mierzy. Pełza dzięki łuskom (tarcie kierunkowe segmentów) i fali stawów, zwykle z <see cref="CpgModule"/>.
+/// z okiem. Kręgosłup (<see cref="SpineActuator"/>, gniazdo „Spine”) zadaje stawy, czucie stawów (<see cref="JointSensor"/>,
+/// gniazdo „Joints”) je mierzy. Pełza dzięki łuskom (tarcie kierunkowe segmentów) i fali stawów, zwykle z <see cref="CpgModule"/>.
 /// Liczbę segmentów zmienia się w miejscu (<see cref="SetSegments"/>) — ten sam stwór i mózg.
 /// </summary>
-public sealed class SnakeCreature : ArticulatedCreature
+public static class Snake
 {
     /// <summary>
     /// Zakres skrętu i pochylenia stawu węża (rad) i moment serwa (N·m). ±1.2 rad w obu osiach — tyle trzeba, żeby
@@ -71,58 +71,72 @@ public sealed class SnakeCreature : ArticulatedCreature
         return builder.Build();
     }
 
-    public SnakeCreature(int aSegments = DefaultSegments, Brain? aBrain = null)
-        : base(DefaultPlan(aSegments), aBrain)
-    {
-        _segments = aSegments;
-    }
+    /// <summary>Ustawienia projektu: liczba segmentów i wspinacz.</summary>
+    public const string SegmentsSetting = "Segments";
+    public const string ClimberSetting = "Climber";
 
-    private int _segments;
-
-    /// <summary>Oko „Eye” (głowa), czucie stawów „Joints”, zegar rytmu „Clock”, czucie terenu „Feel”, kręgosłup „Spine”.</summary>
-    public override void Equip()
-    {
-        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
-        Body.Sensors.Add(new JointSensor(Segments - 1) { Slot = "Joints" });
-        Body.Sensors.Add(new ClockSensor { Slot = "Clock" });
-        Body.Sensors.Add(new FeelSensor { Slot = "Feel" });
-        Body.Actuators.Add(new SpineActuator(Segments - 1) { Slot = "Spine" });
-        base.Equip();
-    }
-
-    public override IReadOnlyList<BrainPreset> BrainPresets =>
-    [
-        new("Sieć neuronowa", "zegar rytmu, cel i czucie terenu, 2 warstwy ukryte, losowe wagi",
-            () => WorldObjectCatalog.CreateSnakeNeuralModule(Segments, WorldObjectCatalog.SnakeHiddenLayers)),
-        new("CPG · pełzanie", "generator fali: 6 parametrów (amplituda, częstotliwość, fala, skręt, pochylenie)",
-            () => WorldObjectCatalog.CreateCpg(Segments), true),
-        new("CPG · toczenie (wspinaczka)", "zwój toczy się po pniu w górę — dla węża owiniętego wokół cylindra",
-            () => WorldObjectCatalog.CreateClimbingCpg(Segments), true)
-    ];
-
-    public override SeekRig TrainingRig => Climber ? SeekRigs.ClimbWith(Segments) : SeekRigs.SnakeWith(Segments);
-
-    public override string Describe() => $"SnakeCreature · {Segments} segm. · {JointCount} stawów · fizyka Bepu";
-
-    [Setting("Segmenty", Min = MinSegments, Max = MaxSegments, Step = 1, Reshapes = true, Slots = "Spine,Joints", Tip = "Liczba segmentów węża. Ciało przebudowuje się w miejscu, CPG zachowuje wyuczony chód, sieć dostaje przeliczone wyjścia.")]
-    public int Segments
-    {
-        get => _segments;
-        set => SetSegments(value);
-    }
+    public static bool Is(Entity aEntity) => aEntity is Creature creature && creature.Design == Design;
 
     /// <summary>
-    /// Wspinacz: uczy się wchodzić na pień — cylinder z tarciem chwytnym (próby zaczyna owinięty wokół pnia, cel na jego szczycie —
-    /// <see cref="Training.SeekRigs.ClimbWith"/>), a nie pełzać po ziemi.
+    /// Oko „Eye” (głowa), czucie stawów „Joints”, zegar rytmu „Clock” (1.2 Hz), czucie terenu „Feel”, kręgosłup „Spine”
+    /// (czucie i kręgosłup mają tyle stawów, ile plan).
     /// </summary>
-    [Setting("Wspinacz", Tip = "Nauka uczy wchodzenia na pień — cylinder z tarciem chwytnym (próby: wąż owinięty wokół niego, kula na szczycie) zamiast pełzania po ziemi.")]
-    public bool Climber { get; set; }
+    public static CreatureBlueprint Blueprint(int aSegments) => new(DefaultPlan(aSegments),
+        [
+            new SlotSpec("Eye", nameof(TargetSensor)),
+            new SlotSpec("Joints", nameof(JointSensor)),
+            new SlotSpec("Clock", nameof(ClockSensor)),
+            new SlotSpec("Feel", nameof(FeelSensor))
+        ],
+        [new SlotSpec("Spine", nameof(SpineActuator))]);
+
+    public static CreatureDesign Design { get; } = new()
+    {
+        Id = "snake",
+        Name = "Wąż",
+        Icon = "snake",
+        Blueprint = aValues => Blueprint((int)aValues[SegmentsSetting]!),
+        Settings =
+        [
+            new DesignSetting(SegmentsSetting, typeof(int), new SettingAttribute("Segmenty")
+            {
+                Min = MinSegments, Max = MaxSegments, Step = 1, Reshapes = true, Slots = "Spine,Joints",
+                Tip = "Liczba segmentów węża. Ciało przebudowuje się w miejscu, CPG zachowuje wyuczony chód, sieć dostaje przeliczone wyjścia."
+            }, DefaultSegments)
+            {
+                Set = (aSnake, aValue) => SetSegments(aSnake, Convert.ToInt32(aValue, System.Globalization.CultureInfo.InvariantCulture))
+            },
+            // Wspinacz uczy się wchodzić na pień — cylinder z tarciem chwytnym (próby zaczyna owinięty wokół pnia, cel na jego
+            // szczycie — SeekRigs.ClimbWith), a nie pełzać po ziemi.
+            DesignSetting.Value(ClimberSetting, false, new SettingAttribute("Wspinacz")
+            {
+                Tip = "Nauka uczy wchodzenia na pień — cylinder z tarciem chwytnym (próby: wąż owinięty wokół niego, kula na szczycie) zamiast pełzania po ziemi."
+            })
+        ],
+        Presets = aSnake =>
+        [
+            new("Sieć neuronowa", "zegar rytmu, cel i czucie terenu, 2 warstwy ukryte, losowe wagi",
+                () => WorldObjectCatalog.CreateSnakeNeuralModule(Segments(aSnake), WorldObjectCatalog.SnakeHiddenLayers)),
+            new("CPG · pełzanie", "generator fali: 6 parametrów (amplituda, częstotliwość, fala, skręt, pochylenie)",
+                () => WorldObjectCatalog.CreateCpg(Segments(aSnake)), true),
+            new("CPG · toczenie (wspinaczka)", "zwój toczy się po pniu w górę — dla węża owiniętego wokół cylindra",
+                () => WorldObjectCatalog.CreateClimbingCpg(Segments(aSnake)), true)
+        ],
+        TrainingRig = aSnake => IsClimber(aSnake) ? SeekRigs.ClimbWith(Segments(aSnake)) : SeekRigs.SnakeWith(Segments(aSnake)),
+        Describe = aSnake => $"Wąż · {Segments(aSnake)} segm. · {aSnake.JointCount} stawów · fizyka Bepu"
+    };
+
+    public static int Segments(Creature aSnake) => aSnake.Value<int>(SegmentsSetting);
+
+    public static bool IsClimber(Creature aSnake) => aSnake.Value<bool>(ClimberSetting);
+
+    public static void SetClimber(Creature aSnake, bool aClimber) => aSnake.SetValue(ClimberSetting, aClimber);
 
     /// <summary>Owija węża wokół cylindra-pnia (<see cref="SnakeWrap.Around"/>) i robi z niego wspinacza.</summary>
-    public void WrapAround(Cylinder aTrunk, float aAngle = 0)
+    public static void WrapAround(Creature aSnake, Cylinder aTrunk, float aAngle = 0)
     {
-        SnakeWrap.Around(this, aTrunk.Body.Position, aTrunk.Radius, aAngle);
-        Climber = true;
+        SnakeWrap.Around(aSnake, aTrunk.Body.Position, aTrunk.Radius, aAngle);
+        SetClimber(aSnake, true);
     }
 
     /// <summary>
@@ -132,23 +146,23 @@ public sealed class SnakeCreature : ArticulatedCreature
     /// (wyjścia Yaw{k}/Pitch{k}) dostaje wyjścia nowych stawów z wagami ostatniego starego stawu, a wyjścia usuniętych
     /// stawów znikają — pozostałe wagi zostają; snapshoty są przeliczane tak samo.
     /// </summary>
-    public void SetSegments(int aSegments)
+    public static void SetSegments(Creature aSnake, int aSegments)
     {
         CheckLength(aSegments);
-        if (aSegments == Segments)
+        if (aSegments == Segments(aSnake))
             return;
 
         var joints = aSegments - 1;
-        PortRewiring.Change(this,
+        PortRewiring.Change(aSnake,
             (aState, _) => aState is NeuralNetworkState network ? RemapSpineOutputs(network, joints) : aState,
             (_, aPort) => IsSpinePort(aPort),
             aGraphs =>
             {
-                Rebuild(DefaultPlan(aSegments));
-                _segments = aSegments;
-                foreach (var actuator in Body.Actuators.OfType<SpineActuator>())
+                aSnake.SetValue(SegmentsSetting, aSegments);
+                aSnake.Reshape();
+                foreach (var actuator in aSnake.Body.Actuators.OfType<SpineActuator>())
                     actuator.SetJointCount(joints);
-                foreach (var sensor in Body.Sensors.OfType<JointSensor>())
+                foreach (var sensor in aSnake.Body.Sensors.OfType<JointSensor>())
                     sensor.SetJointCount(joints);
                 foreach (var module in aGraphs.SelectMany(aGraph => aGraph.Modules))
                     if (module is CpgModule cpg)

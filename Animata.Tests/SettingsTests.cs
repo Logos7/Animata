@@ -32,7 +32,7 @@ public class SettingsTests
     public void EverySetting_HasALabel_AndNumbersHaveARange_ThatHoldsTheDefault()
     {
         foreach (var owner in Owners())
-            foreach (var setting in Settings.Describe(owner.GetType()))
+            foreach (var setting in Settings.Of(owner))
             {
                 var where = $"{owner.GetType().Name}.{setting.Name}";
                 Assert.False(string.IsNullOrWhiteSpace(setting.Attribute.Label), $"{where}: brak nazwy do edytora");
@@ -56,7 +56,7 @@ public class SettingsTests
         Assert.Equal(1.25f, cylinder.Radius);
 
         var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null);
-        var whiskers = Settings.Describe(typeof(CarCreature)).Single(aSetting => aSetting.Name == nameof(CarCreature.Whiskers));
+        var whiskers = Settings.Find(car, Car.WhiskersSetting)!;
         Assert.Equal(WorldObjectCatalog.WhiskerCounts, whiskers.Choices());
         Assert.Throws<ArgumentOutOfRangeException>(() => whiskers.Set(car, 4));
         whiskers.Set(car, 9);
@@ -75,22 +75,22 @@ public class SettingsTests
     public void DerivedSetting_IsEditable_ButNotSaved()
     {
         var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null, 7);
-        Assert.DoesNotContain(nameof(CarCreature.Whiskers), Settings.Capture(car).Keys);
+        Assert.DoesNotContain(Car.WhiskersSetting, Settings.Capture(car).Keys);
         using var world = new Animata.Core.Worlds.World();
         world.Add(car);
         using var restored = WorldFile.Restore(WorldFile.FromJson(WorldFile.ToJson(WorldFile.Capture(world)))).World;
-        Assert.Equal(7, restored.Entities.OfType<CarCreature>().Single().Whiskers);
+        Assert.Equal(7, WorldObjectCatalog.WhiskerCountOf(restored.Entities.OfDesign(Car.Design).Single()));
     }
 
     [Fact]
     public void ReshapingSettings_NameTheirSlots()
     {
-        var snake = (SnakeCreature)EntityTypes.Of<SnakeCreature>().Create();
-        var segments = Settings.Describe(typeof(SnakeCreature)).Single(aSetting => aSetting.Attribute.Reshapes);
+        var snake = (Creature)Snake.Design.Type.Create();
+        var segments = Settings.Of(snake).Single(aSetting => aSetting.Attribute.Reshapes);
         Assert.True(segments.Concerns("Spine") && segments.Concerns("Joints"));
         Assert.False(segments.Concerns("Eye"));
         foreach (var owner in Owners().OfType<ActiveEntity>())
-            foreach (var setting in Settings.Describe(owner.GetType()).Where(aSetting => aSetting.Attribute.Reshapes))
+            foreach (var setting in Settings.Of(owner).Where(aSetting => aSetting.Attribute.Reshapes))
                 Assert.All(setting.Attribute.Slots.Split(','), aSlot =>
                     Assert.True(owner.Body.FindSensor(aSlot.Trim()) is not null || owner.Body.FindActuator(aSlot.Trim()) is not null,
                         $"{owner.GetType().Name}.{setting.Name}: slot {aSlot} nie istnieje"));

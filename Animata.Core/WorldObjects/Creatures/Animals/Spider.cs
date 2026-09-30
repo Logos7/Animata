@@ -17,7 +17,7 @@ namespace Animata.Core.WorldObjects;
 /// Yaw{k}/Pitch{k} jak u węża; skręt kolana ciało pomija).
 /// Body.Position = ziemia pod środkiem tułowia.
 /// </summary>
-public sealed class SpiderCreature : ArticulatedCreature
+public static class Spider
 {
     public const int Legs = 4;
 
@@ -35,40 +35,48 @@ public sealed class SpiderCreature : ArticulatedCreature
 
     public static readonly string[] LegNames = ["PL", "PP", "TL", "TP"];
 
-    public SpiderCreature(Brain? aBrain = null) : base(DefaultPlan(), aBrain)
-    {
-        // Nogi dźwigają tułów: serwa muszą być sztywniejsze niż w wężu (sprężyna Bepu skaluje się z masą części).
-        ServoFrequency = 60;
-    }
+    public static bool Is(Entity aEntity) => aEntity is Creature creature && creature.Design == Design;
 
-    /// <summary>Obrys do zmysłów i szczeliny do celu: pół rozstawu nóg.</summary>
-    public override float BoundingRadius => 0.3f;
+    /// <summary>Porty dotyku pająka: stopy (FootPL, FootPP, FootTL, FootTP) i brzuch (Belly).</summary>
+    public static readonly string[] TouchPorts = [.. LegNames.Select(aLeg => "Foot" + aLeg), "Belly"];
 
     /// <summary>
     /// Oko „Eye” (tułów), czucie stawów „Joints” (8: biodro, kolano × 4), zegar „Clock” (2.5 Hz), czucie terenu „Feel”,
-    /// dotyk „Touch” (stopy i brzuch), nogi „Legs”.
+    /// dotyk „Touch” (golenie jako stopy i tułów jako brzuch), nogi „Legs”. Nogi dźwigają tułów: serwa są sztywniejsze
+    /// niż w wężu (sprężyna Bepu skaluje się z masą części). Obrys: pół rozstawu nóg.
     /// </summary>
-    public override void Equip()
+    private static readonly CreatureBlueprint Body = new(DefaultPlan(),
+        [
+            new SlotSpec("Eye", nameof(TargetSensor)),
+            new SlotSpec("Joints", nameof(JointSensor)),
+            new SlotSpec("Clock", nameof(ClockSensor)) { Settings = SlotSpec.Values((nameof(ClockSensor.Frequency), 2.5f)) },
+            new SlotSpec("Feel", nameof(FeelSensor)),
+            new SlotSpec("Touch", nameof(TouchSensor))
+            {
+                Touch = [.. LegNames.Select(aLeg => new TouchPoint("Foot" + aLeg, "Goleń" + aLeg)), new TouchPoint("Belly", "Tułów")]
+            }
+        ],
+        [new SlotSpec("Legs", nameof(SpineActuator))])
     {
-        Body.Sensors.Add(new TargetSensor { Slot = "Eye" });
-        Body.Sensors.Add(new JointSensor(GaitModule.Joints) { Slot = "Joints" });
-        Body.Sensors.Add(new ClockSensor { Slot = "Clock", Frequency = 2.5f });
-        Body.Sensors.Add(new FeelSensor { Slot = "Feel" });
-        Body.Sensors.Add(WorldObjectCatalog.CreateSpiderTouch());
-        Body.Actuators.Add(new SpineActuator(GaitModule.Joints) { Slot = "Legs" });
-        base.Equip();
-    }
+        ServoFrequency = 60,
+        BoundingRadius = 0.3f
+    };
 
-    public override IReadOnlyList<BrainPreset> BrainPresets =>
-    [
-        new("Sieć neuronowa", "zegar rytmu i cel, 2 warstwy ukryte, losowe wagi",
-            () => WorldObjectCatalog.CreateSpiderNeuralModule(false, WorldObjectCatalog.DefaultSpiderHidden)),
-        new("Generator chodu (kłus)", "6 parametrów: krok, uniesienie, kolano, częstotliwość, skręt", () => new GaitModule { Name = "Chód" }, true)
-    ];
-
-    public override SeekRig TrainingRig => SeekRigs.Spider;
-
-    public override string Describe() => $"SpiderCreature · {Legs} nogi · {JointCount} stawów · fizyka Bepu";
+    public static CreatureDesign Design { get; } = new()
+    {
+        Id = "spider",
+        Name = "Pająk",
+        Icon = "spider",
+        Blueprint = _ => Body,
+        Presets = _ =>
+        [
+            new("Sieć neuronowa", "zegar rytmu i cel, 2 warstwy ukryte, losowe wagi",
+                () => WorldObjectCatalog.CreateSpiderNeuralModule(false, WorldObjectCatalog.DefaultSpiderHidden)),
+            new("Generator chodu (kłus)", "6 parametrów: krok, uniesienie, kolano, częstotliwość, skręt", () => new GaitModule { Name = "Chód" }, true)
+        ],
+        TrainingRig = _ => SeekRigs.Spider,
+        Describe = aSpider => $"Pająk · {Legs} nogi · {aSpider.JointCount} stawów · fizyka Bepu"
+    };
 
     public static BodyPlan DefaultPlan()
     {
