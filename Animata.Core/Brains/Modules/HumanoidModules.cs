@@ -1,4 +1,5 @@
 using Animata.Core.Actuators;
+using Animata.Core.Bodies;
 using Animata.Core.Sensors;
 using Animata.Core.WorldObjects;
 
@@ -39,10 +40,10 @@ public sealed class BalanceModule() : ParametricModule(Specs, new float[6])
         var side = Math.Clamp(RollP * roll + RollD * rollRate, -1, 1);
         for (var leg = 0; leg < 2; leg++)
         {
-            _outputs[SpineActuator.PitchPort(Humanoid.Ankle(leg))] = ankle;
-            _outputs[SpineActuator.PitchPort(Humanoid.Hip(leg))] = hip;
-            _outputs[SpineActuator.YawPort(Humanoid.Ankle(leg))] = side;
-            _outputs[SpineActuator.YawPort(Humanoid.Hip(leg))] = side;
+            _outputs[JointPorts.Pitch(Humanoid.Ankle(leg))] = ankle;
+            _outputs[JointPorts.Pitch(Humanoid.Hip(leg))] = hip;
+            _outputs[JointPorts.Yaw(Humanoid.Ankle(leg))] = side;
+            _outputs[JointPorts.Yaw(Humanoid.Hip(leg))] = side;
         }
         return _outputs;
     }
@@ -120,12 +121,12 @@ public sealed class BipedGaitModule() : ParametricModule(Specs, [0.26f, 0, -0.87
             var stride = Stride * drive * (1 - turn * side);
             var hip = -stride * MathF.Sin(phase) + Lean + balance;
             var knee = KneeLift * drive * MathF.Max(0, MathF.Sin(phase + KneePhase));
-            _outputs[SpineActuator.PitchPort(Humanoid.Hip(leg))] = Math.Clamp(hip, -1, 1);
-            _outputs[SpineActuator.PitchPort(Humanoid.Knee(leg))] = Math.Clamp(knee, 0, 1);
-            _outputs[SpineActuator.PitchPort(Humanoid.Ankle(leg))] = Math.Clamp(-0.5f * knee - hip * 0.5f, -1, 1);
+            _outputs[JointPorts.Pitch(Humanoid.Hip(leg))] = Math.Clamp(hip, -1, 1);
+            _outputs[JointPorts.Pitch(Humanoid.Knee(leg))] = Math.Clamp(knee, 0, 1);
+            _outputs[JointPorts.Pitch(Humanoid.Ankle(leg))] = Math.Clamp(-0.5f * knee - hip * 0.5f, -1, 1);
             var sway = Sway * drive * MathF.Cos(_phase);
-            _outputs[SpineActuator.YawPort(Humanoid.Hip(leg))] = Math.Clamp(sway, -1, 1);
-            _outputs[SpineActuator.YawPort(Humanoid.Ankle(leg))] = Math.Clamp(-sway, -1, 1);
+            _outputs[JointPorts.Yaw(Humanoid.Hip(leg))] = Math.Clamp(sway, -1, 1);
+            _outputs[JointPorts.Yaw(Humanoid.Ankle(leg))] = Math.Clamp(-sway, -1, 1);
         }
         return _outputs;
     }

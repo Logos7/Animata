@@ -20,18 +20,13 @@ public sealed class TargetSensor : Sensor
     public const string DirectionYPort = "DirectionY";
     public const string DirectionZPort = "DirectionZ";
 
-    private static readonly string[] Ports =
-        [FoundPort, DistancePort, GapPort, DirectionXPort, DirectionYPort, DirectionZPort];
-
     /// <summary>Porty, z których sterowniki jazdy do celu (CPG, chód, heurystyka walca, sieci stworów) liczą kurs i dojazd.</summary>
     public static readonly IReadOnlyList<string> SteeringPorts = [FoundPort, GapPort, DirectionXPort, DirectionYPort];
 
-    private readonly Dictionary<string, float> _readings = Ports.ToDictionary(aPort => aPort, _ => 0f);
+    public TargetSensor() => SetPorts([FoundPort, DistancePort, GapPort, DirectionXPort, DirectionYPort, DirectionZPort]);
 
     [Setting("Cel", Tip = "Na co patrzy oko: kula, inny stwór albo dowolna bryła. Nauka i tak ćwiczy na własnych celach — to zmienia tylko cel w scenie.")]
     public Guid? TargetId { get; set; }
-
-    public override IReadOnlyList<string> OutputPorts => Ports;
 
     /// <summary>Kurs do celu z wejść sterownika nazwanych jak porty oka (<see cref="SteeringPorts"/>).</summary>
     public static TargetCourse Course(IReadOnlyDictionary<string, float> aInputs) => new(
@@ -44,9 +39,9 @@ public sealed class TargetSensor : Sensor
         var target = TargetId is { } id ? aWorld.Find(id) : null;
         if (target is null || ReferenceEquals(target, aOwner))
         {
-            foreach (var port in Ports)
-                _readings[port] = 0;
-            return _readings;
+            foreach (var port in OutputPorts)
+                Readings[port] = 0;
+            return Readings;
         }
 
         var displacement = target.Body.Position - aOwner.Body.Position;
@@ -55,13 +50,13 @@ public sealed class TargetSensor : Sensor
             ? Vector3.Transform(displacement / distance, Quaternion.Inverse(aOwner.Body.Rotation))
             : Vector3.Zero;
 
-        _readings[FoundPort] = 1;
-        _readings[DistancePort] = distance;
-        _readings[GapPort] = distance - aOwner.BoundingRadius - target.BoundingRadius;
-        _readings[DirectionXPort] = localDirection.X;
-        _readings[DirectionYPort] = localDirection.Y;
-        _readings[DirectionZPort] = localDirection.Z;
-        return _readings;
+        Readings[FoundPort] = 1;
+        Readings[DistancePort] = distance;
+        Readings[GapPort] = distance - aOwner.BoundingRadius - target.BoundingRadius;
+        Readings[DirectionXPort] = localDirection.X;
+        Readings[DirectionYPort] = localDirection.Y;
+        Readings[DirectionZPort] = localDirection.Z;
+        return Readings;
     }
 }
 

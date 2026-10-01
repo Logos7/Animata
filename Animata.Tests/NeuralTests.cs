@@ -85,7 +85,7 @@ public class NeuralTests
         {
             var evolution = new Animata.Core.Training.Evolution(new float[5], new Animata.Core.Training.EvolutionOptions { Seed = 9 });
             for (var generation = 0; generation < 40; generation++)
-                evolution.Step(Fitness);
+                evolution.NextGeneration(Fitness);
             return evolution.BestFitness;
         }
 

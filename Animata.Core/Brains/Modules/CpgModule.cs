@@ -1,4 +1,5 @@
 using Animata.Core.Actuators;
+using Animata.Core.Bodies;
 using Animata.Core.Sensors;
 
 namespace Animata.Core.Brains.Modules;
@@ -57,7 +58,7 @@ public sealed class CpgModule : ParametricModule
     {
         ArgumentOutOfRangeException.ThrowIfNegative(aJoints);
         Joints = aJoints;
-        _ports = SpineActuator.PortsFor(aJoints);
+        _ports = JointPorts.For(aJoints);
         _outputs.Clear();
         foreach (var port in _ports)
             _outputs[port] = 0;
@@ -77,8 +78,8 @@ public sealed class CpgModule : ParametricModule
         for (var joint = 0; joint < Joints; joint++)
         {
             var wave = _phase - joint * PhaseLag;
-            _outputs[SpineActuator.YawPort(joint)] = Math.Clamp(amplitude * MathF.Sin(wave) + turn, -1, 1);
-            _outputs[SpineActuator.PitchPort(joint)] = Math.Clamp(pitch * MathF.Sin(wave + PitchPhase), -1, 1);
+            _outputs[JointPorts.Yaw(joint)] = Math.Clamp(amplitude * MathF.Sin(wave) + turn, -1, 1);
+            _outputs[JointPorts.Pitch(joint)] = Math.Clamp(pitch * MathF.Sin(wave + PitchPhase), -1, 1);
         }
         return _outputs;
     }

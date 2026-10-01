@@ -107,7 +107,7 @@ public sealed class TrainingController : IDisposable
                 LastStartError = $"{module.Name}: {exception.Message}";
                 continue;
             }
-            var evolution = new Evolution(((ITrainableModule)module).GetParameters(), new EvolutionOptions { Seed = seed + started, Algorithm = rig.Algorithm });
+            var evolution = Evolution.Create(((ITrainableModule)module).GetParameters(), new EvolutionOptions { Seed = seed + started, Algorithm = rig.Algorithm });
             var trainer = new BackgroundTrainer(evolution, task.Evaluate, _maxGenerations, task.Validate);
             _sessions.Add(new Session(aCreature, brain, module, trainer, modules.Count > 1 ? $"{rig.Name} ({module.Name})" : rig.Name,
                 Setup(aCreature, module)));
@@ -209,9 +209,9 @@ public sealed class TrainingController : IDisposable
         var builder = new System.Text.StringBuilder(aCreature.TrainingRigFor(aModule)?.Name ?? aCreature.GetType().Name);
         if (aModule.CaptureState() is { } state)
             builder.Append('|').Append(state.CreateTrainable(new float[state.CountParameters()], aModule.Name).CaptureState()?.ToJson());
-        foreach (var owner in aCreature.Body.Sensors.Cast<object>().Concat(aCreature.Body.Actuators))
+        foreach (var (_, owner) in aCreature.Body.Slots)
             foreach (var (name, value) in Settings.Capture(owner))
-                if (Settings.Find(owner, name)?.Type != typeof(Guid?))
+                if (Settings.Find(owner, name)?.IsReference != true)
                     builder.Append('|').Append(name).Append('=').Append(value.GetRawText());
         return builder.ToString();
     }

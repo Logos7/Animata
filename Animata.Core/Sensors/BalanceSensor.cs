@@ -24,12 +24,12 @@ public sealed class BalanceSensor : Sensor
     public const string VelocityXPort = "VelX";
     public const string VelocityYPort = "VelY";
 
-    private static readonly string[] Ports = [PitchPort, RollPort, PitchRatePort, RollRatePort, HeightPort, VelocityXPort, VelocityYPort];
-    private readonly Dictionary<string, float> _readings = Ports.ToDictionary(aPort => aPort, _ => 0f);
     private double _lastTime = double.NaN;
     private float _lastPitch;
     private float _lastRoll;
     private Vector3 _lastRoot;
+
+    public BalanceSensor() => SetPorts([PitchPort, RollPort, PitchRatePort, RollRatePort, HeightPort, VelocityXPort, VelocityYPort]);
 
     /// <summary>Wzmocnienie kątów: 1 na wyjściu = tyle radianów odwrotności (domyślnie 2 → ±0.5 rad = ±29°).</summary>
     [Setting("Czułość kąta", Min = 0.5, Max = 10, Tip = "Pochylenie w radianach razy tyle daje odczyt; 1 = skraj.")]
@@ -39,12 +39,10 @@ public sealed class BalanceSensor : Sensor
     [Setting("Czułość szybkości", Min = 0.05, Max = 5, Tip = "Szybkość pochylania (rad/s) razy tyle daje odczyt; 1 = skraj.")]
     public float RateGain { get; set; } = 0.5f;
 
-    public override IReadOnlyList<string> OutputPorts => Ports;
-
     public override IReadOnlyDictionary<string, float> Read(Entity aOwner, World aWorld)
     {
         if (aOwner is not ArticulatedCreature creature || creature.PartOrientations.Count == 0)
-            return _readings;
+            return Readings;
         var (pitch, roll) = Angles(creature.PartOrientations[0]);
         var dt = double.IsNaN(_lastTime) ? 0 : aWorld.Time - _lastTime;
         var pitchRate = dt > 1e-6 ? (float)((pitch - _lastPitch) / dt) : 0;
@@ -55,20 +53,18 @@ public sealed class BalanceSensor : Sensor
         _lastPitch = pitch;
         _lastRoll = roll;
         _lastRoot = root;
-        var forward = Vector3.Transform(Vector3.UnitX, creature.PartOrientations[0]);
-        var heading = new Vector2(forward.X, forward.Y);
-        heading = heading.LengthSquared() > 1e-6f ? Vector2.Normalize(heading) : Vector2.UnitX;
-        _readings[VelocityXPort] = Math.Clamp((velocity.X * heading.X + velocity.Y * heading.Y) / 2, -1, 1);
-        _readings[VelocityYPort] = Math.Clamp((-velocity.X * heading.Y + velocity.Y * heading.X) / 2, -1, 1);
+        var heading = Heading(Vector3.Transform(Vector3.UnitX, creature.PartOrientations[0]));
+        Readings[VelocityXPort] = Math.Clamp((velocity.X * heading.X + velocity.Y * heading.Y) / 2, -1, 1);
+        Readings[VelocityYPort] = Math.Clamp((-velocity.X * heading.Y + velocity.Y * heading.X) / 2, -1, 1);
 
         var ground = Terrain.HeightAt(aWorld, new Vector2(root.X, root.Y));
         var rest = creature.Plan.Root.Position.Z;
-        _readings[PitchPort] = Math.Clamp(pitch * Gain, -1, 1);
-        _readings[RollPort] = Math.Clamp(roll * Gain, -1, 1);
-        _readings[PitchRatePort] = Math.Clamp(pitchRate * RateGain, -1, 1);
-        _readings[RollRatePort] = Math.Clamp(rollRate * RateGain, -1, 1);
-        _readings[HeightPort] = Math.Clamp((root.Z - ground - rest) * 4, -1, 1);
-        return _readings;
+        Readings[PitchPort] = Math.Clamp(pitch * Gain, -1, 1);
+        Readings[RollPort] = Math.Clamp(roll * Gain, -1, 1);
+        Readings[PitchRatePort] = Math.Clamp(pitchRate * RateGain, -1, 1);
+        Readings[RollRatePort] = Math.Clamp(rollRate * RateGain, -1, 1);
+        Readings[HeightPort] = Math.Clamp((root.Z - ground - rest) * 4, -1, 1);
+        return Readings;
     }
 
     /// <summary>

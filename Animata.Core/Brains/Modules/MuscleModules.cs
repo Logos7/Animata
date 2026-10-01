@@ -84,7 +84,7 @@ public sealed class MuscleGeometry
     }
 
     /// <summary>Port czucia stawów dla osi.</summary>
-    public string PortOf(int aAxis) => Axes[aAxis].Yaw ? SpineActuator.YawPort(Axes[aAxis].Joint) : SpineActuator.PitchPort(Axes[aAxis].Joint);
+    public string PortOf(int aAxis) => Axes[aAxis].Yaw ? JointPorts.Yaw(Axes[aAxis].Joint) : JointPorts.Pitch(Axes[aAxis].Joint);
 
     /// <summary>Kąt osi (rad) z odczytu czucia stawów (ułamek zakresu).</summary>
     public float AngleOf(int aAxis, float aReading)

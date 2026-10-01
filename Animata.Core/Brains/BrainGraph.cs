@@ -40,9 +40,17 @@ public class BrainGraph
     /// <summary>Jak <see cref="Invalidate"/>, także dla grafów wszystkich zagnieżdżonych podgrafów.</summary>
     public void InvalidateDeep()
     {
-        _compiled = null;
-        foreach (var composite in Modules.OfType<CompositeModule>())
-            composite.Inner.InvalidateDeep();
+        foreach (var graph in Graphs())
+            graph._compiled = null;
+    }
+
+    /// <summary>Ten graf i grafy wszystkich zagnieżdżonych podgrafów (w głąb, rodzic przed dziećmi).</summary>
+    public IEnumerable<BrainGraph> Graphs()
+    {
+        yield return this;
+        foreach (var composite in Modules.OfType<CompositeModule>().ToArray())
+            foreach (var inner in composite.Inner.Graphs())
+                yield return inner;
     }
 
     /// <summary>Usuwa moduł razem z jego połączeniami i położeniem. Zwraca false, jeśli go nie było.</summary>

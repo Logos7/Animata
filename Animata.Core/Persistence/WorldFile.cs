@@ -34,8 +34,8 @@ public sealed record EntityDocument(
     Guid Id,
     string Type,
     string Name,
-    float[] Position,
-    float[] Rotation,
+    Vector3 Position,
+    Quaternion Rotation,
     IReadOnlyDictionary<string, JsonElement> Settings,
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>>? Sensors = null,
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, JsonElement>>? Actuators = null,
@@ -81,7 +81,8 @@ public static class WorldFile
     /// <summary>Sugerowane rozszerzenie pliku.</summary>
     public const string Extension = ".animata.json";
 
-    internal static readonly JsonSerializerOptions Options = new()
+    /// <summary>Opcje JSON: wektory i kwaterniony jako tablice liczb (jak w ustawieniach, <see cref="Settings.Json"/>).</summary>
+    internal static readonly JsonSerializerOptions Options = new(Settings.Json)
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.Never
@@ -133,7 +134,7 @@ public static class WorldFile
             .. aDocuments.Select(aDocument => RestoreEntity(aDocument with
             {
                 Id = ids[aDocument.Id],
-                Position = Vector(ToVector(aDocument.Position) + aOffset),
+                Position = aDocument.Position + aOffset,
                 Sensors = RemapSlots(aDocument.Sensors),
                 Actuators = RemapSlots(aDocument.Actuators)
             }))
@@ -144,7 +145,7 @@ public static class WorldFile
     {
         var type = EntityTypes.Of(aEntity) ?? throw new NotSupportedException($"Zapis nie zna encji {aEntity.GetType().Name}.");
         var creature = aEntity as ActiveEntity;
-        return new EntityDocument(aEntity.Id, type.Id, aEntity.Name, Vector(aEntity.Body.Position), Rotation(aEntity.Body.Rotation),
+        return new EntityDocument(aEntity.Id, type.Id, aEntity.Name, aEntity.Body.Position, aEntity.Body.Rotation,
             Settings.Capture(aEntity),
             creature is null ? null : SlotSettings(creature.Body.Sensors.Select(aSensor => (aSensor.Slot, (object)aSensor))),
             creature is null ? null : SlotSettings(creature.Body.Actuators.Select(aActuator => (aActuator.Slot, (object)aActuator))),
@@ -233,8 +234,8 @@ public static class WorldFile
     private static Entity RestoreEntity(EntityDocument aDocument)
     {
         var type = EntityTypes.Find(aDocument.Type) ?? throw new NotSupportedException($"Nieznany rodzaj obiektu w pliku: {aDocument.Type}.");
-        var position = ToVector(aDocument.Position);
-        var rotation = ToRotation(aDocument.Rotation);
+        var position = aDocument.Position;
+        var rotation = NormalizedIfNeeded(aDocument.Rotation);
         return new Spawn(type)
         {
             Settings = aEntity => Settings.Apply(aEntity, aDocument.Settings),
@@ -335,21 +336,7 @@ public static class WorldFile
         return module;
     }
 
-    // ---------- liczby ----------
-
-    internal static float[] Vector(Vector3 aVector) => [aVector.X, aVector.Y, aVector.Z];
-
-    private static float[] Rotation(Quaternion aRotation) => [aRotation.X, aRotation.Y, aRotation.Z, aRotation.W];
-
-    private static Vector3 ToVector(float[] aValues) =>
-        aValues.Length >= 3 ? new Vector3(aValues[0], aValues[1], aValues[2]) : throw new JsonException("Wektor musi mieć 3 liczby.");
-
     /// <summary>Kwaternion z pliku; normalizowany tylko wtedy, gdy wyraźnie nie jest jednostkowy (zapis i odczyt są wtedy bit w bit).</summary>
-    private static Quaternion ToRotation(float[] aValues)
-    {
-        if (aValues.Length < 4)
-            return Quaternion.Identity;
-        var rotation = new Quaternion(aValues[0], aValues[1], aValues[2], aValues[3]);
-        return MathF.Abs(rotation.LengthSquared() - 1) > 1e-3f ? Quaternion.Normalize(rotation) : rotation;
-    }
+    private static Quaternion NormalizedIfNeeded(Quaternion aRotation) =>
+        MathF.Abs(aRotation.LengthSquared() - 1) > 1e-3f ? Quaternion.Normalize(aRotation) : aRotation;
 }

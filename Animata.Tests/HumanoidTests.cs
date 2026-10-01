@@ -44,8 +44,8 @@ public class HumanoidTests : IDisposable
         var knee = plan.Joints[Humanoid.Knee(0)];
         Assert.Equal(0, knee.PitchMin);
         Assert.True(knee.MaxPitch > 2);
-        Assert.DoesNotContain(SpineActuator.YawPort(Humanoid.Knee(0)), Humanoid.Ports);
-        Assert.Contains(SpineActuator.PitchPort(Humanoid.Knee(0)), Humanoid.Ports);
+        Assert.DoesNotContain(JointPorts.Yaw(Humanoid.Knee(0)), Humanoid.Ports);
+        Assert.Contains(JointPorts.Pitch(Humanoid.Knee(0)), Humanoid.Ports);
         // Komenda „wstecz” to kąt zero, a nie przeprost.
         Assert.Equal(0, JointPlan.Angle(-1, knee.PitchMin, knee.MaxPitch));
     }

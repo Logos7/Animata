@@ -153,7 +153,7 @@ public static class Snake
         var joints = aSegments - 1;
         PortRewiring.Change(aSnake,
             (aState, _) => aState is NeuralNetworkState network ? RemapSpineOutputs(network, joints) : aState,
-            (_, aPort) => IsSpinePort(aPort),
+            (_, aPort) => JointPorts.IsJointPort(aPort),
             aGraphs =>
             {
                 aSnake.SetValue(SegmentsSetting, aSegments);
@@ -181,13 +181,12 @@ public static class Snake
         var lastOf = new Dictionary<string, (int Row, int Joint)>();
         for (var index = 0; index < aState.Outputs.Length; index++)
         {
-            var port = aState.Outputs[index].Port;
-            if (!IsSpinePort(port))
+            if (!JointPorts.TryParse(aState.Outputs[index].Port, out var joint, out var yaw))
             {
                 kept.Add(index);
                 continue;
             }
-            var (kind, joint) = SplitSpinePort(port);
+            var kind = yaw ? JointPorts.YawPrefix : JointPorts.PitchPrefix;
             if (!lastOf.TryGetValue(kind, out var last) || joint > last.Joint)
                 lastOf[kind] = (index, joint);
             if (joint < aJoints)
@@ -198,7 +197,7 @@ public static class Snake
         var sources = new List<int>(kept);
         var present = outputs.Select(aOutput => aOutput.Port).ToHashSet();
         for (var joint = 0; joint < aJoints; joint++)
-            foreach (var kind in new[] { "Yaw", "Pitch" })
+            foreach (var kind in new[] { JointPorts.YawPrefix, JointPorts.PitchPrefix })
             {
                 var port = kind + joint;
                 if (present.Contains(port) || !lastOf.TryGetValue(kind, out var last))
@@ -217,12 +216,4 @@ public static class Snake
         layers[^1] = outputs.Count;
         return aState with { Layers = layers, Weights = weights, Biases = allBiases, Outputs = [.. outputs] };
     }
-
-    private static (string Kind, int Joint) SplitSpinePort(string aPort) =>
-        aPort.StartsWith("Yaw", StringComparison.Ordinal) ? ("Yaw", int.Parse(aPort.AsSpan(3), System.Globalization.CultureInfo.InvariantCulture)) : ("Pitch", int.Parse(aPort.AsSpan(5), System.Globalization.CultureInfo.InvariantCulture));
-
-    /// <summary>Port stawu: Yaw{i} albo Pitch{i}.</summary>
-    public static bool IsSpinePort(string aPort) =>
-        (aPort.StartsWith("Yaw", StringComparison.Ordinal) && aPort.Length > 3 && aPort[3..].All(char.IsAsciiDigit)) ||
-        (aPort.StartsWith("Pitch", StringComparison.Ordinal) && aPort.Length > 5 && aPort[5..].All(char.IsAsciiDigit));
 }

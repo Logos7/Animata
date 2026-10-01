@@ -110,7 +110,7 @@ public class SnakeTests
         // Zamiast CPG stała: staw 0 skręcony o połowę zakresu, reszta prosto.
         var graph = snake.Brain!.Graph;
         graph.Remove(graph.Modules.OfType<CpgModule>().Single());
-        var yaw = graph.Add(new ConstantModule(SpineActuator.YawPort(0), 0.5f));
+        var yaw = graph.Add(new ConstantModule(JointPorts.Yaw(0), 0.5f));
         graph.Connect(yaw, yaw.Port, graph.Modules.OfType<ActuatorModule>().Single(), yaw.Port);
 
         for (var tick = 0; tick < 60; tick++)
@@ -120,7 +120,7 @@ public class SnakeTests
         Assert.InRange(MathF.Abs(snake.JointYaw(0)), expected * 0.7f, expected * 1.3f);
         Assert.InRange(MathF.Abs(snake.JointYaw(1)), 0, 0.15f);
         var sense = snake.Body.Sensors.OfType<JointSensor>().Single().Read(snake, world);
-        Assert.InRange(MathF.Abs(sense[SpineActuator.YawPort(0)]), 0.35f, 0.65f);
+        Assert.InRange(MathF.Abs(sense[JointPorts.Yaw(0)]), 0.35f, 0.65f);
     }
 
     [Fact]

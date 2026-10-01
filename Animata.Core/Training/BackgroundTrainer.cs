@@ -8,12 +8,12 @@ namespace Animata.Core.Training;
 public sealed record TrainingProgress(int Generation, float BestFitness, float[] Champion, float ChampionScore, int ChampionGeneration);
 
 /// <summary>
-/// Uruchamia <see cref="Evolution"/> na wątku w tle. Wątek UI co klatkę pyta o nowy postęp
+/// Uruchamia optymalizator (<see cref="IOptimizer"/>) na wątku w tle. Wątek UI co klatkę pyta o nowy postęp
 /// (<see cref="TryGetProgress"/>) i sam przenosi parametry do sceny — trener nigdy nie dotyka świata sceny.
 /// </summary>
 public sealed class BackgroundTrainer : IDisposable
 {
-    private readonly Evolution _evolution;
+    private readonly IOptimizer _evolution;
     private readonly Func<float[], int, float> _fitness;
     private readonly Func<float[], float>? _validate;
     private readonly object _gate = new();
@@ -26,7 +26,7 @@ public sealed class BackgroundTrainer : IDisposable
     /// <param name="aValidate">
     /// Ocena na stałym zestawie prób (większa = lepsza). Bez niej mistrzem jest po prostu zwycięzca pokolenia.
     /// </param>
-    public BackgroundTrainer(Evolution aEvolution, Func<float[], int, float> aFitness, int aMaxGenerations = 300,
+    public BackgroundTrainer(IOptimizer aEvolution, Func<float[], int, float> aFitness, int aMaxGenerations = 300,
         Func<float[], float>? aValidate = null)
     {
         _evolution = aEvolution;
@@ -75,7 +75,7 @@ public sealed class BackgroundTrainer : IDisposable
                 while (!token.IsCancellationRequested && _evolution.Generation < MaxGenerations)
                 {
                     _running.Wait(token);
-                    _evolution.Step(_fitness);
+                    _evolution.NextGeneration(_fitness);
                     var best = _evolution.Best;
                     var score = _validate?.Invoke(best) ?? _evolution.BestFitness;
                     if (_validate is null || score > championScore)

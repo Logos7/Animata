@@ -57,7 +57,7 @@ public static class Humanoid
     public static BodyPlan Plan { get; } = DefaultPlan();
 
     /// <summary>Porty napędu stawów „Body” (ruchome osie planu): najpierw skręty (Yaw), potem pochylenia (Pitch).</summary>
-    public static readonly string[] Ports = SpineActuator.PortsFor(Plan);
+    public static readonly string[] Ports = JointPorts.Driven(Plan);
 
     /// <summary>Zmysły humanoida (wspólne z <see cref="MuscleHumanoid"/>); dotyk: stopy i tułów (tułów na ziemi = upadek).</summary>
     internal static readonly SlotSpec[] Senses =

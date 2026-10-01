@@ -12,7 +12,8 @@ namespace Animata.Core.Entities;
 /// Stwór z części (<see cref="BodyPlan"/>) poruszający się w fizyce Bepu. Każda część to bryła. Staw kulowy to BallSocket
 /// z serwem kątowym (AngularServo), które trzyma zadany skręt i pochylenie; staw sztywny to Weld; koło to zawieszenie
 /// (LinearAxisServo + PointOnLineServo), zawias osi (AngularHinge, skręt = obrót osi wokół pionu) i silnik
-/// (AngularAxisMotor) — jak w demie samochodu Bepu.
+/// (AngularAxisMotor) — jak w demie samochodu Bepu; staw bierny — przegub, więzy osi, ograniczniki i tłumik; mięśnie —
+/// w <c>ArticulatedCreature.Muscles.cs</c>.
 /// Układ stwora (Body.Position / Rotation) wynika z korzenia: to poza, w której korzeń byłby w swojej pozie
 /// spoczynkowej — dla leżącego węża to punkt na ziemi pod głową, obrócony jak głowa.
 /// Ręczna zmiana Body.Position / Rotation (mysz, panel) albo <see cref="Place"/> stawia całe ciało w pozie
@@ -21,48 +22,37 @@ namespace Animata.Core.Entities;
 /// tutaj, przed każdym krokiem fizyki, dla części, które w poprzednim kroku czegoś dotykały — to ono pozwala wężowi
 /// pełzać falowaniem.
 /// </summary>
-public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
+public partial class ArticulatedCreature : ActiveEntity, IPhysicalEntity
 {
     /// <summary>Kapsuła Bepu leży wzdłuż lokalnej osi Y, a część planu wzdłuż X: poza Bepu = poza części · ten obrót.</summary>
     private static readonly Quaternion CapsuleFix = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -MathF.PI / 2);
 
-    private const float Gravity = 9.81f;
+    /// <summary>Sprężyna więzów, które mają trzymać sztywno (przeguby, spawy, zawiasy, prowadnice).</summary>
+    private static readonly SpringSettings Rigid = new(30, 1);
+
+    private static readonly float Gravity = -PhysicsWorld.Gravity.Z;
 
     /// <summary>Sztywność serw stawów (częstotliwość sprężyny, Hz). Zmiana działa od następnej zmiany celu stawu.</summary>
     public float ServoFrequency { get; set; } = 30;
 
+    /// <summary>Stan stawu: części, poza spoczynkowa, więzy w fizyce, cele, wysłane cele i zmierzone kąty.</summary>
+    private struct JointState
+    {
+        public int Parent;
+        public int Child;
+        public Quaternion RestRelative;
+        public ConstraintHandle Servo;      // serwo stawu kulowego, zawias koła albo tłumik stawu biernego
+        public ConstraintHandle? Motor;     // silnik koła napędzanego
+        public float TargetYaw, TargetPitch, SentYaw, SentPitch;
+        public float Yaw, Pitch;
+        public float WheelSteer, WheelSpeed, WheelTorque, SentSteer, SentSpeed, SentTorque;
+    }
+
     private PhysicsWorld? _physics;
     private BodyHandle[] _bodies = [];
-    private ConstraintHandle[] _servos = [];
-    private ConstraintHandle?[] _motors = [];
-    private float[] _wheelSteer = [];
-    private float[] _wheelSpeed = [];
-    private float[] _wheelTorque = [];
-    private float[] _sentSteer = [];
-    private float[] _sentSpeed = [];
-    private float[] _sentTorque = [];
     private Vector3[] _positions = [];
     private Quaternion[] _orientations = [];
-    private Quaternion[] _restRelative = [];
-    private int[] _parents = [];
-    private int[] _children = [];
-    private float[] _targetYaw = [];
-    private float[] _targetPitch = [];
-    private float[] _sentYaw = [];
-    private float[] _sentPitch = [];
-    private float[] _yaw = [];
-    private float[] _pitch = [];
-    // Mięśnie: części i punkty przyczepów (w układzie części planu), stan i silniki liniowe w fizyce.
-    private ConstraintHandle[] _muscleMotors = [];
-    private int[] _muscleOrigin = [];
-    private int[] _muscleInsertion = [];
-    private Vector3[] _muscleOriginLocal = [];
-    private Vector3[] _muscleInsertionLocal = [];
-    private float[] _excitation = [];
-    private float[] _activation = [];
-    private float[] _muscleLength = [];
-    private float[] _muscleSpeed = [];
-    private float[] _muscleForce = [];
+    private JointState[] _joints = [];
     private Vector3 _publishedPosition;
     private Quaternion _publishedRotation = Quaternion.Identity;
 
@@ -82,34 +72,6 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     public override EntityCategory Category => EntityCategory.Creature;
 
     public int JointCount => Plan.Joints.Count;
-
-    public int MuscleCount => _excitation.Length;
-
-    /// <summary>Stała czasowa narastania aktywacji mięśnia (s) — pobudzenie dochodzi do włókien z opóźnieniem.</summary>
-    public const float ActivationTime = 0.01f;
-
-    /// <summary>Stała czasowa wygasania aktywacji (s).</summary>
-    public const float DeactivationTime = 0.04f;
-
-    /// <summary>Pobudzenie mięśnia [0, 1] z mózgu; działa od następnego kroku fizyki (przez aktywację z opóźnieniem).</summary>
-    public void SetMuscleExcitation(int aMuscle, float aExcitation) =>
-        _excitation[aMuscle] = float.IsFinite(aExcitation) ? Math.Clamp(aExcitation, 0, 1) : 0;
-
-    /// <summary>Aktywacja mięśnia [0, 1] w ostatnim kroku.</summary>
-    public float MuscleActivation(int aMuscle) => _activation[aMuscle];
-
-    /// <summary>Długość mięśnia (m) po ostatnim kroku.</summary>
-    public float MuscleLength(int aMuscle) => _muscleLength[aMuscle];
-
-    /// <summary>Szybkość wydłużania mięśnia (m/s, ujemna = skracanie) po ostatnim kroku.</summary>
-    public float MuscleSpeed(int aMuscle) => _muscleSpeed[aMuscle];
-
-    /// <summary>Przyczepy mięśnia w świecie (początkowy, końcowy) — w bieżącej pozie ciała.</summary>
-    public (Vector3 Origin, Vector3 Insertion) MuscleEnds(int aMuscle) =>
-        (MusclePoint(_muscleOrigin[aMuscle], _muscleOriginLocal[aMuscle]), MusclePoint(_muscleInsertion[aMuscle], _muscleInsertionLocal[aMuscle]));
-
-    /// <summary>Siła mięśnia (N) w ostatnim kroku.</summary>
-    public float MuscleForce(int aMuscle) => _muscleForce[aMuscle];
 
     /// <summary>Pozycje części w świecie (po ostatnim kroku fizyki albo z pozy spoczynkowej przed podpięciem).</summary>
     public IReadOnlyList<Vector3> PartPositions => _positions;
@@ -138,10 +100,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     public bool IsPartTouching(int aPart) => _physics is { } physics && aPart < _bodies.Length && physics.IsTouching(_bodies[aPart]);
 
     /// <summary>Zmierzony skręt stawu (rad, wokół osi Z dziecka w pozie spoczynkowej).</summary>
-    public float JointYaw(int aJoint) => _yaw[aJoint];
+    public float JointYaw(int aJoint) => _joints[aJoint].Yaw;
 
     /// <summary>Zmierzone pochylenie stawu (rad, wokół osi Y dziecka w pozie spoczynkowej).</summary>
-    public float JointPitch(int aJoint) => _pitch[aJoint];
+    public float JointPitch(int aJoint) => _joints[aJoint].Pitch;
 
     /// <summary>
     /// Zadaje koło: kąt skrętu (rad, dodatni = w lewo; tylko koła skrętne), prędkość obwodowa (m/s, dodatnia = do przodu)
@@ -152,9 +114,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         var joint = Plan.Joints[aJoint];
         if (joint.Kind != JointKind.Wheel)
             return;
-        _wheelSteer[aJoint] = joint.Steerable && float.IsFinite(aSteer) ? aSteer : 0;
-        _wheelSpeed[aJoint] = joint.Driven && float.IsFinite(aSpeed) ? aSpeed : 0;
-        _wheelTorque[aJoint] = joint.Driven && float.IsFinite(aTorque) ? MathF.Max(0, aTorque) : 0;
+        ref var state = ref _joints[aJoint];
+        state.WheelSteer = joint.Steerable && float.IsFinite(aSteer) ? aSteer : 0;
+        state.WheelSpeed = joint.Driven && float.IsFinite(aSpeed) ? aSpeed : 0;
+        state.WheelTorque = joint.Driven && float.IsFinite(aTorque) ? MathF.Max(0, aTorque) : 0;
     }
 
     /// <summary>
@@ -166,8 +129,8 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         var joint = Plan.Joints[aJoint];
         if (joint.Kind != JointKind.Ball)
             return;
-        _targetYaw[aJoint] = JointPlan.Angle(Math.Clamp(float.IsFinite(aYaw) ? aYaw : 0, -1, 1), joint.YawMin, joint.MaxYaw);
-        _targetPitch[aJoint] = JointPlan.Angle(Math.Clamp(float.IsFinite(aPitch) ? aPitch : 0, -1, 1), joint.PitchMin, joint.MaxPitch);
+        _joints[aJoint].TargetYaw = JointPlan.Angle(Math.Clamp(float.IsFinite(aYaw) ? aYaw : 0, -1, 1), joint.YawMin, joint.MaxYaw);
+        _joints[aJoint].TargetPitch = JointPlan.Angle(Math.Clamp(float.IsFinite(aPitch) ? aPitch : 0, -1, 1), joint.PitchMin, joint.MaxPitch);
     }
 
     public override void Place(Vector3 aPosition, Quaternion aRotation)
@@ -177,9 +140,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         for (var part = 0; part < Plan.Parts.Count; part++)
             (_positions[part], _orientations[part]) = RestPose(part);
         PushPoses();
-        Array.Clear(_yaw);
-        Array.Clear(_pitch);
-        Array.Clear(_activation);
+        for (var joint = 0; joint < _joints.Length; joint++)
+            (_joints[joint].Yaw, _joints[joint].Pitch) = (0, 0);
+        for (var muscle = 0; muscle < _muscles.Length; muscle++)
+            _muscles[muscle].Activation = 0;
         MeasureMuscles();
         _publishedPosition = Body.Position;
         _publishedRotation = Body.Rotation;
@@ -202,8 +166,9 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             var progress = false;
             for (var joint = 0; joint < Plan.Joints.Count; joint++)
             {
-                var parent = _parents[joint];
-                var child = _children[joint];
+                ref var state = ref _joints[joint];
+                var parent = state.Parent;
+                var child = state.Child;
                 if (done[child] || !done[parent])
                     continue;
                 var plan = Plan.Joints[joint];
@@ -214,18 +179,12 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                 var childPart = Plan.Parts[child];
                 var toAnchor = Vector3.Transform(plan.Anchor - parentPart.Position, Quaternion.Inverse(parentPart.Orientation));
                 var fromAnchor = Vector3.Transform(childPart.Position - plan.Anchor, Quaternion.Inverse(childPart.Orientation));
-                var bend = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitY, pitch);
-                var orientation = Quaternion.Normalize(_orientations[parent] * _restRelative[joint] * bend);
+                var orientation = Quaternion.Normalize(_orientations[parent] * state.RestRelative * Bend(yaw, pitch));
                 var anchor = _positions[parent] + Vector3.Transform(toAnchor, _orientations[parent]);
                 _positions[child] = anchor + Vector3.Transform(fromAnchor, orientation);
                 _orientations[child] = orientation;
                 if (plan.Bends)
-                {
-                    _targetYaw[joint] = yaw;
-                    _targetPitch[joint] = pitch;
-                    _yaw[joint] = yaw;
-                    _pitch[joint] = pitch;
-                }
+                    (state.TargetYaw, state.TargetPitch, state.Yaw, state.Pitch) = (yaw, pitch, yaw, pitch);
                 done[child] = true;
                 remaining--;
                 progress = true;
@@ -251,8 +210,8 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         }
         PushPoses();
         MeasureJoints();
-        Array.Copy(_yaw, _targetYaw, _yaw.Length);
-        Array.Copy(_pitch, _targetPitch, _pitch.Length);
+        for (var joint = 0; joint < _joints.Length; joint++)
+            (_joints[joint].TargetYaw, _joints[joint].TargetPitch) = (_joints[joint].Yaw, _joints[joint].Pitch);
         PublishFromRoot();
     }
 
@@ -282,9 +241,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         {
             var part = Plan.Parts[index];
             // Bieżąca poza części: spoczynkowa (Place) albo wygięta (PlaceBent) przed dodaniem do świata.
-            var position = _positions[index];
-            var orientation = _orientations[index];
-            var pose = new RigidPose(position, orientation * FixOf(part));
+            var pose = new RigidPose(_positions[index], _orientations[index] * FixOf(part));
             _bodies[index] = part.Shape switch
             {
                 PartShape.Capsule => aPhysics.AddBody(new Capsule(part.Size.X, part.Size.Y), part.Mass, pose, part.Friction),
@@ -297,14 +254,14 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         for (var index = 0; index < Plan.Joints.Count; index++)
         {
             var joint = Plan.Joints[index];
-            var parent = Plan.Parts[_parents[index]];
-            var child = Plan.Parts[_children[index]];
-            var parentBepu = parent.Orientation * FixOf(parent);
+            ref var state = ref _joints[index];
+            var parent = Plan.Parts[state.Parent];
+            var child = Plan.Parts[state.Child];
             var childBepu = child.Orientation * FixOf(child);
-            var toParent = Quaternion.Inverse(parentBepu);
-            var a = _bodies[_parents[index]];
-            var b = _bodies[_children[index]];
-            _motors[index] = null;
+            var toParent = Quaternion.Inverse(parent.Orientation * FixOf(parent));
+            var a = _bodies[state.Parent];
+            var b = _bodies[state.Child];
+            state.Motor = null;
             switch (joint.Kind)
             {
                 case JointKind.Fixed:
@@ -312,7 +269,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                     {
                         LocalOffset = Vector3.Transform(child.Position - parent.Position, toParent),
                         LocalOrientation = Quaternion.Normalize(toParent * childBepu),
-                        SpringSettings = new SpringSettings(30, 1)
+                        SpringSettings = Rigid
                     });
                     break;
                 case JointKind.Wheel:
@@ -334,50 +291,26 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                         LocalOffsetA = top,
                         LocalOffsetB = default,
                         ServoSettings = ServoSettings.Default,
-                        SpringSettings = new SpringSettings(30, 1)
+                        SpringSettings = Rigid
                     });
-                    _servos[index] = aPhysics.AddConstraint(a, b, Hinge(index, 0));
+                    state.Servo = aPhysics.AddConstraint(a, b, Hinge(index, 0));
                     if (joint.Driven)
-                        _motors[index] = aPhysics.AddConstraint(b, a, Motor(index, 0, 0));
-                    _sentSteer[index] = 0;
-                    _sentSpeed[index] = 0;
-                    _sentTorque[index] = 0;
+                        state.Motor = aPhysics.AddConstraint(b, a, Motor(index, 0, 0));
+                    (state.SentSteer, state.SentSpeed, state.SentTorque) = (0, 0, 0);
                     break;
                 }
                 case JointKind.Passive:
                     AddPassiveJoint(aPhysics, index, a, b, toParent, childBepu);
                     break;
                 default:
-                {
-                    var socket = new BallSocket
-                    {
-                        LocalOffsetA = Vector3.Transform(joint.Anchor - parent.Position, toParent),
-                        LocalOffsetB = Vector3.Transform(joint.Anchor - child.Position, Quaternion.Inverse(childBepu)),
-                        SpringSettings = new SpringSettings(30, 1)
-                    };
-                    aPhysics.AddConstraint(a, b, socket);
-                    _servos[index] = aPhysics.AddConstraint(a, b, Servo(index, 0, 0));
-                    _sentYaw[index] = 0;
-                    _sentPitch[index] = 0;
+                    aPhysics.AddConstraint(a, b, Socket(joint, parent, child, toParent, childBepu, Rigid));
+                    state.Servo = aPhysics.AddConstraint(a, b, Servo(index, 0, 0));
+                    (state.SentYaw, state.SentPitch) = (0, 0);
                     break;
-                }
             }
         }
 
-        for (var muscle = 0; muscle < _muscleMotors.Length; muscle++)
-        {
-            var origin = Plan.Parts[_muscleOrigin[muscle]];
-            var insertion = Plan.Parts[_muscleInsertion[muscle]];
-            _muscleMotors[muscle] = aPhysics.AddConstraint(_bodies[_muscleOrigin[muscle]], _bodies[_muscleInsertion[muscle]], new LinearAxisMotor
-            {
-                LocalOffsetA = Vector3.Transform(_muscleOriginLocal[muscle], Quaternion.Inverse(FixOf(origin))),
-                LocalOffsetB = Vector3.Transform(_muscleInsertionLocal[muscle], Quaternion.Inverse(FixOf(insertion))),
-                LocalAxis = Vector3.UnitX,
-                TargetVelocity = 0,
-                Settings = new MotorSettings(0, 1e-6f)
-            });
-        }
-        MeasureMuscles();
+        AttachMuscles(aPhysics);
 
         // Części odległe w drzewie stawów o 1 albo 2 (staw, albo wspólny sąsiad — np. udo pająka i tułów przez
         // przyspawane biodro) nie zderzają się ze sobą; dalsze tak (wąż nie przenika sam przez siebie).
@@ -392,10 +325,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     private HashSet<(int, int)> NearPairs()
     {
         var neighbours = Enumerable.Range(0, Plan.Parts.Count).Select(_ => new HashSet<int>()).ToArray();
-        for (var joint = 0; joint < Plan.Joints.Count; joint++)
+        foreach (var joint in _joints)
         {
-            neighbours[_parents[joint]].Add(_children[joint]);
-            neighbours[_children[joint]].Add(_parents[joint]);
+            neighbours[joint.Parent].Add(joint.Child);
+            neighbours[joint.Child].Add(joint.Parent);
         }
         var pairs = new HashSet<(int, int)>();
         for (var part = 0; part < neighbours.Length; part++)
@@ -414,9 +347,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         foreach (var body in _bodies)
             aPhysics.RemoveBody(body);
         Array.Clear(_bodies);
-        Array.Clear(_servos);
-        Array.Clear(_motors);
-        Array.Clear(_muscleMotors);
+        for (var joint = 0; joint < _joints.Length; joint++)
+            (_joints[joint].Servo, _joints[joint].Motor) = (default, null);
+        for (var muscle = 0; muscle < _muscles.Length; muscle++)
+            _muscles[muscle].Motor = default;
         _physics = null;
     }
 
@@ -434,31 +368,30 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     {
         ApplyExternalMove();
 
-        for (var joint = 0; joint < _servos.Length; joint++)
+        for (var joint = 0; joint < _joints.Length; joint++)
         {
+            ref var state = ref _joints[joint];
             switch (Plan.Joints[joint].Kind)
             {
                 case JointKind.Ball:
-                    if (_targetYaw[joint] == _sentYaw[joint] && _targetPitch[joint] == _sentPitch[joint])
+                    if (state.TargetYaw == state.SentYaw && state.TargetPitch == state.SentPitch)
                         continue;
-                    aPhysics.UpdateConstraint(_servos[joint], Servo(joint, _targetYaw[joint], _targetPitch[joint]));
-                    _sentYaw[joint] = _targetYaw[joint];
-                    _sentPitch[joint] = _targetPitch[joint];
+                    aPhysics.UpdateConstraint(state.Servo, Servo(joint, state.TargetYaw, state.TargetPitch));
+                    (state.SentYaw, state.SentPitch) = (state.TargetYaw, state.TargetPitch);
                     break;
                 case JointKind.Passive:
                     UpdateDamper(aPhysics, joint);
                     break;
                 case JointKind.Wheel:
-                    if (_wheelSteer[joint] != _sentSteer[joint])
+                    if (state.WheelSteer != state.SentSteer)
                     {
-                        aPhysics.UpdateConstraint(_servos[joint], Hinge(joint, _wheelSteer[joint]));
-                        _sentSteer[joint] = _wheelSteer[joint];
+                        aPhysics.UpdateConstraint(state.Servo, Hinge(joint, state.WheelSteer));
+                        state.SentSteer = state.WheelSteer;
                     }
-                    if (_motors[joint] is { } motor && (_wheelSpeed[joint] != _sentSpeed[joint] || _wheelTorque[joint] != _sentTorque[joint]))
+                    if (state.Motor is { } motor && (state.WheelSpeed != state.SentSpeed || state.WheelTorque != state.SentTorque))
                     {
-                        aPhysics.UpdateConstraint(motor, Motor(joint, _wheelSpeed[joint], _wheelTorque[joint]));
-                        _sentSpeed[joint] = _wheelSpeed[joint];
-                        _sentTorque[joint] = _wheelTorque[joint];
+                        aPhysics.UpdateConstraint(motor, Motor(joint, state.WheelSpeed, state.WheelTorque));
+                        (state.SentSpeed, state.SentTorque) = (state.WheelSpeed, state.WheelTorque);
                     }
                     break;
             }
@@ -502,86 +435,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         PublishFromRoot();
     }
 
-    // ---------- mięśnie ----------
-
-    /// <summary>Punkt przyczepu w świecie: punkt w układzie części → bieżąca poza części.</summary>
-    private Vector3 MusclePoint(int aPart, Vector3 aLocal) => _positions[aPart] + Vector3.Transform(aLocal, _orientations[aPart]);
-
-    /// <summary>Długości i szybkości mięśni z bieżących póz (i prędkości ciał, jeśli stwór jest w fizyce).</summary>
-    private void MeasureMuscles()
-    {
-        for (var muscle = 0; muscle < _muscleLength.Length; muscle++)
-        {
-            var origin = MusclePoint(_muscleOrigin[muscle], _muscleOriginLocal[muscle]);
-            var insertion = MusclePoint(_muscleInsertion[muscle], _muscleInsertionLocal[muscle]);
-            var line = origin - insertion;
-            var length = line.Length();
-            _muscleLength[muscle] = length;
-            if (_physics is not { } physics || length < 1e-6f)
-            {
-                _muscleSpeed[muscle] = 0;
-                continue;
-            }
-            var a = physics.Body(_bodies[_muscleOrigin[muscle]]);
-            var b = physics.Body(_bodies[_muscleInsertion[muscle]]);
-            var velocityA = a.Velocity.Linear + Vector3.Cross(a.Velocity.Angular, origin - _positions[_muscleOrigin[muscle]]);
-            var velocityB = b.Velocity.Linear + Vector3.Cross(b.Velocity.Angular, insertion - _positions[_muscleInsertion[muscle]]);
-            _muscleSpeed[muscle] = Vector3.Dot(line / length, velocityA - velocityB);
-        }
-    }
-
-    /// <summary>
-    /// Aktywacja goni pobudzenie (wykładniczo, szybciej w górę niż w dół). Siła z modelu Hilla (<see cref="MusclePlan"/>):
-    /// F = F0 · (a · fL · fV + fP). Zależność od szybkości (fV) jest liczona niejawnie, przez solver fizyki: mięsień to
-    /// silnik liniowy między przyczepami — tłumik o współczynniku c = a · fL · F0 / v₀, który dąży do skracania
-    /// z szybkością v* = F / c. W bezruchu daje F; przy skracaniu siła maleje liniowo (do zera przy v₀ = vmax/5 —
-    /// styczna do krzywej Hilla), przy rozciąganiu rośnie, najwyżej do 1.5 · a · fL · F0 + fP · F0. Tłumik liczony
-    /// w każdym podkroku solvera jest stabilny; jawna fV zmieniana raz na krok świata (1/30 s) drgała.
-    /// Współczynnik tłumienia Bepu jest skalowany masą — dzieli się go przez masę efektywną osi mięśnia.
-    /// </summary>
-    private void UpdateMuscles(PhysicsWorld aPhysics, float aDelta)
-    {
-        for (var muscle = 0; muscle < _muscleMotors.Length; muscle++)
-        {
-            var plan = Plan.MuscleList[muscle];
-            var target = _excitation[muscle];
-            var time = target > _activation[muscle] ? ActivationTime : DeactivationTime;
-            _activation[muscle] += (target - _activation[muscle]) * (1 - MathF.Exp(-aDelta / time));
-
-            var optimal = plan.Optimal;
-            var relative = _muscleLength[muscle] / optimal;
-            var active = plan.MaxForce * _activation[muscle] * MusclePlan.ForceLength(relative);
-            var passive = plan.MaxForce * MusclePlan.Passive(relative);
-            var isometric = active + passive;
-            var linear = plan.MaxVelocity * optimal / 5;   // m/s: tu siła czynna spada do zera
-            var damping = MathF.Max(active, 0.01f * plan.MaxForce) / linear;
-            _muscleForce[muscle] = Math.Clamp(isometric + damping * _muscleSpeed[muscle], 0, 1.5f * active + passive);
-
-            var originPart = _muscleOrigin[muscle];
-            var insertionPart = _muscleInsertion[muscle];
-            var origin = MusclePoint(originPart, _muscleOriginLocal[muscle]);
-            var insertion = MusclePoint(insertionPart, _muscleInsertionLocal[muscle]);
-            var line = origin - insertion;
-            if (line.LengthSquared() < 1e-12f)
-                continue;
-            var direction = Vector3.Normalize(line);
-            var bodyA = aPhysics.Body(_bodies[originPart]);
-            var bodyB = aPhysics.Body(_bodies[insertionPart]);
-            var inverseMass = AxisInverseMass(bodyA, origin - _positions[originPart], direction)
-                + AxisInverseMass(bodyB, insertion - _positions[insertionPart], direction);
-            var orientationA = Quaternion.Normalize(_orientations[originPart] * FixOf(Plan.Parts[originPart]));
-            aPhysics.UpdateConstraint(_muscleMotors[muscle], new LinearAxisMotor
-            {
-                LocalOffsetA = Vector3.Transform(_muscleOriginLocal[muscle], Quaternion.Inverse(FixOf(Plan.Parts[originPart]))),
-                LocalOffsetB = Vector3.Transform(_muscleInsertionLocal[muscle], Quaternion.Inverse(FixOf(Plan.Parts[insertionPart]))),
-                LocalAxis = Vector3.Transform(direction, Quaternion.Inverse(orientationA)),
-                TargetVelocity = isometric > 0 ? isometric / damping : 0,   // dodatnia prędkość celu skraca mięsień (pomiar)
-                Settings = isometric > 0
-                    ? new MotorSettings(1.5f * active + passive, 1 / (damping * inverseMass))
-                    : new MotorSettings(0, 1)
-            });
-        }
-    }
+    // ---------- stawy bierne ----------
 
     /// <summary>
     /// Tłumik stawu biernego: c = <see cref="JointPlan.Strength"/> (N·m·s/rad). Bepu skaluje tłumienie bezwładnością,
@@ -589,12 +443,14 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     /// </summary>
     private void UpdateDamper(PhysicsWorld aPhysics, int aJoint)
     {
+        var state = _joints[aJoint];
         var damping = Plan.Joints[aJoint].Strength;
-        var a = aPhysics.Body(_bodies[_parents[aJoint]]);
-        var b = aPhysics.Body(_bodies[_children[aJoint]]);
-        var axis = Vector3.Transform(Vector3.UnitY, _orientations[_children[aJoint]]);
-        var inverse = AxisInverseInertia(a, axis) + AxisInverseInertia(b, axis);
-        aPhysics.UpdateConstraint(_servos[aJoint], new AngularMotor
+        var a = aPhysics.Body(_bodies[state.Parent]);
+        var b = aPhysics.Body(_bodies[state.Child]);
+        var axis = Vector3.Transform(Vector3.UnitY, _orientations[state.Child]);
+        var inverse = InverseInertia(a, Vector3.Transform(axis, Quaternion.Inverse(a.Pose.Orientation)))
+            + InverseInertia(b, Vector3.Transform(axis, Quaternion.Inverse(b.Pose.Orientation)));
+        aPhysics.UpdateConstraint(state.Servo, new AngularMotor
         {
             TargetVelocityLocalA = Vector3.Zero,
             Settings = new MotorSettings(MaxDamperTorque, 1 / (damping * inverse))
@@ -604,29 +460,15 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     /// <summary>Największy moment tłumika stawu (N·m).</summary>
     private const float MaxDamperTorque = 1000;
 
-    private static float AxisInverseInertia(BodyReference aBody, Vector3 aAxis)
+    /// <summary>v · I⁻¹ · v dla wektora w lokalnym układzie ciała (odwrotność bezwładności wokół tej osi, razy |v|²).</summary>
+    private static float InverseInertia(BodyReference aBody, Vector3 aLocal)
     {
-        var local = Vector3.Transform(aAxis, Quaternion.Inverse(aBody.Pose.Orientation));
         var tensor = aBody.LocalInertia.InverseInertiaTensor;
         var rotated = new Vector3(
-            tensor.XX * local.X + tensor.YX * local.Y + tensor.ZX * local.Z,
-            tensor.YX * local.X + tensor.YY * local.Y + tensor.ZY * local.Z,
-            tensor.ZX * local.X + tensor.ZY * local.Y + tensor.ZZ * local.Z);
-        return Vector3.Dot(local, rotated);
-    }
-
-    /// <summary>Odwrotność masy efektywnej ciała w punkcie (ramię <paramref name="aArm"/> od środka) wzdłuż kierunku.</summary>
-    private static float AxisInverseMass(BodyReference aBody, Vector3 aArm, Vector3 aDirection)
-    {
-        var inertia = aBody.LocalInertia;
-        var orientation = aBody.Pose.Orientation;
-        var angular = Vector3.Transform(Vector3.Cross(aArm, aDirection), Quaternion.Inverse(orientation));
-        var tensor = inertia.InverseInertiaTensor;
-        var rotated = new Vector3(
-            tensor.XX * angular.X + tensor.YX * angular.Y + tensor.ZX * angular.Z,
-            tensor.YX * angular.X + tensor.YY * angular.Y + tensor.ZY * angular.Z,
-            tensor.ZX * angular.X + tensor.ZY * angular.Y + tensor.ZZ * angular.Z);
-        return inertia.InverseMass + Vector3.Dot(angular, rotated);
+            tensor.XX * aLocal.X + tensor.YX * aLocal.Y + tensor.ZX * aLocal.Z,
+            tensor.YX * aLocal.X + tensor.YY * aLocal.Y + tensor.ZY * aLocal.Z,
+            tensor.ZX * aLocal.X + tensor.ZY * aLocal.Y + tensor.ZZ * aLocal.Z);
+        return Vector3.Dot(aLocal, rotated);
     }
 
     /// <summary>
@@ -637,14 +479,9 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     private void AddPassiveJoint(PhysicsWorld aPhysics, int aJoint, BodyHandle aA, BodyHandle aB, Quaternion aToParent, Quaternion aChildBepu)
     {
         var joint = Plan.Joints[aJoint];
-        var parent = Plan.Parts[_parents[aJoint]];
-        var child = Plan.Parts[_children[aJoint]];
-        aPhysics.AddConstraint(aA, aB, new BallSocket
-        {
-            LocalOffsetA = Vector3.Transform(joint.Anchor - parent.Position, aToParent),
-            LocalOffsetB = Vector3.Transform(joint.Anchor - child.Position, Quaternion.Inverse(aChildBepu)),
-            SpringSettings = new SpringSettings(LimitFrequency, 1)
-        });
+        var child = Plan.Parts[_joints[aJoint].Child];
+        var limit = new SpringSettings(LimitFrequency, 1);
+        aPhysics.AddConstraint(aA, aB, Socket(joint, Plan.Parts[_joints[aJoint].Parent], child, aToParent, aChildBepu, limit));
         // Baza dziecka w pozie spoczynkowej w układzie Bepu rodzica (A) i dziecka (B).
         var restInA = Quaternion.Normalize(aToParent * child.Orientation);
         var restInB = Quaternion.Inverse(FixOf(child));
@@ -654,7 +491,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             {
                 LocalSwivelAxisA = Vector3.Transform(Vector3.UnitZ, restInA),
                 LocalHingeAxisB = Vector3.Transform(Vector3.UnitY, restInB),
-                SpringSettings = new SpringSettings(30, 1)
+                SpringSettings = Rigid
             });
         else
         {
@@ -663,7 +500,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             {
                 LocalHingeAxisA = Vector3.Transform(axis, restInA),
                 LocalHingeAxisB = Vector3.Transform(axis, restInB),
-                SpringSettings = new SpringSettings(30, 1)
+                SpringSettings = Rigid
             });
         }
         if (joint.HasYaw)
@@ -673,10 +510,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                 LocalBasisB = restInB,
                 MinimumAngle = joint.YawMin,
                 MaximumAngle = joint.MaxYaw,
-                SpringSettings = new SpringSettings(LimitFrequency, 1)
+                SpringSettings = limit
             });
         // Tłumienie stawu (tkanki, maź): tłumik kątowy o współczynniku Strength (N·m·s/rad), liczony w solverze.
-        _servos[aJoint] = aPhysics.AddConstraint(aA, aB, new AngularMotor
+        _joints[aJoint].Servo = aPhysics.AddConstraint(aA, aB, new AngularMotor
         {
             TargetVelocityLocalA = Vector3.Zero,
             Settings = new MotorSettings(0, 1)
@@ -688,7 +525,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                 LocalBasisB = Quaternion.Normalize(restInB * toY),
                 MinimumAngle = joint.PitchMin,   // ogranicznik wokół osi Y mierzy pochylenie z tym samym znakiem (pomiar)
                 MaximumAngle = joint.MaxPitch,
-                SpringSettings = new SpringSettings(LimitFrequency, 1)
+                SpringSettings = limit
             });
     }
 
@@ -696,6 +533,15 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     public const float LimitFrequency = 120;
 
     // ---------- pomocnicze ----------
+
+    /// <summary>Przegub kulowy w kotwicy stawu (przesunięcia w układach Bepu rodzica i dziecka).</summary>
+    private static BallSocket Socket(JointPlan aJoint, PartPlan aParent, PartPlan aChild, Quaternion aToParent, Quaternion aChildBepu,
+        SpringSettings aSpring) => new()
+    {
+        LocalOffsetA = Vector3.Transform(aJoint.Anchor - aParent.Position, aToParent),
+        LocalOffsetB = Vector3.Transform(aJoint.Anchor - aChild.Position, Quaternion.Inverse(aChildBepu)),
+        SpringSettings = aSpring
+    };
 
     /// <summary>Bieżące pozy części do brył fizyki (jeśli stwór w niej jest), z zerowymi prędkościami.</summary>
     private void PushPoses()
@@ -726,74 +572,37 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     /// <summary>Kąty stawów kulowych z bieżących orientacji części.</summary>
     private void MeasureJoints()
     {
-        for (var joint = 0; joint < _yaw.Length; joint++)
+        for (var joint = 0; joint < _joints.Length; joint++)
         {
             if (!Plan.Joints[joint].Bends)
                 continue;
-            var relative = Quaternion.Inverse(_orientations[_parents[joint]]) * _orientations[_children[joint]];
-            var bend = Quaternion.Inverse(_restRelative[joint]) * relative;
+            ref var state = ref _joints[joint];
+            var relative = Quaternion.Inverse(_orientations[state.Parent]) * _orientations[state.Child];
+            var bend = Quaternion.Inverse(state.RestRelative) * relative;
             var axis = Vector3.Transform(Vector3.UnitX, bend);
-            _yaw[joint] = MathF.Atan2(axis.Y, axis.X);
-            _pitch[joint] = MathF.Atan2(-axis.Z, MathF.Sqrt(axis.X * axis.X + axis.Y * axis.Y));
+            state.Yaw = MathF.Atan2(axis.Y, axis.X);
+            state.Pitch = MathF.Atan2(-axis.Z, MathF.Sqrt(axis.X * axis.X + axis.Y * axis.Y));
         }
     }
 
     private void SetPlan(BodyPlan aPlan)
     {
         var parts = aPlan.Parts.Count;
-        var joints = aPlan.Joints.Count;
         _bodies = new BodyHandle[parts];
         _positions = new Vector3[parts];
         _orientations = new Quaternion[parts];
-        _servos = new ConstraintHandle[joints];
-        _motors = new ConstraintHandle?[joints];
-        _wheelSteer = new float[joints];
-        _wheelSpeed = new float[joints];
-        _wheelTorque = new float[joints];
-        _sentSteer = new float[joints];
-        _sentSpeed = new float[joints];
-        _sentTorque = new float[joints];
-        _restRelative = new Quaternion[joints];
-        _parents = new int[joints];
-        _children = new int[joints];
-        _targetYaw = new float[joints];
-        _targetPitch = new float[joints];
-        _sentYaw = new float[joints];
-        _sentPitch = new float[joints];
-        _yaw = new float[joints];
-        _pitch = new float[joints];
-        for (var index = 0; index < joints; index++)
+        _joints = new JointState[aPlan.Joints.Count];
+        for (var index = 0; index < _joints.Length; index++)
         {
             var joint = aPlan.Joints[index];
-            _parents[index] = aPlan.IndexOf(joint.Parent);
-            _children[index] = aPlan.IndexOf(joint.Child);
-            _restRelative[index] = Quaternion.Inverse(aPlan.Parts[_parents[index]].Orientation) * aPlan.Parts[_children[index]].Orientation;
+            ref var state = ref _joints[index];
+            state.Parent = aPlan.IndexOf(joint.Parent);
+            state.Child = aPlan.IndexOf(joint.Child);
+            state.RestRelative = Quaternion.Inverse(aPlan.Parts[state.Parent].Orientation) * aPlan.Parts[state.Child].Orientation;
         }
         for (var index = 0; index < parts; index++)
             (_positions[index], _orientations[index]) = RestPose(index);
-
-        var muscles = aPlan.MuscleList.Count;
-        _muscleMotors = new ConstraintHandle[muscles];
-        _muscleOrigin = new int[muscles];
-        _muscleInsertion = new int[muscles];
-        _muscleOriginLocal = new Vector3[muscles];
-        _muscleInsertionLocal = new Vector3[muscles];
-        _excitation = new float[muscles];
-        _activation = new float[muscles];
-        _muscleLength = new float[muscles];
-        _muscleSpeed = new float[muscles];
-        _muscleForce = new float[muscles];
-        for (var muscle = 0; muscle < muscles; muscle++)
-        {
-            var plan = aPlan.MuscleList[muscle];
-            _muscleOrigin[muscle] = aPlan.IndexOf(plan.Origin);
-            _muscleInsertion[muscle] = aPlan.IndexOf(plan.Insertion);
-            var origin = aPlan.Parts[_muscleOrigin[muscle]];
-            var insertion = aPlan.Parts[_muscleInsertion[muscle]];
-            _muscleOriginLocal[muscle] = Vector3.Transform(plan.OriginPoint - origin.Position, Quaternion.Inverse(origin.Orientation));
-            _muscleInsertionLocal[muscle] = Vector3.Transform(plan.InsertionPoint - insertion.Position, Quaternion.Inverse(insertion.Orientation));
-            _muscleLength[muscle] = plan.RestLength;
-        }
+        SetMuscles(aPlan);
     }
 
     /// <summary>Poza spoczynkowa części w świecie przy obecnej pozie stwora.</summary>
@@ -804,6 +613,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             Quaternion.Normalize(Body.Rotation * part.Orientation));
     }
 
+    /// <summary>Obrót stawu: skręt wokół osi Z, potem pochylenie wokół osi Y (w pozie spoczynkowej dziecka).</summary>
+    private static Quaternion Bend(float aYaw, float aPitch) =>
+        Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitY, aPitch);
+
     /// <summary>
     /// Serwo stawu: cel B = A · T w lokalnym układzie Bepu rodzica, gdzie T = Fa⁻¹ · R0 · Rz(skręt) · Ry(pochylenie) · Fb
     /// (R0 — względny obrót w pozie spoczynkowej, F — poprawka osi kapsuły). Skręt i pochylenie są wokół osi dziecka
@@ -811,24 +624,21 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     /// </summary>
     private AngularServo Servo(int aJoint, float aYaw, float aPitch)
     {
-        var joint = Plan.Joints[aJoint];
-        var parent = Plan.Parts[_parents[aJoint]];
-        var child = Plan.Parts[_children[aJoint]];
-        var bend = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, aYaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitY, aPitch);
-        var target = Quaternion.Inverse(FixOf(parent)) * _restRelative[aJoint] * bend * FixOf(child);
+        var state = _joints[aJoint];
+        var target = Quaternion.Inverse(FixOf(Plan.Parts[state.Parent])) * state.RestRelative * Bend(aYaw, aPitch) * FixOf(Plan.Parts[state.Child]);
         return new AngularServo
         {
             TargetRelativeRotationLocalA = Quaternion.Normalize(target),
             SpringSettings = new SpringSettings(ServoFrequency, 1),
-            ServoSettings = new ServoSettings(float.MaxValue, 0, joint.Strength)
+            ServoSettings = new ServoSettings(float.MaxValue, 0, Plan.Joints[aJoint].Strength)
         };
     }
 
     /// <summary>Zawias koła: oś koła (jego Y) wzdłuż osi z pozy spoczynkowej obróconej o skręt wokół pionu rodzica.</summary>
     private AngularHinge Hinge(int aJoint, float aSteer)
     {
-        var parent = Plan.Parts[_parents[aJoint]];
-        var child = Plan.Parts[_children[aJoint]];
+        var parent = Plan.Parts[_joints[aJoint].Parent];
+        var child = Plan.Parts[_joints[aJoint].Child];
         var toParent = Quaternion.Inverse(parent.Orientation * FixOf(parent));
         var axle = Vector3.Transform(Vector3.Transform(Vector3.UnitY, child.Orientation * FixOf(child)), toParent);
         var up = Vector3.Transform(Vector3.UnitZ, toParent);
@@ -836,18 +646,18 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         {
             LocalHingeAxisA = Vector3.Normalize(Vector3.Transform(axle, Quaternion.CreateFromAxisAngle(up, aSteer))),
             LocalHingeAxisB = Vector3.UnitY,
-            SpringSettings = new SpringSettings(30, 1)
+            SpringSettings = Rigid
         };
     }
 
-    /// <summary>Silnik koła: prędkość obwodowa → kątowa wokół osi koła (znak sprawdzony pomiarem: dodatnia = do przodu).</summary>
+    /// <summary>Silnik koła: prędkość obwodowa → kątowa wokół osi koła (dodatnia = do przodu, sprawdzone pomiarem).</summary>
     private AngularAxisMotor Motor(int aJoint, float aSpeed, float aTorque)
     {
-        var radius = MathF.Max(0.01f, Plan.Parts[_children[aJoint]].Size.X);
+        var radius = MathF.Max(0.01f, Plan.Parts[_joints[aJoint].Child].Size.X);
         return new AngularAxisMotor
         {
             LocalAxisA = Vector3.UnitY,
-            TargetVelocity = aSpeed / radius,   // dodatnia = do przodu (pomiar)
+            TargetVelocity = aSpeed / radius,
             Settings = new MotorSettings(MathF.Max(0, aTorque), 1e-6f)
         };
     }

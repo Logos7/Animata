@@ -1,5 +1,6 @@
 using System.Numerics;
 using Animata.Core.Actuators;
+using Animata.Core.Bodies;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Sensors;
 
@@ -25,7 +26,7 @@ public static partial class WorldObjectCatalog
         string[] senses = aSenses ? [.. Spider.TouchPorts, FeelSensor.HeadPitchPort, FeelSensor.HeadRollPort] : [];
         var outputs = Enumerable.Range(0, Spider.Legs).SelectMany(aLeg => new[]
         {
-            SpineActuator.YawPort(Spider.SwingJoint(aLeg)), SpineActuator.PitchPort(Spider.LiftJoint(aLeg)), SpineActuator.PitchPort(Spider.KneeJoint(aLeg))
+            JointPorts.Yaw(Spider.SwingJoint(aLeg)), JointPorts.Pitch(Spider.LiftJoint(aLeg)), JointPorts.Pitch(Spider.KneeJoint(aLeg))
         });
         return NeuralNetworkModule.Build("Neural", [ClockSensor.SinPort, ClockSensor.CosPort, .. TargetSensor.SteeringPorts, .. senses],
             [ClockSensor.SinPort, ClockSensor.CosPort, "Found * DirectionY", "Found * DirectionX", "Found * Gap / 4", .. senses],

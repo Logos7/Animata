@@ -46,31 +46,41 @@ public sealed record EvolutionOptions
 }
 
 /// <summary>
-/// Prosty algorytm genetyczny na wektorach float z elitaryzmem i mutacją gaussowską.
-/// Niezależny od zadania: fitness dostaje wektor parametrów i numer pokolenia (większy = lepszy).
+/// Optymalizator wektora parametrów, niezależny od zadania: fitness dostaje wektor i numer pokolenia (większy = lepszy).
 /// Ocena populacji jest równoległa, więc funkcja fitness musi być bezpieczna wątkowo.
 /// </summary>
-public sealed class Evolution
+public interface IOptimizer
+{
+    int Generation { get; }
+
+    /// <summary>Najlepszy osobnik (kopia — nie zmienia się po następnych krokach).</summary>
+    float[] Best { get; }
+
+    float BestFitness { get; }
+
+    /// <summary>Ocenia bieżące pokolenie i tworzy następne. Zwraca fitness najlepszego osobnika.</summary>
+    float NextGeneration(Func<float[], int, float> aFitness);
+}
+
+/// <summary>
+/// Prosty algorytm genetyczny na wektorach float z elitaryzmem i mutacją gaussowską (<see cref="EvolutionAlgorithm.Genetic"/>).
+/// Optymalizator według <see cref="EvolutionOptions.Algorithm"/> daje <see cref="Create"/>.
+/// </summary>
+public sealed class Evolution : IOptimizer
 {
     private readonly EvolutionOptions _options;
     private readonly Random _random;
     private float[][] _population;
     private readonly float[] _fitness;
 
-    private readonly CmaEs? _cma;
+    /// <summary>Optymalizator wybrany w opcjach: algorytm genetyczny albo CMA-ES.</summary>
+    public static IOptimizer Create(ReadOnlySpan<float> aStart, EvolutionOptions aOptions) =>
+        aOptions.Algorithm == EvolutionAlgorithm.CmaEs ? new CmaEs(aStart, aOptions) : new Evolution(aStart, aOptions);
 
     public Evolution(ReadOnlySpan<float> aStart, EvolutionOptions aOptions)
     {
-        if (aOptions.Algorithm == EvolutionAlgorithm.CmaEs)
-        {
-            _options = aOptions;
-            _random = new Random(aOptions.Seed);
-            _fitness = [];
-            _population = [];
-            _cma = new CmaEs(aStart, aOptions);
-            Best = aStart.ToArray();
-            return;
-        }
+        if (aOptions.Algorithm != EvolutionAlgorithm.Genetic)
+            throw new ArgumentException($"{aOptions.Algorithm} — użyj {nameof(Evolution)}.{nameof(Create)}.", nameof(aOptions));
         if (aOptions.PopulationSize < 2 || aOptions.EliteCount < 1 || aOptions.EliteCount >= aOptions.PopulationSize)
             throw new ArgumentException("Population must be at least 2 and larger than the elite.", nameof(aOptions));
 
@@ -89,17 +99,8 @@ public sealed class Evolution
     public float[] Best { get; private set; }
     public float BestFitness { get; private set; } = float.NegativeInfinity;
 
-    /// <summary>Ocenia bieżące pokolenie i tworzy następne. Zwraca fitness najlepszego osobnika.</summary>
-    public float Step(Func<float[], int, float> aFitness)
+    public float NextGeneration(Func<float[], int, float> aFitness)
     {
-        if (_cma is { } cma)
-        {
-            cma.Step(aFitness, Generation);
-            Best = (float[])cma.Best.Clone();
-            BestFitness = cma.BestFitness;
-            Generation++;
-            return BestFitness;
-        }
         var generation = Generation;
         Parallel.For(0, _population.Length, new ParallelOptions { MaxDegreeOfParallelism = _options.MaxParallelism }, aIndex =>
         {

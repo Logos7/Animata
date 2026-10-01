@@ -299,13 +299,13 @@ public static class SeekRigs
         {
             return tuning; // mózg nie pasuje do ciała rigu — powie o tym budowa zadania nauki
         }
-        foreach (var (slot, source) in Slots(active))
+        foreach (var (slot, source) in active.Body.Slots)
         {
-            if (Slots(reference).FirstOrDefault(aPair => aPair.Slot == slot).Owner is not { } target || target.GetType() != source.GetType())
+            if (reference.Body.Slots.FirstOrDefault(aPair => aPair.Slot == slot).Owner is not { } target || target.GetType() != source.GetType())
                 continue;
             var mine = Settings.Capture(source);
             var theirs = Settings.Capture(target);
-            var differing = mine.Where(aPair => !IsTarget(source, aPair.Key) && (!theirs.TryGetValue(aPair.Key, out var other) ||
+            var differing = mine.Where(aPair => Settings.Find(source, aPair.Key)?.IsReference != true && (!theirs.TryGetValue(aPair.Key, out var other) ||
                     aPair.Value.GetRawText() != other.GetRawText()))
                 .ToDictionary(aPair => aPair.Key, aPair => aPair.Value);
             if (differing.Count > 0)
@@ -316,17 +316,10 @@ public static class SeekRigs
 
     private static void ApplySlotTuning(ActiveEntity aCreature, Dictionary<string, Dictionary<string, System.Text.Json.JsonElement>> aTuning)
     {
-        foreach (var (slot, owner) in Slots(aCreature))
+        foreach (var (slot, owner) in aCreature.Body.Slots)
             if (aTuning.TryGetValue(slot, out var values))
                 Settings.Apply(owner, values);
     }
-
-    private static IEnumerable<(string Slot, object Owner)> Slots(ActiveEntity aCreature) =>
-        aCreature.Body.Sensors.Select(aSensor => (aSensor.Slot, (object)aSensor))
-            .Concat(aCreature.Body.Actuators.Select(aActuator => (aActuator.Slot, (object)aActuator)));
-
-    private static bool IsTarget(object aOwner, string aSetting) =>
-        Settings.Find(aOwner, aSetting)?.Type == typeof(Guid?);
 
     /// <summary>
     /// Rig dla stwora bez własnego (<see cref="ActiveEntity.TrainingRig"/>): nowy stwór tego samego rodzaju z rejestru

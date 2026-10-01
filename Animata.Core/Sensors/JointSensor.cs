@@ -1,4 +1,5 @@
 using Animata.Core.Actuators;
+using Animata.Core.Bodies;
 using Animata.Core.Entities;
 using Animata.Core.Worlds;
 
@@ -10,43 +11,30 @@ namespace Animata.Core.Sensors;
 /// </summary>
 public sealed class JointSensor : Sensor
 {
-    private string[] _ports = [];
-    private readonly Dictionary<string, float> _readings = [];
-
     public JointSensor(Bodies.BodyPlan aPlan) => SetJoints(aPlan);
 
     public int Joints { get; private set; }
-
-    public override IReadOnlyList<string> OutputPorts => _ports;
 
     /// <summary>Stawy i porty z planu ciała (tylko ruchome osie — zawias nie ma portu skrętu).</summary>
     public void SetJoints(Bodies.BodyPlan aPlan)
     {
         Joints = aPlan.Joints.Count;
-        SetPorts(SpineActuator.SensedPortsFor(aPlan));
-    }
-
-    private void SetPorts(string[] aPorts)
-    {
-        _ports = aPorts;
-        _readings.Clear();
-        foreach (var port in _ports)
-            _readings[port] = 0;
+        SetPorts(JointPorts.Sensed(aPlan));
     }
 
     public override IReadOnlyDictionary<string, float> Read(Entity aOwner, World aWorld)
     {
         if (aOwner is not ArticulatedCreature creature)
-            return _readings;
+            return Readings;
         var joints = Math.Min(Joints, creature.JointCount);
         for (var joint = 0; joint < joints; joint++)
         {
             var plan = creature.Plan.Joints[joint];
             if (plan.HasYaw)
-                _readings[SpineActuator.YawPort(joint)] = Bodies.JointPlan.Command(creature.JointYaw(joint), plan.YawMin, plan.MaxYaw);
+                Readings[JointPorts.Yaw(joint)] = Bodies.JointPlan.Command(creature.JointYaw(joint), plan.YawMin, plan.MaxYaw);
             if (plan.HasPitch)
-                _readings[SpineActuator.PitchPort(joint)] = Bodies.JointPlan.Command(creature.JointPitch(joint), plan.PitchMin, plan.MaxPitch);
+                Readings[JointPorts.Pitch(joint)] = Bodies.JointPlan.Command(creature.JointPitch(joint), plan.PitchMin, plan.MaxPitch);
         }
-        return _readings;
+        return Readings;
     }
 }

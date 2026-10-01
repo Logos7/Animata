@@ -16,4 +16,8 @@ public class Body
 
     /// <summary>Aktuator w danym slocie albo null.</summary>
     public Actuator? FindActuator(string aSlot) => Actuators.Find(aActuator => aActuator.Slot == aSlot);
+
+    /// <summary>Wszystkie gniazda: zmysły, potem napędy (slot, obiekt — np. do ustawień).</summary>
+    public IEnumerable<(string Slot, object Owner)> Slots =>
+        Sensors.Select(aSensor => (aSensor.Slot, (object)aSensor)).Concat(Actuators.Select(aActuator => (aActuator.Slot, (object)aActuator)));
 }

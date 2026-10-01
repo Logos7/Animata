@@ -34,7 +34,7 @@ public static class MuscleHumanoid
     public static string Muscle(string aName, int aSide) => aName + Humanoid.Sides[aSide];
 
     /// <summary>Porty serw (talia, barki, łokcie).</summary>
-    public static readonly string[] ServoPorts = SpineActuator.PortsFor(Plan);
+    public static readonly string[] ServoPorts = JointPorts.Driven(Plan);
 
     /// <summary>Porty mięśni (pobudzenia), lewa noga, potem prawa.</summary>
     public static readonly string[] MusclePorts = [.. Plan.MuscleList.Select(aMuscle => aMuscle.Name)];

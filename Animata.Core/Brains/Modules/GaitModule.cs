@@ -1,4 +1,5 @@
 using Animata.Core.Actuators;
+using Animata.Core.Bodies;
 using Animata.Core.Sensors;
 
 namespace Animata.Core.Brains.Modules;
@@ -44,8 +45,8 @@ public sealed class GaitModule() : ParametricModule(Specs, [0.6f, 0.6f, 0, 0.5f,
     /// <summary>Porty ruchomych osi nóg, w kolejności portów nóg pająka: zamachy, potem uniesienia i kolana.</summary>
     public static readonly string[] Outputs =
     [
-        .. Enumerable.Range(0, Legs).Select(aLeg => SpineActuator.YawPort(3 * aLeg)),
-        .. Enumerable.Range(0, Legs).SelectMany(aLeg => new[] { SpineActuator.PitchPort(3 * aLeg + 1), SpineActuator.PitchPort(3 * aLeg + 2) })
+        .. Enumerable.Range(0, Legs).Select(aLeg => JointPorts.Yaw(3 * aLeg)),
+        .. Enumerable.Range(0, Legs).SelectMany(aLeg => new[] { JointPorts.Pitch(3 * aLeg + 1), JointPorts.Pitch(3 * aLeg + 2) })
     ];
 
     private readonly Dictionary<string, float> _outputs = Outputs.ToDictionary(aPort => aPort, _ => 0f);
@@ -74,9 +75,9 @@ public sealed class GaitModule() : ParametricModule(Specs, [0.6f, 0.6f, 0, 0.5f,
             var theta = _phase + Offset[leg];
             var swing = MathF.Max(0, MathF.Cos(theta)) * drive;
             var stride = Math.Clamp(Stride * drive * (1 + turn * Side[leg]), 0, 1);
-            _outputs[SpineActuator.YawPort(3 * leg)] = Math.Clamp(Side[leg] * stride * MathF.Sin(theta), -1, 1);
-            _outputs[SpineActuator.PitchPort(3 * leg + 1)] = Math.Clamp(-Lift * swing, -1, 1);
-            _outputs[SpineActuator.PitchPort(3 * leg + 2)] = Math.Clamp(Knee + KneeSwing * swing, -1, 1);
+            _outputs[JointPorts.Yaw(3 * leg)] = Math.Clamp(Side[leg] * stride * MathF.Sin(theta), -1, 1);
+            _outputs[JointPorts.Pitch(3 * leg + 1)] = Math.Clamp(-Lift * swing, -1, 1);
+            _outputs[JointPorts.Pitch(3 * leg + 2)] = Math.Clamp(Knee + KneeSwing * swing, -1, 1);
         }
         return _outputs;
     }

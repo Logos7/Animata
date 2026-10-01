@@ -14,9 +14,7 @@ namespace Animata.Core.Sensors;
 public sealed class RaySensor : Sensor
 {
     private float[] _angles = [];
-    private string[] _ports = [];
     private float[] _distances = [];
-    private readonly Dictionary<string, float> _readings = [];
 
     public RaySensor(IEnumerable<float> aAngles, float aRange = 3)
     {
@@ -34,12 +32,9 @@ public sealed class RaySensor : Sensor
         if (angles.Length == 0 || angles.Any(aAngle => !float.IsFinite(aAngle)))
             throw new ArgumentException("A ray sensor needs at least one finite angle.", nameof(aAngles));
         _angles = angles;
-        _ports = Enumerable.Range(0, angles.Length).Select(PortName).ToArray();
         _distances = new float[angles.Length];
         Array.Fill(_distances, Range);
-        _readings.Clear();
-        foreach (var port in _ports)
-            _readings[port] = 0;
+        SetPorts(Enumerable.Range(0, angles.Length).Select(PortName));
     }
 
     /// <summary>Czy nazwa portu wygląda jak port wąsa („Ray” + numer).</summary>
@@ -74,8 +69,6 @@ public sealed class RaySensor : Sensor
     /// <summary>Odległości trafień od obrysu z ostatniego odczytu (Range = brak trafienia) — do rysowania.</summary>
     public IReadOnlyList<float> LastDistances => _distances;
 
-    public override IReadOnlyList<string> OutputPorts => _ports;
-
     public override IReadOnlyDictionary<string, float> Read(Entity aOwner, World aWorld)
     {
         var range = MathF.Max(1e-3f, Range);
@@ -104,9 +97,9 @@ public sealed class RaySensor : Sensor
             }
 
             _distances[ray] = nearest;
-            _readings[_ports[ray]] = 1 - nearest / range;
+            Readings[OutputPorts[ray]] = 1 - nearest / range;
         }
-        return _readings;
+        return Readings;
     }
 
     /// <summary>Odległość wzdłuż promienia do okręgu; 0 gdy start jest w środku; +∞ gdy pudło.</summary>

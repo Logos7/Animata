@@ -27,7 +27,7 @@ public static class PortRewiring
         Func<BrainModule, string, bool> aFeeds, Action<IReadOnlyList<BrainGraph>> aChangeBody)
     {
         var brain = aCreature.Brain;
-        var graphs = brain is null ? [] : GraphsOf(brain.Graph).ToList();
+        var graphs = brain is null ? [] : brain.Graph.Graphs().ToList();
 
         // 1. Wszystko, co może rzucić, zanim cokolwiek się zmieni.
         var states = new List<(BrainModule Module, ModuleState State)>();
@@ -81,15 +81,6 @@ public static class PortRewiring
         }
         var remapped = aRemap(aModule.State, aModule.ModuleName);
         return ReferenceEquals(remapped, aModule.State) ? aModule : aModule with { State = remapped };
-    }
-
-    /// <summary>Graf i wszystkie podgrafy (rekurencyjnie).</summary>
-    public static IEnumerable<BrainGraph> GraphsOf(BrainGraph aGraph)
-    {
-        yield return aGraph;
-        foreach (var composite in aGraph.Modules.OfType<CompositeModule>())
-            foreach (var inner in GraphsOf(composite.Inner))
-                yield return inner;
     }
 
     /// <summary>Pary modułów połączone „port do portu tej samej nazwy” na portach spełniających warunek (źródło, port).</summary>

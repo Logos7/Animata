@@ -40,12 +40,12 @@ public class MuscleTests
         var plan = MuscleHumanoid.DefaultPlan();
         Assert.Equal(24, plan.MuscleList.Count);
         Assert.All(new[] { 1, 2, 3, 4, 5, 6 }, aJoint => Assert.Equal(JointKind.Passive, plan.Joints[aJoint].Kind));
-        Assert.DoesNotContain(SpineActuator.PitchPort(Humanoid.Knee(0)), MuscleHumanoid.ServoPorts);
-        Assert.Contains(SpineActuator.PitchPort(Humanoid.Waist), MuscleHumanoid.ServoPorts);
+        Assert.DoesNotContain(JointPorts.Pitch(Humanoid.Knee(0)), MuscleHumanoid.ServoPorts);
+        Assert.Contains(JointPorts.Pitch(Humanoid.Waist), MuscleHumanoid.ServoPorts);
 
         var humanoid = (Creature)MuscleHumanoid.Design.Type.Create();
         Assert.Equal(24, humanoid.MuscleCount);
-        Assert.Contains(SpineActuator.PitchPort(Humanoid.Knee(0)), humanoid.Body.Sensors.OfType<JointSensor>().Single().OutputPorts);
+        Assert.Contains(JointPorts.Pitch(Humanoid.Knee(0)), humanoid.Body.Sensors.OfType<JointSensor>().Single().OutputPorts);
         Assert.Equal(72, humanoid.Body.Sensors.OfType<MuscleSensor>().Single().OutputPorts.Count);
         Assert.Equal(MuscleHumanoid.MusclePorts, humanoid.Body.Actuators.OfType<MuscleActuator>().Single().InputPorts);
     }
@@ -215,13 +215,13 @@ public class MuscleTests
             }
             return -sum;
         }
-        var evolution = new Evolution(new float[aDimensions], new EvolutionOptions
+        var evolution = Evolution.Create(new float[aDimensions], new EvolutionOptions
         {
             Algorithm = EvolutionAlgorithm.CmaEs, Seed = 2, MutationSigma = 0.5f, PopulationSize = 16, MaxParallelism = 1
         });
         var start = Fitness(new float[aDimensions], 0);
         for (var generation = 0; generation < (aDimensions < 20 ? 150 : 400); generation++)
-            evolution.Step(Fitness);
+            evolution.NextGeneration(Fitness);
         Assert.True(evolution.BestFitness > start * 1e-3f, $"{start} → {evolution.BestFitness}");
         Assert.All(evolution.Best, aValue => Assert.InRange(aValue, 0.8f, 1.2f));
     }

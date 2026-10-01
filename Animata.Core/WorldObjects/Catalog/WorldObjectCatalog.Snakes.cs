@@ -1,5 +1,6 @@
 using System.Numerics;
 using Animata.Core.Actuators;
+using Animata.Core.Bodies;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Sensors;
 
@@ -68,7 +69,7 @@ public static partial class WorldObjectCatalog
             "Found * DirectionY", "Found * DirectionX", "Found * DirectionZ", "Found * Gap / 4",
             FeelSensor.AheadPort, FeelSensor.HeadPitchPort
         ];
-        var outputs = Enumerable.Range(0, aSegments - 1).SelectMany(aJoint => new[] { SpineActuator.YawPort(aJoint), SpineActuator.PitchPort(aJoint) });
+        var outputs = JointPorts.Interleaved(aSegments - 1);
         var module = NeuralNetworkModule.Build("Neural",
             [ClockSensor.SinPort, ClockSensor.CosPort, .. TargetSensor.SteeringPorts, TargetSensor.DirectionZPort, FeelSensor.AheadPort, FeelSensor.HeadPitchPort],
             inputs, outputs, aHidden.Length > 0 ? aHidden : SnakeHiddenLayers);

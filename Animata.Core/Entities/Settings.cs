@@ -71,6 +71,9 @@ public sealed class SettingInfo(string aName, Type aType, SettingAttribute aAttr
     public string Label => Attribute.Label.Length > 0 ? Attribute.Label : Name;
     public bool IsReadOnly => Type == typeof(float[]);
 
+    /// <summary>Czy to wskazanie innej encji (Id, np. cel oka) — nie przenosi się do innego świata (próby nauki, warunki nauki).</summary>
+    public bool IsReference => Type == typeof(Guid?);
+
     /// <summary>Czy ustawienie stwora dotyczy slotu (<see cref="SettingAttribute.Slots"/>).</summary>
     public bool Concerns(string aSlot) =>
         Attribute.Slots.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Contains(aSlot);

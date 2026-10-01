@@ -7,7 +7,7 @@ namespace Animata.Core.Training;
 /// powyżej — tylko przekątna (sep-CMA-ES, Ros i Hansen 2008), bo sieci mają tysiące wag.
 /// Najlepszy wynik to najlepsza próbka od początku (pierwsze pokolenie ocenia też punkt startowy).
 /// </summary>
-public sealed class CmaEs
+public sealed class CmaEs : IOptimizer
 {
     public const int FullCovarianceLimit = 60;
 
@@ -81,6 +81,8 @@ public sealed class CmaEs
         Best = aStart.ToArray();
     }
 
+    public int Generation { get; private set; }
+
     public float[] Best { get; private set; }
     public float BestFitness { get; private set; } = float.NegativeInfinity;
 
@@ -88,8 +90,9 @@ public sealed class CmaEs
     public double Sigma => _sigma;
 
     /// <summary>Jedno pokolenie: λ próbek, ocena (równoległa), aktualizacja rozkładu. Fitness — większy lepszy.</summary>
-    public void Step(Func<float[], int, float> aFitness, int aGeneration)
+    public float NextGeneration(Func<float[], int, float> aFitness)
     {
+        var generation = Generation;
         var z = new double[_lambda][];
         var y = new double[_lambda][];
         var x = new float[_lambda][];
@@ -103,7 +106,7 @@ public sealed class CmaEs
             for (var i = 0; i < _n; i++)
                 x[k][i] = (float)(_mean[i] + _sigma * y[k][i]);
         }
-        if (aGeneration == 0)
+        if (generation == 0)
         {
             // Pierwsza próbka to sam punkt startowy — najlepszy wynik nigdy nie jest gorszy od startu.
             Array.Clear(z[0]);
@@ -115,7 +118,7 @@ public sealed class CmaEs
         var fitness = new float[_lambda];
         Parallel.For(0, _lambda, new ParallelOptions { MaxDegreeOfParallelism = _parallelism }, aIndex =>
         {
-            var value = aFitness(x[aIndex], aGeneration);
+            var value = aFitness(x[aIndex], generation);
             fitness[aIndex] = float.IsFinite(value) ? value : float.NegativeInfinity;
         });
         var order = Enumerable.Range(0, _lambda).OrderByDescending(aIndex => fitness[aIndex]).ToArray();
@@ -139,7 +142,7 @@ public sealed class CmaEs
         for (var i = 0; i < _n; i++)
             _ps[i] = (1 - _cs) * _ps[i] + csFactor * whitened[i];
         var psNorm = Math.Sqrt(_ps.Sum(aValue => aValue * aValue));
-        var hsig = psNorm / Math.Sqrt(1 - Math.Pow(1 - _cs, 2 * (aGeneration + 1))) / _chiN < 1.4 + 2.0 / (_n + 1) ? 1.0 : 0.0;
+        var hsig = psNorm / Math.Sqrt(1 - Math.Pow(1 - _cs, 2 * (generation + 1))) / _chiN < 1.4 + 2.0 / (_n + 1) ? 1.0 : 0.0;
         var ccFactor = Math.Sqrt(_cc * (2 - _cc) * _muEff);
         for (var i = 0; i < _n; i++)
             _pc[i] = (1 - _cc) * _pc[i] + hsig * ccFactor * yw[i];
@@ -174,6 +177,8 @@ public sealed class CmaEs
 
         _sigma *= Math.Exp(_cs / _damps * (psNorm / _chiN - 1));
         _sigma = Math.Clamp(_sigma, 1e-8, 1e4);
+        Generation++;
+        return BestFitness;
     }
 
     /// <summary>y = B · D · z.</summary>

@@ -13,20 +13,21 @@ public sealed class ClockSensor : Sensor
     public const string SinPort = "Sin";
     public const string CosPort = "Cos";
 
-    private static readonly string[] Ports = [SinPort, CosPort];
-    private readonly Dictionary<string, float> _readings = new() { [SinPort] = 0, [CosPort] = 1 };
+    public ClockSensor()
+    {
+        SetPorts([SinPort, CosPort]);
+        Readings[CosPort] = 1;
+    }
 
     /// <summary>Częstotliwość w Hz (domyślnie jak ręczne CPG węża).</summary>
     [Setting("Częstotliwość", Unit = "Hz", Min = 0.05, Max = 10)]
     public float Frequency { get; set; } = 1.2f;
 
-    public override IReadOnlyList<string> OutputPorts => Ports;
-
     public override IReadOnlyDictionary<string, float> Read(Entity aOwner, World aWorld)
     {
         var phase = 2 * Math.PI * Frequency * aWorld.Time;
-        _readings[SinPort] = (float)Math.Sin(phase);
-        _readings[CosPort] = (float)Math.Cos(phase);
-        return _readings;
+        Readings[SinPort] = (float)Math.Sin(phase);
+        Readings[CosPort] = (float)Math.Cos(phase);
+        return Readings;
     }
 }

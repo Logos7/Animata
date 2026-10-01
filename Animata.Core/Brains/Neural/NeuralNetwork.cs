@@ -38,7 +38,7 @@ public sealed class NeuralNetwork
                         neuron < _weights[layer - 1].Length &&
                         source < _weights[layer - 1][neuron].Length
                             ? _weights[layer - 1][neuron][source]
-                            : (Random.Shared.NextSingle() * 2 - 1) * scale;
+                            : RandomWeight(Random.Shared, scale);
                 if (layer - 1 < _biases.Length && neuron < _biases[layer - 1].Length)
                     biases[layer - 1][neuron] = _biases[layer - 1][neuron];
             }
@@ -163,7 +163,7 @@ public sealed class NeuralNetwork
             {
                 weights[matrix][neuron] = new float[aLayers[matrix]];
                 for (var source = 0; source < aLayers[matrix]; source++)
-                    weights[matrix][neuron][source] = (Random.Shared.NextSingle() * 2 - 1) * scale;
+                    weights[matrix][neuron][source] = RandomWeight(Random.Shared, scale);
             }
         }
         _layers = aLayers;
@@ -227,11 +227,14 @@ public sealed class NeuralNetwork
             {
                 var weights = _weights[layer][neuron];
                 for (var source = 0; source < weights.Length; source++)
-                    weights[source] = (random.NextSingle() * 2 - 1) * scale;
+                    weights[source] = RandomWeight(random, scale);
                 _biases[layer][neuron] = 0;
             }
         }
     }
+
+    /// <summary>Losowa waga z ±<paramref name="aScale"/> (skala ±1/√wejść).</summary>
+    private static float RandomWeight(Random aRandom, float aScale) => (aRandom.NextSingle() * 2 - 1) * aScale;
 
     /// <summary>Głęboka kopia wag.</summary>
     public float[][][] CopyWeights() =>
