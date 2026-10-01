@@ -64,19 +64,5 @@ internal sealed class MuscleRenderer(Viewport3DX aViewport)
         }
     }
 
-    /// <summary>Pusty model nie trafia do sceny (jak w <see cref="WhiskerRenderer"/>).</summary>
-    private bool Show(MeshGeometryModel3D aModel, bool aShown, MeshBuilder? aMesh)
-    {
-        if (aMesh is null)
-        {
-            if (aShown)
-                aViewport.Items.Remove(aModel);
-            return false;
-        }
-
-        aModel.Geometry = aMesh.ToMeshGeometry3D();
-        if (!aShown)
-            aViewport.Items.Add(aModel);
-        return true;
-    }
+    private bool Show(MeshGeometryModel3D aModel, bool aShown, MeshBuilder? aMesh) => SceneMeshes.Show(aViewport, aModel, aShown, aMesh);
 }

@@ -31,6 +31,6 @@ public class WiringTests
         Assert.Equal(4, demo.Creatures.Count);
         foreach (var creature in demo.Creatures)
             creature.Brain!.Graph.Validate();
-        demo.World.Update(1f / 30f);
+        demo.World.Update(TestWorlds.Delta);
     }
 }

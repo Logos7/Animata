@@ -76,8 +76,17 @@ public abstract class StudioPanel : Border
     {
     }
 
-    /// <summary>Skróty panelu. True = obsłużone (nawigator nie potraktuje np. Esc jako „wstecz”).</summary>
-    public virtual bool HandleKey(KeyEventArgs aEvent) => false;
+    /// <summary>
+    /// Skróty panelu. True = obsłużone (nawigator nie potraktuje np. Esc jako „wstecz”). Domyślnie Spacja — pauza sceny
+    /// (panele sceny wołają to na końcu swoich skrótów).
+    /// </summary>
+    public virtual bool HandleKey(KeyEventArgs aEvent)
+    {
+        if (aEvent.Key != Key.Space)
+            return false;
+        Session.TogglePause();
+        return true;
+    }
 
     public virtual void OnShown()
     {

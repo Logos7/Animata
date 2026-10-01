@@ -298,14 +298,11 @@ public sealed class NetworkPanel : StudioPanel
             case Key.S when (aEvent.KeyModifiers & KeyModifiers.Control) != 0:
                 Session.SaveSnapshot(_brain);
                 return true;
-            case Key.Space:
-                Session.TogglePause();
-                return true;
             case Key.Escape when _view?.Selected is not null:
                 _view.Select(_view.SelectedLayer);
                 return true;
             default:
-                return false;
+                return base.HandleKey(aEvent);
         }
     }
 }

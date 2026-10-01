@@ -351,16 +351,13 @@ public sealed class GraphPanel : StudioPanel
             case Key.F:
                 _canvas.FitToView();
                 return true;
-            case Key.Space:
-                Session.TogglePause();
-                return true;
             case Key.Enter when _canvas.Primary is { } primary and (CompositeModule or NeuralNetworkModule):
                 Activate(primary, _canvas.ScreenCenterOf(primary));
                 return true;
             case Key.Escape:
                 return _canvas.Cancel();
             default:
-                return false;
+                return base.HandleKey(aEvent);
         }
     }
 }

@@ -578,9 +578,6 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
         var control = (aEvent.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
         switch (aEvent.Key)
         {
-            case Key.Space:
-                Session.TogglePause();
-                return true;
             case Key.Delete when _renderer.Selection.Count > 0:
                 RemoveEntities(_renderer.Selection);
                 return true;
@@ -627,7 +624,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                 EnterCreature(creature);
                 return true;
             default:
-                return false;
+                return base.HandleKey(aEvent);
         }
     }
 
@@ -724,7 +721,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
     {
         try
         {
-            if (await WorldFiles.PickSaveAsync(this, Session.Name) is not { } file)
+            if (await JsonFiles.Worlds.PickSaveAsync(this, Session.Name) is not { } file)
                 return;
             var document = Session.Save();
             await using (var stream = await file.OpenWriteAsync())
@@ -734,7 +731,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
                     stream.SetLength(0); // nadpisanie dłuższego pliku nie może zostawić jego końcówki
                 await writer.WriteAsync(WorldFile.ToJson(document));
             }
-            if (WorldFiles.LocalPath(file) is { } path)
+            if (JsonFiles.LocalPath(file) is { } path)
                 RecentFiles.Add(path);
             Session.Status = $"zapisano: {file.Name}";
         }
@@ -746,7 +743,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
 
     private async Task LoadWorldAsync()
     {
-        if (await WorldFiles.PickOpenAsync(this) is not { } file)
+        if (await JsonFiles.Worlds.PickOpenAsync(this) is not { } file)
             return;
         try
         {
@@ -755,7 +752,7 @@ public sealed class SimulationPanel : StudioPanel, IDisposable
             var document = WorldFile.FromJson(await reader.ReadToEndAsync());
             _renderer.Select(null);
             Session.Load(document);
-            if (WorldFiles.LocalPath(file) is { } path)
+            if (JsonFiles.LocalPath(file) is { } path)
                 RecentFiles.Add(path);
             _listKey = string.Empty;
             _propertiesBuilt = false;

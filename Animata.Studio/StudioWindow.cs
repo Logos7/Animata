@@ -108,7 +108,7 @@ public sealed class StudioWindow : Window
             try
             {
                 var document = Core.Persistence.WorldFile.FromJson(File.ReadAllText(path));
-                session = new StudioSession(Kit.WorldFiles.SceneName(path), () => Core.Persistence.WorldFile.Restore(document));
+                session = new StudioSession(Kit.JsonFiles.Worlds.NameOf(path), () => Core.Persistence.WorldFile.Restore(document));
             }
             catch (Exception exception) when (exception is IOException or NotSupportedException or System.Text.Json.JsonException
                 or InvalidOperationException or ArgumentException or UnauthorizedAccessException)

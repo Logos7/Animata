@@ -73,13 +73,13 @@ public class NetworkEditingTests
         car.Brain.Graph.InvalidateDeep();
         car.Brain.Graph.Validate();
         for (var tick = 0; tick < 10; tick++)
-            world.Update(1f / 30f);
+            world.Update(TestWorlds.Delta);
         Assert.False(car.Brain.Matches(snapshot));
 
         car.Brain.Restore(snapshot);
         Assert.Equal(shape, string.Join(",", module.Network.Layers));
         Assert.True(car.Brain.Matches(snapshot));
-        world.Update(1f / 30f);
+        world.Update(TestWorlds.Delta);
     }
 
 }

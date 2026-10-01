@@ -97,8 +97,8 @@ public class CompositeModuleTests
 
         for (var tick = 0; tick < 240; tick++)
         {
-            flatWorld.Update(1f / 30f);
-            groupedWorld.Update(1f / 30f);
+            flatWorld.Update(TestWorlds.Delta);
+            groupedWorld.Update(TestWorlds.Delta);
         }
         Assert.Equal(flatCar.Body.Position, groupedCar.Body.Position);
         Assert.Equal(flatCar.Body.Rotation, groupedCar.Body.Rotation);

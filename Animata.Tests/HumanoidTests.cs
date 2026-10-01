@@ -8,13 +8,13 @@ using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
+using static Animata.Tests.TestWorlds;
 
 namespace Animata.Tests;
 
 /// <summary>Humanoid, błędnik, automat stanów (stanie ↔ chód) i nauka kilku modułów jednego mózgu.</summary>
 public class HumanoidTests : IDisposable
 {
-    private const float Delta = 1f / 30f;
     private readonly List<TrainingController> _controllers = [];
 
     public void Dispose()

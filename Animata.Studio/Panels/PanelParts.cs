@@ -88,7 +88,7 @@ public static class PanelParts
 
     private static async Task LoadBrainAsync(StudioSession aSession, ActiveEntity aCreature, Control aOwner, Action? aChanged)
     {
-        if (await BrainFiles.PickOpenAsync(aOwner) is not { } file)
+        if (await JsonFiles.Brains.PickOpenAsync(aOwner) is not { } file)
             return;
         try
         {
@@ -110,7 +110,7 @@ public static class PanelParts
         try
         {
             var document = aSession.CaptureBrain(aCreature);
-            if (await BrainFiles.PickSaveAsync(aOwner, StudioSession.NameOf(aCreature)) is not { } file)
+            if (await JsonFiles.Brains.PickSaveAsync(aOwner, StudioSession.NameOf(aCreature)) is not { } file)
                 return;
             await using (var stream = await file.OpenWriteAsync())
             await using (var writer = new StreamWriter(stream))

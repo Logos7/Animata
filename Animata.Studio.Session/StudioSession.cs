@@ -135,8 +135,7 @@ public sealed class StudioSession : IDisposable
     /// <summary>Jeden krok symulacji (przycisk „krok” w pauzie).</summary>
     public void Step()
     {
-        Error = null;
-        ErrorModuleId = null;
+        ClearError();
         Advance();
     }
 
@@ -144,18 +143,16 @@ public sealed class StudioSession : IDisposable
     {
         Paused = !Paused;
         if (!Paused)
-        {
-            Error = null;
-            ErrorModuleId = null;
-        }
+            ClearError();
     }
 
     public void Resume()
     {
         Paused = false;
-        Error = null;
-        ErrorModuleId = null;
+        ClearError();
     }
+
+    private void ClearError() => (Error, ErrorModuleId) = (null, null);
 
     private static readonly float[] Speeds = [0.25f, 0.5f, 1, 2, 4];
 
@@ -324,8 +321,7 @@ public sealed class StudioSession : IDisposable
             Status = $"mózg bez zmian: {exception.Message}";
             return false;
         }
-        History.Forget(brain);
-        _progress.Remove(brain);
+        Forget(brain);
         BrainRevision++;
         return true;
     }
@@ -561,6 +557,13 @@ public sealed class StudioSession : IDisposable
         return training;
     }
 
+    /// <summary>Zapomina historię snapshotów (kursor cofania) i postęp nauki mózgu — po podmianie albo usunięciu.</summary>
+    private void Forget(Brain aBrain)
+    {
+        History.Forget(aBrain);
+        _progress.Remove(aBrain);
+    }
+
     private Sphere? NearestTarget(Vector3 aPosition) => World.Entities.OfType<Sphere>()
         .MinBy(aTarget => Vector3.DistanceSquared(aTarget.Body.Position, aPosition));
 
@@ -585,8 +588,7 @@ public sealed class StudioSession : IDisposable
         if (aEntity is ActiveEntity { Brain: { } brain })
         {
             Training.Stop(brain, aSnapshot: false);
-            History.Forget(brain);
-            _progress.Remove(brain);
+            Forget(brain);
         }
         World.Remove(aEntity);
     }
@@ -736,8 +738,7 @@ public sealed class StudioSession : IDisposable
         Training = new TrainingController(History) { Paused = !_visible };
         old.Dispose();
         Paused = false;
-        Error = null;
-        ErrorModuleId = null;
+        ClearError();
         SceneReset?.Invoke();
     }
 

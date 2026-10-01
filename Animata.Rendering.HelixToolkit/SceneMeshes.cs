@@ -73,6 +73,25 @@ internal static class SceneMeshes
     }
 
     /// <summary>
+    /// Model z nową siatką w scenie (dodany, jeśli go nie było) albo zdjęty ze sceny, gdy siatki brak — pusty model nie
+    /// trafia do sceny (nie wiadomo, jak Helix zniesie pustą siatkę). Zwraca, czy model jest teraz w scenie.
+    /// </summary>
+    public static bool Show(Viewport3DX aViewport, MeshGeometryModel3D aModel, bool aShown, MeshBuilder? aMesh)
+    {
+        if (aMesh is null)
+        {
+            if (aShown)
+                aViewport.Items.Remove(aModel);
+            return false;
+        }
+
+        aModel.Geometry = aMesh.ToMeshGeometry3D();
+        if (!aShown)
+            aViewport.Items.Add(aModel);
+        return true;
+    }
+
+    /// <summary>
     /// Siatka części ciała w jej własnym układzie (środek w 0, długość wzdłuż X) — do stworów z części.
     /// Pierwsza część (głowa) dostaje kropkę na przodzie, żeby było widać, dokąd patrzy.
     /// </summary>

@@ -5,14 +5,13 @@ using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
+using static Animata.Tests.TestWorlds;
 
 namespace Animata.Tests;
 
 /// <summary>Pająk (czworonóg), generator kłusa, samokolizje stworów i czucie terenu.</summary>
 public class SpiderTests
 {
-    private const float Delta = 1f / 30f;
-
     private static Creature Walk(World aWorld, Vector3 aTarget, float aSeconds)
     {
         aWorld.Add(WorldObjectCatalog.CreateFloor(30, 30));
@@ -156,8 +155,6 @@ public class SpiderTests
 /// <summary>Noga pająka z trzech członów: kolano zgina się tylko w jedną stronę.</summary>
 public class SpiderLegTests
 {
-    private const float Delta = 1f / 30f;
-
     [Fact]
     public void Knee_BendsOnlyOneWay()
     {

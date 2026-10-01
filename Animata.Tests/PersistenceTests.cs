@@ -6,14 +6,13 @@ using Animata.Core.Persistence;
 using Animata.Core.Sensors;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
+using static Animata.Tests.TestWorlds;
 
 namespace Animata.Tests;
 
 /// <summary>Zapis i odczyt światów (JSON) — z mózgami, snapshotami i podgrafami.</summary>
 public class PersistenceTests
 {
-    private const float Delta = 1f / 30f;
-
     private static string RoundTrip(World aWorld, out World aRestored)
     {
         var json = WorldFile.ToJson(WorldFile.Capture(aWorld, "test"));

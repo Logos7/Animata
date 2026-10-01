@@ -5,14 +5,13 @@ using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
+using static Animata.Tests.TestWorlds;
 
 namespace Animata.Tests;
 
 /// <summary>Płyty terenu, wysokość terenu i przyciąganie do niego, wąż z własną siecią.</summary>
 public class TerrainTests
 {
-    private const float Delta = 1f / 30f;
-
     [Fact]
     public void HeightAt_TakesTheHighestSurface_AndRespectsRotation()
     {

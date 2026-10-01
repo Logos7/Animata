@@ -4,14 +4,13 @@ using Animata.Core.Persistence;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
+using static Animata.Tests.TestWorlds;
 
 namespace Animata.Tests;
 
 /// <summary>Drzewa i wspinanie węża (owinięcie wokół pnia, toczenie zwoju), kolory stworów.</summary>
 public class ClimbTests
 {
-    private const float Delta = 1f / 30f;
-
     private static (World World, Cylinder Tree, Creature Snake) Wrapped(CpgModule? aBrain = null)
     {
         var world = new World();

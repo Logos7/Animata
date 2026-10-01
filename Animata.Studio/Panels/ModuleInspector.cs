@@ -216,14 +216,7 @@ public sealed class ModuleInspector
         }
     }
 
-    private float? InputValue(BrainModule aModule, string aPort)
-    {
-        foreach (var link in _graph.Connections)
-            if (link.TargetId == aModule.Id && link.TargetPort == aPort && _graph.Find(link.SourceId) is { } source &&
-                _graph.LastOutputs(source) is { } outputs && outputs.TryGetValue(link.SourcePort, out var value))
-                return value;
-        return null;
-    }
+    private float? InputValue(BrainModule aModule, string aPort) => _graph.LastInput(aModule, aPort);
 
     /// <summary>Węzeł zmysłu: typ, slot, porty i ustawienia (zmysłu i stwora, które go dotyczą) z edytora ustawień.</summary>
     private void SensorSection(StackPanel aPanel, SensorModule aModule)

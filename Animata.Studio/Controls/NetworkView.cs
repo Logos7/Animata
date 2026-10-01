@@ -157,7 +157,7 @@ public sealed class NetworkView : ThemedControl
             for (var neuron = 0; neuron < layers[0] && neuron < inputs.Count; neuron++)
             {
                 var point = At(0, neuron);
-                Draw.Text(aContext, Shorten(inputs[neuron].Expression, 22), new Point(point.X - radius - 8, point.Y), labelSize,
+                Draw.Text(aContext, Ui.Shorten(inputs[neuron].Expression, 22), new Point(point.X - radius - 8, point.Y), labelSize,
                     palette.Text2, TextAnchor.Right, aMono: true);
             }
             var outputs = _module.Outputs;
@@ -170,9 +170,6 @@ public sealed class NetworkView : ThemedControl
             }
         }
     }
-
-    private static string Shorten(string aText, int aLength) =>
-        aText.Length <= aLength ? aText : aText[..(aLength - 1)] + "…";
 
     // ---------- mysz ----------
 

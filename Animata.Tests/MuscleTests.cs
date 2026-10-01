@@ -7,14 +7,13 @@ using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
+using static Animata.Tests.TestWorlds;
 
 namespace Animata.Tests;
 
 /// <summary>Stawy bierne, mięśnie (model Hilla), humanoid mięśniowy i CMA-ES.</summary>
 public class MuscleTests
 {
-    private const float Delta = 1f / 30f;
-
     private static Creature Stand(World aWorld)
     {
         aWorld.Add(WorldObjectCatalog.CreateFloor(10, 10));

@@ -28,10 +28,7 @@ internal static class ScenePicker
         if (width <= 0 || height <= 0)
             return false;
 
-        var forward = Vector3.Normalize(aCamera.LookDirection);
-        var right = Vector3.Normalize(Vector3.Cross(forward, aCamera.UpDirection));
-        var up = Vector3.Cross(right, forward);
-        var halfTan = MathF.Tan((float)(aCamera.FieldOfView * Math.PI / 180) / 2);
+        var (forward, right, up, halfTan) = Basis(aCamera);
         var x = (float)(2 * aPoint.X / width - 1) * (float)(width / height) * halfTan;
         var y = (float)(1 - 2 * aPoint.Y / height) * halfTan;
         aDirection = Vector3.Normalize(forward + right * x + up * y);
@@ -49,19 +46,24 @@ internal static class ScenePicker
         if (width <= 0 || height <= 0)
             return false;
 
-        var forward = Vector3.Normalize(aCamera.LookDirection);
-        var right = Vector3.Normalize(Vector3.Cross(forward, aCamera.UpDirection));
-        var up = Vector3.Cross(right, forward);
+        var (forward, right, up, halfTan) = Basis(aCamera);
         var offset = aWorld - aCamera.Position;
         var depth = Vector3.Dot(offset, forward);
         if (depth <= 1e-4f)
             return false;
 
-        var halfTan = MathF.Tan((float)(aCamera.FieldOfView * Math.PI / 180) / 2);
         var x = Vector3.Dot(offset, right) / depth / ((float)(width / height) * halfTan);
         var y = Vector3.Dot(offset, up) / depth / halfTan;
         aPoint = new Point((x + 1) / 2 * width, (1 - y) / 2 * height);
         return true;
+    }
+
+    /// <summary>Kierunek patrzenia, prawo i góra ekranu w świecie oraz tangens połowy kąta widzenia kamery.</summary>
+    private static (Vector3 Forward, Vector3 Right, Vector3 Up, float HalfTan) Basis(PerspectiveCamera aCamera)
+    {
+        var forward = Vector3.Normalize(aCamera.LookDirection);
+        var right = Vector3.Normalize(Vector3.Cross(forward, aCamera.UpDirection));
+        return (forward, right, Vector3.Cross(right, forward), MathF.Tan((float)(aCamera.FieldOfView * Math.PI / 180) / 2));
     }
 
     /// <summary>Punkt, w którym promień przecina poziomą płaszczyznę z = <paramref name="aHeight"/> przed kamerą.</summary>

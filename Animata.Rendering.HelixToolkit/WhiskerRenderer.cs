@@ -101,19 +101,5 @@ internal sealed class WhiskerRenderer(Viewport3DX aViewport)
         aModels.HitShown = Show(aModels.Hit, aModels.HitShown, null);
     }
 
-    /// <summary>Pusty model nie trafia do sceny (nie wiadomo, jak Helix zniesie pustą siatkę).</summary>
-    private bool Show(MeshGeometryModel3D aModel, bool aShown, MeshBuilder? aMesh)
-    {
-        if (aMesh is null)
-        {
-            if (aShown)
-                aViewport.Items.Remove(aModel);
-            return false;
-        }
-
-        aModel.Geometry = aMesh.ToMeshGeometry3D();
-        if (!aShown)
-            aViewport.Items.Add(aModel);
-        return true;
-    }
+    private bool Show(MeshGeometryModel3D aModel, bool aShown, MeshBuilder? aMesh) => SceneMeshes.Show(aViewport, aModel, aShown, aMesh);
 }

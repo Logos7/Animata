@@ -197,33 +197,31 @@ public sealed class GraphCanvas : ThemedControl
         _ => string.Empty
     };
 
-    public static string IconOf(BrainModule aModule) => aModule switch
+    /// <summary>Wygląd modułu: ikona, kolor i rodzaj do podsumowania mózgu (null — moduł pomocniczy: zmysł, granica, stała…).</summary>
+    public static (string Icon, Color Color, string? Kind) LookOf(BrainModule aModule) => aModule switch
     {
-        SensorModule sensor when sensor.OutputPorts.Contains(TargetSensor.FoundPort) => Icons.Eye,
-        SensorModule => Icons.Whiskers,
-        ActuatorModule => Icons.Wheel,
-        NeuralNetworkModule => Icons.Neural,
-        CompositeModule => Icons.Composite,
-        SubgraphInputModule => Icons.BoundaryIn,
-        SubgraphOutputModule => Icons.BoundaryOut,
-        RouterModule => Icons.Router,
-        ConstantModule => Icons.Constant,
-        CpgModule => Icons.Snake,
-        GaitModule => Icons.Spider,
-        BalanceModule or BipedGaitModule or MuscleStandModule or MuscleGaitModule => Icons.Humanoid,
-        StateMachineModule => Icons.States,
-        _ => Icons.Brain
+        SensorModule sensor => (sensor.OutputPorts.Contains(TargetSensor.FoundPort) ? Icons.Eye : Icons.Whiskers, StudioTheme.Palette.Accent, null),
+        ActuatorModule => (Icons.Wheel, StudioTheme.Palette.WireCommand, null),
+        NeuralNetworkModule => (Icons.Neural, StudioPalette.Neural, "sieć neuronowa"),
+        CompositeModule => (Icons.Composite, StudioTheme.Palette.Accent, null),
+        SubgraphInputModule => (Icons.BoundaryIn, StudioTheme.Palette.Accent, null),
+        SubgraphOutputModule => (Icons.BoundaryOut, StudioTheme.Palette.Accent, null),
+        RouterModule => (Icons.Router, StudioTheme.Palette.Text3, null),
+        ConstantModule => (Icons.Constant, StudioTheme.Palette.Text3, null),
+        CpgModule => (Icons.Snake, StudioPalette.Neural, "CPG"),
+        GaitModule => (Icons.Spider, StudioPalette.Neural, "generator chodu"),
+        BalanceModule => (Icons.Humanoid, StudioPalette.Neural, "regulator równowagi"),
+        BipedGaitModule => (Icons.Humanoid, StudioPalette.Neural, "generator kroku"),
+        MuscleStandModule => (Icons.Humanoid, StudioPalette.Neural, "stanie na mięśniach"),
+        MuscleGaitModule => (Icons.Humanoid, StudioPalette.Neural, "chód na mięśniach"),
+        StateMachineModule => (Icons.States, StudioPalette.Controller, "automat stanów"),
+        AvoidAndSeekModule or ApproachTargetModule => (Icons.Brain, StudioPalette.Controller, "sterownik"),
+        _ => (Icons.Brain, StudioTheme.Palette.Text3, null)
     };
 
-    public static Color ColorOf(BrainModule aModule) => aModule switch
-    {
-        SensorModule or CompositeModule or SubgraphInputModule or SubgraphOutputModule => StudioTheme.Palette.Accent,
-        ActuatorModule => StudioTheme.Palette.WireCommand,
-        NeuralNetworkModule or CpgModule or GaitModule or BalanceModule or BipedGaitModule or MuscleStandModule or MuscleGaitModule => StudioPalette.Neural,
-        StateMachineModule => StudioPalette.Controller,
-        AvoidAndSeekModule or ApproachTargetModule => StudioPalette.Controller,
-        _ => StudioTheme.Palette.Text3
-    };
+    public static string IconOf(BrainModule aModule) => LookOf(aModule).Icon;
+
+    public static Color ColorOf(BrainModule aModule) => LookOf(aModule).Color;
 
     private static bool IsData(BrainModule aSource) => aSource is SensorModule or SubgraphInputModule;
     private static bool IsBoundary(BrainModule aModule) => aModule is SubgraphInputModule or SubgraphOutputModule;
@@ -231,13 +229,7 @@ public sealed class GraphCanvas : ThemedControl
     private float? OutputValue(BrainModule aModule, string aPort) =>
         Graph.LastOutputs(aModule) is { } outputs && outputs.TryGetValue(aPort, out var value) ? value : null;
 
-    private float? InputValue(BrainModule aModule, string aPort)
-    {
-        foreach (var link in Graph.Connections)
-            if (link.TargetId == aModule.Id && link.TargetPort == aPort)
-                return Graph.Find(link.SourceId) is { } source ? OutputValue(source, link.SourcePort) : null;
-        return null;
-    }
+    private float? InputValue(BrainModule aModule, string aPort) => Graph.LastInput(aModule, aPort);
 
     // ---------- rysowanie ----------
 
@@ -334,8 +326,8 @@ public sealed class GraphCanvas : ThemedControl
         // Nagłówek.
         aContext.DrawLine(Draw.Pen(P.Stroke), new Point(rect.X, rect.Y + HeaderHeight), new Point(rect.Right, rect.Y + HeaderHeight));
         DrawIcon(aContext, IconOf(aModule), new Point(rect.X + 10, rect.Y + 9), color);
-        Draw.Text(aContext, Shorten(TitleOf(aModule), 17), new Point(rect.X + 30, rect.Y + HeaderHeight / 2), 12, P.Text, aBold: true);
-        Draw.Text(aContext, Shorten(SubtitleOf(aModule), 10), new Point(rect.Right - 10, rect.Y + HeaderHeight / 2), 10, P.Text3, TextAnchor.Right);
+        Draw.Text(aContext, Ui.Shorten(TitleOf(aModule), 17), new Point(rect.X + 30, rect.Y + HeaderHeight / 2), 12, P.Text, aBold: true);
+        Draw.Text(aContext, Ui.Shorten(SubtitleOf(aModule), 10), new Point(rect.Right - 10, rect.Y + HeaderHeight / 2), 10, P.Text3, TextAnchor.Right);
 
         // Porty.
         var inputs = aModule.InputPorts;
@@ -350,7 +342,7 @@ public sealed class GraphCanvas : ThemedControl
                 var connected = Graph.Connections.Any(aLink => aLink.TargetId == aModule.Id && aLink.TargetPort == port);
                 DrawPin(aContext, new Point(rect.X, y), connected, aModule is ActuatorModule or SubgraphOutputModule ? P.WireCommand : P.Accent,
                     new PinRef(aModule, port, false));
-                Draw.Text(aContext, Shorten(port, oneSided ? 14 : 11), new Point(rect.X + 12, y), 11.5, P.Text2);
+                Draw.Text(aContext, Ui.Shorten(port, oneSided ? 14 : 11), new Point(rect.X + 12, y), 11.5, P.Text2);
                 if (oneSided && InputValue(aModule, port) is { } value)
                     Draw.Text(aContext, Ui.F(value), new Point(rect.Right - 12, y), 11, P.Text, TextAnchor.Right, aMono: true);
             }
@@ -361,12 +353,12 @@ public sealed class GraphCanvas : ThemedControl
                 DrawPin(aContext, new Point(rect.Right, y), connected, IsData(aModule) ? P.Accent : P.WireCommand, new PinRef(aModule, port, true));
                 if (oneSided)
                 {
-                    Draw.Text(aContext, Shorten(port, 14), new Point(rect.X + 12, y), 11.5, P.Text2);
+                    Draw.Text(aContext, Ui.Shorten(port, 14), new Point(rect.X + 12, y), 11.5, P.Text2);
                     if (OutputValue(aModule, port) is { } value)
                         Draw.Text(aContext, Ui.F(value), new Point(rect.Right - 12, y), 11, P.Text, TextAnchor.Right, aMono: true);
                 }
                 else
-                    Draw.Text(aContext, Shorten(port, 11), new Point(rect.Right - 12, y), 11.5, P.Text, TextAnchor.Right);
+                    Draw.Text(aContext, Ui.Shorten(port, 11), new Point(rect.Right - 12, y), 11.5, P.Text, TextAnchor.Right);
             }
         }
     }
@@ -399,8 +391,6 @@ public sealed class GraphCanvas : ThemedControl
         using (aContext.PushTransform(Matrix.CreateScale(14 / 16.0, 14 / 16.0) * Matrix.CreateTranslation(aAt.X, aAt.Y)))
             aContext.DrawGeometry(null, Draw.Pen(aColor, 1.6), geometry);
     }
-
-    private static string Shorten(string aText, int aMax) => aText.Length <= aMax ? aText : aText[..(aMax - 1)] + "…";
 
     // ---------- trafianie ----------
 

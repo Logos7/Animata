@@ -201,7 +201,7 @@ public sealed class MenuPanel : StudioPanel
             var target = path;
             var row = new Button
             {
-                Content = Ui.HStack(12, Ui.Icon(Icons.Open, 16), Ui.Text(WorldFiles.SceneName(path), 14),
+                Content = Ui.HStack(12, Ui.Icon(Icons.Open, 16), Ui.Text(JsonFiles.Worlds.NameOf(path), 14),
                     Ui.Text(Path.GetDirectoryName(path) ?? string.Empty, 12, "Studio.Text3")),
                 Height = 34,
                 Padding = new Thickness(10, 0),
@@ -218,9 +218,9 @@ public sealed class MenuPanel : StudioPanel
 
     private async Task PickAndOpenAsync()
     {
-        if (await WorldFiles.PickOpenAsync(this) is not { } file)
+        if (await JsonFiles.Worlds.PickOpenAsync(this) is not { } file)
             return;
-        if (WorldFiles.LocalPath(file) is { } path)
+        if (JsonFiles.LocalPath(file) is { } path)
             _openFile(path);
     }
 

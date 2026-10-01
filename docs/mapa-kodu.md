@@ -619,6 +619,14 @@ classDiagram
     +Slot
     +OutputPorts
     +Read(owner, world)
+    #SetPorts(ports)
+    #Readings
+  }
+  class JointPorts {
+    <<static>>
+    +Yaw(i) Pitch(i)
+    +Driven(plan) Sensed(plan)
+    +TryParse(port)
   }
   class Actuator {
     <<abstract>>
@@ -684,6 +692,8 @@ classDiagram
   Actuator <|-- SteeringDriveActuator
   Actuator <|-- SpineActuator
   Actuator <|-- MuscleActuator
+  SpineActuator ..> JointPorts : porty osi z serwem
+  JointSensor ..> JointPorts : porty osi zginanych
 ```
 
 *Po strzałce „→” są porty wyjściowe zmysłu; w napędach przed kropką porty komend, po niej ustawienia `[Setting]`.*
@@ -732,10 +742,16 @@ classDiagram
     +SetParameters()
     +Randomize()
   }
-  class TrainableModules {
-    <<static>>
-    +ParameterCount(state)
-    +Create(state, params)
+  class ParametricModule {
+    <<abstract>>
+    +ParameterSpecs
+    #Values
+  }
+  class ParameterSpec {
+    +Name
+    +Min/Max
+    +RandomMin/RandomMax
+    +NotFinite
   }
   class NeuralNetworkModule {
     +Network
@@ -783,12 +799,14 @@ classDiagram
   BrainModule <|-- SensorModule
   BrainModule <|-- ActuatorModule
   BrainModule <|-- NeuralNetworkModule
-  BrainModule <|-- CpgModule
-  BrainModule <|-- GaitModule
-  BrainModule <|-- BalanceModule
-  BrainModule <|-- BipedGaitModule
+  BrainModule <|-- ParametricModule
+  ParametricModule <|-- CpgModule
+  ParametricModule <|-- GaitModule
+  ParametricModule <|-- BalanceModule
+  ParametricModule <|-- BipedGaitModule
   BrainModule <|-- StateMachineModule
-  BrainModule <|-- MuscleControlModule
+  ParametricModule <|-- MuscleControlModule
+  ParametricModule "1" *-- "*" ParameterSpec
   MuscleControlModule <|-- MuscleStandModule
   MuscleControlModule <|-- MuscleGaitModule
   MuscleControlModule *-- MuscleGeometry : ramiona sił
@@ -800,15 +818,9 @@ classDiagram
   BrainModule <|-- SubgraphInputModule
   BrainModule <|-- SubgraphOutputModule
   ITrainableModule <|.. NeuralNetworkModule
-  ITrainableModule <|.. CpgModule
-  ITrainableModule <|.. GaitModule
-  ITrainableModule <|.. BalanceModule
-  ITrainableModule <|.. BipedGaitModule
-  ITrainableModule <|.. MuscleStandModule
-  ITrainableModule <|.. MuscleGaitModule
+  ITrainableModule <|.. ParametricModule
   StateMachineModule "1" *-- "*" StateTransition
   StateTransition ..> SensorExpression : warunek
-  TrainableModules ..> ITrainableModule
   NeuralNetworkModule *-- NeuralNetwork
   NeuralNetworkModule "1" *-- "*" NeuralInput
   NeuralNetworkModule "1" *-- "*" NeuralOutput
@@ -821,6 +833,8 @@ classDiagram
 ```
 
 *Automat stanów (`StateMachineModule`) ma dla każdego stanu osobne wejścia „stan.port” (np. „Stoję.Pitch3”, „Idę.Pitch3”) i jedno wyjście na port. Przejścia to warunki nad portami warunków (np. `Found * Gap > 0.8`); wyjście miesza stany płynnie przez `BlendSeconds`, a nowe przejście czeka `MinDwellSeconds`. Humanoid ma tak dwie sieci: stania i chodu.*
+
+*Uczony moduł o kształcie z rekordu stanu i podanych parametrach buduje `ModuleState.CreateTrainable` (liczba parametrów: `CountParameters`) — nauka nie zna typów modułów. Moduły z wektorem parametrów (`ParametricModule`) opisują go tabelą `ParameterSpec`: zakres przycinania, zakres losowania, wartość zamiast NaN.*
 
 *Graf kompiluje się leniwie: sortowanie topologiczne, porty, cykle, jedno wejście na port, każdy napęd sterowany raz. Błąd niesie Id winnego modułu, więc Studio może go podświetlić.*
 
@@ -932,14 +946,17 @@ classDiagram
     +Paused
     +TryGetProgress()
   }
-  class Evolution {
-    +Step(fitness)
+  class IOptimizer {
+    <<interface>>
+    +NextGeneration(fitness)
     +Best
+    +BestFitness
     +Generation
   }
+  class Evolution {
+    +Create(start, options)$
+  }
   class CmaEs {
-    +Step(fitness, gen)
-    +Best
     +Sigma
   }
   class EvolutionOptions {
@@ -992,9 +1009,11 @@ classDiagram
     +ChampionScore
   }
   TrainingController "1" *-- "*" BackgroundTrainer : jedna nauka na moduł
-  BackgroundTrainer *-- Evolution
-  Evolution *-- EvolutionOptions
-  Evolution *-- CmaEs : gdy Algorithm = CmaEs
+  BackgroundTrainer *-- IOptimizer
+  IOptimizer <|.. Evolution : Genetic
+  IOptimizer <|.. CmaEs : CmaEs
+  Evolution ..> EvolutionOptions
+  CmaEs ..> EvolutionOptions
   BackgroundTrainer ..> SeekTargetTask : fitness i walidacja
   BackgroundTrainer ..> TrainingProgress
   SeekTargetTask *-- SeekRig
@@ -1012,13 +1031,13 @@ sequenceDiagram
   participant UI as Wątek UI
   participant TC as TrainingController
   participant BT as BackgroundTrainer (wątek)
-  participant EV as Evolution
+  participant EV as IOptimizer
   participant ST as SeekTargetTask
   UI->>TC: Start(stwór)
   TC->>TC: SeekRigs.For, snapshot „przed nauką”
   TC->>BT: Start()
   loop każde pokolenie
-    BT->>EV: Step(fitness)
+    BT->>EV: NextGeneration(fitness)
     EV->>ST: Evaluate × 48 (równolegle, rdzenie − 1)
     ST-->>EV: koszt z prób w ukrytych światach
     BT->>ST: Validate(zwycięzca)
@@ -1213,4 +1232,4 @@ classDiagram
 
 ---
 
-161 typów w 4 projektach produkcyjnych (bez testów). Diagramy pomijają rekordy pomocnicze (`SeekEpisode`, `SlabSpec`, `ObstacleSpec`, `EpisodeResult`, `BrainContext`) i klasy narzędziowe UI (`Ui`, `Icons`, `Dialogs`, `WorldFiles`, `BrainFiles`, `StudioTheme`).
+165 typów w 4 projektach produkcyjnych (bez testów). Diagramy pomijają rekordy pomocnicze (`SeekEpisode`, `SlabSpec`, `ObstacleSpec`, `EpisodeResult`, `BrainContext`) i klasy narzędziowe UI (`Ui`, `Icons`, `Dialogs`, `JsonFiles`, `StudioTheme`).

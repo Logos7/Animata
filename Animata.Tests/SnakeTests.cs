@@ -7,21 +7,13 @@ using Animata.Core.Sensors;
 using Animata.Core.Training;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
+using static Animata.Tests.TestWorlds;
 
 namespace Animata.Tests;
 
 /// <summary>Podłoga, ciała z klocków w fizyce Bepu, wąż z CPG.</summary>
 public class SnakeTests
 {
-    private const float Delta = 1f / 30f;
-
-    private static World FloorWorld()
-    {
-        var world = new World();
-        world.Add(WorldObjectCatalog.CreateFloor(40, 40));
-        return world;
-    }
-
     // ---------- podłoga ----------
 
     [Fact]
@@ -86,7 +78,7 @@ public class SnakeTests
     [Fact]
     public void Snake_CreatesPhysics_AndLiesOnTheFloor()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(40);
         var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg());
         world.Add(snake);
         Assert.NotNull(world.Physics);
@@ -104,7 +96,7 @@ public class SnakeTests
     [Fact]
     public void Joints_FollowSpineCommands()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(40);
         var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), null, WorldObjectCatalog.CreateCpg(4), 4);
         world.Add(snake);
         // Zamiast CPG stała: staw 0 skręcony o połowę zakresu, reszta prosto.
@@ -127,7 +119,7 @@ public class SnakeTests
     [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void HandCpg_CrawlsTowardsTheTarget()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(40);
         var target = WorldObjectCatalog.CreateSphere(new Vector3(6, 0, 0));
         world.Add(target);
         var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), target.Id, WorldObjectCatalog.CreateCpg());
@@ -144,7 +136,7 @@ public class SnakeTests
     [Fact]
     public void HandCpg_TurnsTowardsATargetOnTheSide()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(40);
         var target = WorldObjectCatalog.CreateSphere(new Vector3(0, 5, 0));
         world.Add(target);
         var snake = WorldObjectCatalog.CreateSnake(Vector3.Zero, 0, WorldObjectCatalog.RandomColor(), target.Id, WorldObjectCatalog.CreateCpg());
@@ -160,7 +152,7 @@ public class SnakeTests
     [Fact]
     public void SetSegments_RebuildsBodyAndBrainInPlace()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(40);
         var snake = WorldObjectCatalog.CreateLearningSnake(Vector3.Zero, 0, null);
         world.Add(snake);
         var cpg = snake.Brain!.Graph.Modules.OfType<CpgModule>().Single();

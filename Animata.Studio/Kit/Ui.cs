@@ -99,6 +99,9 @@ public static class Ui
     public static string F(float aValue, int aDigits = 2) =>
         (aValue < 0 ? "−" : string.Empty) + MathF.Abs(aValue).ToString("F" + aDigits, CultureInfo.InvariantCulture);
 
+    /// <summary>Tekst skrócony do <paramref name="aMax"/> znaków (z wielokropkiem).</summary>
+    public static string Shorten(string aText, int aMax) => aText.Length <= aMax ? aText : aText[..(aMax - 1)] + "…";
+
     public static bool TryParse(string? aText, out float aValue) =>
         float.TryParse((aText ?? string.Empty).Replace('−', '-').Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out aValue)
         && float.IsFinite(aValue);

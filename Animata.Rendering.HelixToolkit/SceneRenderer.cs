@@ -451,9 +451,7 @@ public sealed class SceneRenderer : IDisposable
         {
             // Kolor zmieniony we właściwościach: nowe materiały części.
             painted.Color = aCreature.Color;
-            var repaint = SceneMeshes.MaterialFor(aCreature, _selection.Contains(aCreature));
-            foreach (var model in painted.Models)
-                model.Material = repaint;
+            Paint(aCreature, _selection.Contains(aCreature));
         }
         if (!_parts.TryGetValue(aCreature.Id, out var parts) || !ReferenceEquals(parts.Plan, aCreature.Plan))
         {

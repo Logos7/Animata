@@ -3,20 +3,12 @@ using Animata.Core.Actuators;
 using Animata.Core.Sensors;
 using Animata.Core.WorldObjects;
 using Animata.Core.Worlds;
+using static Animata.Tests.TestWorlds;
 
 namespace Animata.Tests;
 
 public class PhysicsTests
 {
-    private const float Delta = 1f / 30f;
-
-    private static World FloorWorld()
-    {
-        var world = new World();
-        world.Add(WorldObjectCatalog.CreateFloor(60, 60));
-        return world;
-    }
-
     /// <summary>Jazda przez fizykę: autko z napędem, komenda co tick (bez mózgu).</summary>
     private static List<Vector2> Drive(Creature aCar, World aWorld, float aSteer, float aThrottle, float aSeconds)
     {
@@ -48,7 +40,7 @@ public class PhysicsTests
     [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void Car_DrivesStraightAtItsMaxSpeed()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(60);
         var car = PhysicalCar(world);
         Drive(car, world, 0, 1, 4);
         var speed = car.Body.Actuators.OfType<SteeringDriveActuator>().Single().MaxSpeed;
@@ -60,7 +52,7 @@ public class PhysicsTests
     [Fact]
     public void Car_FullLock_DrivesATightLeftCircle()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(60);
         var car = PhysicalCar(world);
         var path = Drive(car, world, 1, 0.5f, 12).Skip(90).ToList();
         var center = new Vector2(path.Average(aPoint => aPoint.X), path.Average(aPoint => aPoint.Y));
@@ -74,7 +66,7 @@ public class PhysicsTests
     [Trait(KnownFailures.Trait, KnownFailures.BepuBeta29)]
     public void Cylinder_TurnsInPlaceToTheLeft()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(60);
         var cylinder = new Creature(Disc.Design);
         var drive = new DiskDriveActuator();
         cylinder.Body.Actuators.Add(drive);
@@ -92,7 +84,7 @@ public class PhysicsTests
     [Fact]
     public void Collisions_ArePhysical_AndPostsDoNotMove()
     {
-        using var world = FloorWorld();
+        using var world = TestWorlds.Floor(60);
         var obstacle = WorldObjectCatalog.CreateCylinder(Vector3.Zero, 0.5f);
         var creature = WorldObjectCatalog.CreateControllerSeeker(new Vector3(0.9f, 0, 0), null);
         world.Add(obstacle);

@@ -65,7 +65,7 @@ public class WhiskerTests
         world.Add(neuralCar);
 
         for (var tick = 0; tick < 10; tick++)
-            world.Update(1f / 30f);
+            world.Update(TestWorlds.Delta);
 
         Assert.Equal(aCount, Car.WhiskerCountOf(controllerCar));
         Assert.Equal(aCount, Car.WhiskerCountOf(neuralCar));
@@ -128,12 +128,12 @@ public class WhiskerTests
                 aLink.SourceId == source.Id && aLink.TargetId == controller.Id && aLink.TargetPort == RaySensor.PortName(ray));
         car.Brain.Graph.Validate();
         for (var tick = 0; tick < 10; tick++)
-            world.Update(1f / 30f);
+            world.Update(TestWorlds.Delta);
 
         WhiskerRewiring.SetCount(car, 3);
         Assert.Equal(3, sensor.Angles.Count);
         Assert.DoesNotContain(car.Brain.Graph.Connections, aLink => aLink.SourcePort == RaySensor.PortName(3));
-        world.Update(1f / 30f);
+        world.Update(TestWorlds.Delta);
     }
 
     [Fact]

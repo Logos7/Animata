@@ -108,6 +108,20 @@ public class BrainGraph
         return index < 0 ? null : compiled.Outputs[index];
     }
 
+    /// <summary>
+    /// Wartość wejścia modułu z ostatniego Think — wyjście źródła połączenia prowadzącego do tego portu — albo null
+    /// (port niepodłączony albo graf zmienił się od tamtej pory). Do podglądu w edytorze.
+    /// </summary>
+    public float? LastInput(BrainModule aModule, string aPort)
+    {
+        foreach (var link in Connections)
+            if (link.TargetId == aModule.Id && link.TargetPort == aPort)
+                return Find(link.SourceId) is { } source && LastOutputs(source) is { } outputs && outputs.TryGetValue(link.SourcePort, out var value)
+                    ? value
+                    : null;
+        return null;
+    }
+
     /// <summary>Kompiluje i waliduje graf. Rzuca <see cref="BrainException"/>, jeśli jest błędny.</summary>
     public void Validate() => EnsureCompiled();
 

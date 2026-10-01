@@ -452,22 +452,8 @@ public sealed class CreaturePanel : StudioPanel
     private string BrainSummary()
     {
         var modules = _brain.Graph.Descendants().Where(aModule => aModule is not SubgraphInputModule and not SubgraphOutputModule).ToList();
-        var logic = modules.Select(aModule => aModule switch
-        {
-            NeuralNetworkModule => "sieć neuronowa",
-            CpgModule => "CPG",
-            GaitModule => "generator chodu",
-            BalanceModule => "regulator równowagi",
-            BipedGaitModule => "generator kroku",
-            MuscleStandModule => "stanie na mięśniach",
-            MuscleGaitModule => "chód na mięśniach",
-            StateMachineModule => "automat stanów",
-            AvoidAndSeekModule or ApproachTargetModule => "sterownik",
-            _ => null
-        }).OfType<string>().Distinct().ToList();
-        var count = modules.Count;
-        var word = count == 1 ? "moduł" : count % 10 is >= 2 and <= 4 && count % 100 is not (>= 12 and <= 14) ? "moduły" : "modułów";
-        return $"{count} {word}" + (logic.Count > 0 ? $" · {string.Join(", ", logic)}" : string.Empty);
+        var logic = modules.Select(aModule => GraphCanvas.LookOf(aModule).Kind).OfType<string>().Distinct().ToList();
+        return StudioSession.Plural(modules.Count, "moduł", "moduły", "modułów") + (logic.Count > 0 ? $" · {string.Join(", ", logic)}" : string.Empty);
     }
 
     public override bool HandleKey(KeyEventArgs aEvent)
@@ -480,11 +466,8 @@ public sealed class CreaturePanel : StudioPanel
             case Key.Z:
                 Session.StepBack(_brain);
                 return true;
-            case Key.Space:
-                Session.TogglePause();
-                return true;
             default:
-                return false;
+                return base.HandleKey(aEvent);
         }
     }
 }
