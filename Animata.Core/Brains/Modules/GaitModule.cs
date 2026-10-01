@@ -17,14 +17,23 @@ namespace Animata.Core.Brains.Modules;
 /// Uczone parametry (6): krok A, uniesienie L, zgięcie kolana K, dodatkowe zgięcie przy przenoszeniu Kz, częstotliwość f, TurnGain.
 /// Stan chwilowy: faza φ (Reset).
 /// </summary>
-public sealed class GaitModule : BrainModule, ITrainableModule
+public sealed class GaitModule() : ParametricModule(Specs, [0.6f, 0.6f, 0, 0.5f, 2.5f, 1.5f])
 {
-    public const int Parameters = 6;
     public const int Legs = 4;
     public const int Joints = Legs * 3;
 
     /// <summary>Szczelina do celu, poniżej której napęd maleje do zera.</summary>
     public const float ArrivalGap = 0.4f;
+
+    public static readonly ParameterSpec[] Specs =
+    [
+        new("Stride", 0, 1, 0, 1),
+        new("Lift", 0, 1, 0, 1),
+        new("Knee", -1, 1, -1, 1),
+        new("KneeSwing", -1, 1, -1, 1),
+        new("Frequency", 0, 4, 0.3f, 3),
+        new("TurnGain", -3, 3, -1.5f, 1.5f)
+    ];
 
     /// <summary>Strona nogi: 0 przednia lewa, 1 przednia prawa, 2 tylna lewa, 3 tylna prawa.</summary>
     public static readonly float[] Side = [-1, 1, -1, 1];
@@ -42,12 +51,12 @@ public sealed class GaitModule : BrainModule, ITrainableModule
     private readonly Dictionary<string, float> _outputs = Outputs.ToDictionary(aPort => aPort, _ => 0f);
     private float _phase;
 
-    public float Stride { get; set; } = 0.6f;
-    public float Lift { get; set; } = 0.6f;
-    public float Knee { get; set; }
-    public float KneeSwing { get; set; } = 0.5f;
-    public float Frequency { get; set; } = 2.5f;
-    public float TurnGain { get; set; } = 1.5f;
+    public float Stride { get => Values[0]; set => Values[0] = value; }
+    public float Lift { get => Values[1]; set => Values[1] = value; }
+    public float Knee { get => Values[2]; set => Values[2] = value; }
+    public float KneeSwing { get => Values[3]; set => Values[3] = value; }
+    public float Frequency { get => Values[4]; set => Values[4] = value; }
+    public float TurnGain { get => Values[5]; set => Values[5] = value; }
 
     public override IReadOnlyList<string> InputPorts => TargetSensor.SteeringPorts;
     public override IReadOnlyList<string> OutputPorts => Outputs;
@@ -56,12 +65,9 @@ public sealed class GaitModule : BrainModule, ITrainableModule
     {
         _phase = (_phase + MathF.Tau * Math.Clamp(Frequency, 0, 4) * aContext.Delta) % MathF.Tau;
 
-        var found = aInputs.GetValueOrDefault(TargetSensor.FoundPort) > 0;
-        var bearing = found
-            ? MathF.Atan2(aInputs.GetValueOrDefault(TargetSensor.DirectionYPort), aInputs.GetValueOrDefault(TargetSensor.DirectionXPort)) / MathF.PI
-            : 0;
-        var drive = found ? Math.Clamp(aInputs.GetValueOrDefault(TargetSensor.GapPort) / ArrivalGap, 0, 1) : 1;
-        var turn = Math.Clamp(TurnGain * bearing, -1, 1);
+        var course = TargetSensor.Course(aInputs);
+        var drive = course.Drive(ArrivalGap);
+        var turn = Math.Clamp(TurnGain * course.Bearing, -1, 1);
 
         for (var leg = 0; leg < Legs; leg++)
         {
@@ -77,27 +83,6 @@ public sealed class GaitModule : BrainModule, ITrainableModule
 
     public override void Reset() => _phase = 0;
 
-    public float[] GetParameters() => [Stride, Lift, Knee, KneeSwing, Frequency, TurnGain];
-
-    public void SetParameters(ReadOnlySpan<float> aParameters)
-    {
-        if (aParameters.Length != Parameters)
-            throw new ArgumentException($"Expected {Parameters} parameters, got {aParameters.Length}.", nameof(aParameters));
-        Stride = Clean(aParameters[0], 0, 1);
-        Lift = Clean(aParameters[1], 0, 1);
-        Knee = Clean(aParameters[2], -1, 1);
-        KneeSwing = Clean(aParameters[3], -1, 1);
-        Frequency = Clean(aParameters[4], 0, 4);
-        TurnGain = Clean(aParameters[5], -3, 3);
-    }
-
-    public void Randomize(Random? aRandom = null)
-    {
-        var random = aRandom ?? Random.Shared;
-        float Between(float aMin, float aMax) => aMin + random.NextSingle() * (aMax - aMin);
-        SetParameters([Between(0, 1), Between(0, 1), Between(-1, 1), Between(-1, 1), Between(0.3f, 3), Between(-1.5f, 1.5f)]);
-    }
-
     public override ModuleState CaptureState() => new GaitState(Stride, Lift, Knee, KneeSwing, Frequency, TurnGain);
 
     public override void RestoreState(ModuleState aState)
@@ -105,13 +90,4 @@ public sealed class GaitModule : BrainModule, ITrainableModule
         var state = Expect<GaitState>(aState);
         SetParameters([state.Stride, state.Lift, state.Knee, state.KneeSwing, state.Frequency, state.TurnGain]);
     }
-
-    public static GaitModule Create(ReadOnlySpan<float> aParameters, string aName = "Chód")
-    {
-        var module = new GaitModule { Name = aName };
-        module.SetParameters(aParameters);
-        return module;
-    }
-
-    private static float Clean(float aValue, float aMin, float aMax) => float.IsFinite(aValue) ? Math.Clamp(aValue, aMin, aMax) : aMin;
 }

@@ -171,7 +171,7 @@ public class HumanoidTests : IDisposable
         int Stood(BrainModule aModule) =>
             SeekTargetTask.Run(aModule, episodes, rig.DefaultOptions, rig).Count(aResult => aResult.PostureTime < 1);
         var passive = Stood(new BalanceModule { Name = HumanoidBrains.StandName });
-        var hand = Stood(BalanceModule.Create(HumanoidBrains.HandBalance));
+        var hand = Stood(new BalanceModule { Name = HumanoidBrains.StandName }.WithParameters(HumanoidBrains.HandBalance));
         Assert.True(hand > passive, $"ręczne {hand}, sztywne {passive}");
     }
 

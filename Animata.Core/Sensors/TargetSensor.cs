@@ -33,6 +33,12 @@ public sealed class TargetSensor : Sensor
 
     public override IReadOnlyList<string> OutputPorts => Ports;
 
+    /// <summary>Kurs do celu z wejść sterownika nazwanych jak porty oka (<see cref="SteeringPorts"/>).</summary>
+    public static TargetCourse Course(IReadOnlyDictionary<string, float> aInputs) => new(
+        aInputs.GetValueOrDefault(FoundPort) > 0,
+        MathF.Atan2(aInputs.GetValueOrDefault(DirectionYPort), aInputs.GetValueOrDefault(DirectionXPort)),
+        aInputs.GetValueOrDefault(GapPort));
+
     public override IReadOnlyDictionary<string, float> Read(Entity aOwner, World aWorld)
     {
         var target = TargetId is { } id ? aWorld.Find(id) : null;
@@ -57,4 +63,16 @@ public sealed class TargetSensor : Sensor
         _readings[DirectionZPort] = localDirection.Z;
         return _readings;
     }
+}
+
+/// <summary>
+/// Kurs do celu dla sterowników jazdy i chodu: czy cel widać, kąt do niego (rad, w lewo dodatni) i szczelina.
+/// </summary>
+public readonly record struct TargetCourse(bool Found, float Angle, float Gap)
+{
+    /// <summary>Kąt do celu jako ułamek π (−1…1); 0, gdy celu nie widać.</summary>
+    public float Bearing => Found ? Angle / MathF.PI : 0;
+
+    /// <summary>Napęd słabnący przy celu: szczelina / <paramref name="aArrivalGap"/> przycięta do 0…1; 1, gdy celu nie widać.</summary>
+    public float Drive(float aArrivalGap) => Found ? Math.Clamp(Gap / aArrivalGap, 0, 1) : 1;
 }

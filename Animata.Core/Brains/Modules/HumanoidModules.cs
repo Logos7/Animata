@@ -10,19 +10,20 @@ namespace Animata.Core.Brains.Modules;
 /// pozostałe stawy trzymają pozę spoczynkową. 6 uczonych parametrów: wzmocnienia P i D pochylenia dla kostek i bioder,
 /// P i D przechyłu dla kostek i odwiedzenia bioder. Znaki wzmocnień dobiera pomiar (albo nauka) — zero to postawa sztywna.
 /// </summary>
-public sealed class BalanceModule : BrainModule, ITrainableModule
+public sealed class BalanceModule() : ParametricModule(Specs, new float[6])
 {
-    public const int Parameters = 6;
+    /// <summary>Wzmocnienia regulatora: przycinane do ±5 (NaN — 0), losowane z ±2.</summary>
+    public static readonly ParameterSpec[] Specs = ParameterSpec.Same(-5, 5, -2, 2, 0, "AnkleP", "AnkleD", "HipP", "HipD", "RollP", "RollD");
 
     private static readonly string[] Inputs = [BalanceSensor.PitchPort, BalanceSensor.RollPort, BalanceSensor.PitchRatePort, BalanceSensor.RollRatePort];
     private readonly Dictionary<string, float> _outputs = Humanoid.Ports.ToDictionary(aPort => aPort, _ => 0f);
 
-    public float AnkleP { get; set; }
-    public float AnkleD { get; set; }
-    public float HipP { get; set; }
-    public float HipD { get; set; }
-    public float RollP { get; set; }
-    public float RollD { get; set; }
+    public float AnkleP { get => Values[0]; set => Values[0] = value; }
+    public float AnkleD { get => Values[1]; set => Values[1] = value; }
+    public float HipP { get => Values[2]; set => Values[2] = value; }
+    public float HipD { get => Values[3]; set => Values[3] = value; }
+    public float RollP { get => Values[4]; set => Values[4] = value; }
+    public float RollD { get => Values[5]; set => Values[5] = value; }
 
     public override IReadOnlyList<string> InputPorts => Inputs;
     public override IReadOnlyList<string> OutputPorts => Humanoid.Ports;
@@ -46,26 +47,6 @@ public sealed class BalanceModule : BrainModule, ITrainableModule
         return _outputs;
     }
 
-    public float[] GetParameters() => [AnkleP, AnkleD, HipP, HipD, RollP, RollD];
-
-    public void SetParameters(ReadOnlySpan<float> aParameters)
-    {
-        if (aParameters.Length != Parameters)
-            throw new ArgumentException($"Expected {Parameters} parameters, got {aParameters.Length}.", nameof(aParameters));
-        AnkleP = Clean(aParameters[0]);
-        AnkleD = Clean(aParameters[1]);
-        HipP = Clean(aParameters[2]);
-        HipD = Clean(aParameters[3]);
-        RollP = Clean(aParameters[4]);
-        RollD = Clean(aParameters[5]);
-    }
-
-    public void Randomize(Random? aRandom = null)
-    {
-        var random = aRandom ?? Random.Shared;
-        SetParameters([.. Enumerable.Range(0, Parameters).Select(_ => (random.NextSingle() * 2 - 1) * 2)]);
-    }
-
     public override ModuleState CaptureState() => new BalanceState(AnkleP, AnkleD, HipP, HipD, RollP, RollD);
 
     public override void RestoreState(ModuleState aState)
@@ -73,15 +54,6 @@ public sealed class BalanceModule : BrainModule, ITrainableModule
         var state = Expect<BalanceState>(aState);
         SetParameters([state.AnkleP, state.AnkleD, state.HipP, state.HipD, state.RollP, state.RollD]);
     }
-
-    public static BalanceModule Create(ReadOnlySpan<float> aParameters, string aName = "Stanie")
-    {
-        var module = new BalanceModule { Name = aName };
-        module.SetParameters(aParameters);
-        return module;
-    }
-
-    private static float Clean(float aValue) => float.IsFinite(aValue) ? Math.Clamp(aValue, -5, 5) : 0;
 }
 
 /// <summary>
@@ -94,9 +66,20 @@ public sealed class BalanceModule : BrainModule, ITrainableModule
 /// - skręt = TurnGain · (kąt do celu / π); napęd słabnie przy celu.
 /// 9 uczonych parametrów: A, K, ψ, S, f, L, P, D, TurnGain. Faza — stan chwilowy (Reset).
 /// </summary>
-public sealed class BipedGaitModule : BrainModule, ITrainableModule
+public sealed class BipedGaitModule() : ParametricModule(Specs, [0.26f, 0, -0.87f, -0.36f, 1.7f, 0.19f, -0.19f, 0.03f, -0.17f])
 {
-    public const int Parameters = 9;
+    public static readonly ParameterSpec[] Specs =
+    [
+        new("Stride", 0, 1, 0, 0.6f),
+        new("KneeLift", 0, 1, 0, 0.8f),
+        new("KneePhase", -MathF.PI, MathF.PI, -3, 3),
+        new("Sway", -1, 1, -0.4f, 0.4f),
+        new("Frequency", 0, 3, 0.4f, 2.5f),
+        new("Lean", -1, 1, -0.3f, 0.3f),
+        new("BalanceP", -5, 5, -2, 2),
+        new("BalanceD", -5, 5, -2, 2),
+        new("TurnGain", -3, 3, -1.5f, 1.5f)
+    ];
 
     /// <summary>Szczelina do celu, poniżej której napęd maleje do zera.</summary>
     public const float ArrivalGap = 0.5f;
@@ -109,15 +92,15 @@ public sealed class BipedGaitModule : BrainModule, ITrainableModule
 
     // Domyślne — z ewolucji na próbach chodu (15 + 15 pokoleń): drobi bez podnoszenia kolan, kołysząc się na boki;
     // nie upada w żadnej z 8 prób i dochodzi do celu w 7/8. Ręczne startowe (krok 0.25, kolano 0.35) przewracały go zawsze.
-    public float Stride { get; set; } = 0.26f;
-    public float KneeLift { get; set; }
-    public float KneePhase { get; set; } = -0.87f;
-    public float Sway { get; set; } = -0.36f;
-    public float Frequency { get; set; } = 1.7f;
-    public float Lean { get; set; } = 0.19f;
-    public float BalanceP { get; set; } = -0.19f;
-    public float BalanceD { get; set; } = 0.03f;
-    public float TurnGain { get; set; } = -0.17f;
+    public float Stride { get => Values[0]; set => Values[0] = value; }
+    public float KneeLift { get => Values[1]; set => Values[1] = value; }
+    public float KneePhase { get => Values[2]; set => Values[2] = value; }
+    public float Sway { get => Values[3]; set => Values[3] = value; }
+    public float Frequency { get => Values[4]; set => Values[4] = value; }
+    public float Lean { get => Values[5]; set => Values[5] = value; }
+    public float BalanceP { get => Values[6]; set => Values[6] = value; }
+    public float BalanceD { get => Values[7]; set => Values[7] = value; }
+    public float TurnGain { get => Values[8]; set => Values[8] = value; }
 
     public override IReadOnlyList<string> InputPorts => Inputs;
     public override IReadOnlyList<string> OutputPorts => Humanoid.Ports;
@@ -125,12 +108,9 @@ public sealed class BipedGaitModule : BrainModule, ITrainableModule
     public override IReadOnlyDictionary<string, float> Evaluate(IReadOnlyDictionary<string, float> aInputs, BrainContext aContext)
     {
         _phase = (_phase + MathF.Tau * Math.Clamp(Frequency, 0, 3) * aContext.Delta) % MathF.Tau;
-        var found = aInputs.GetValueOrDefault(TargetSensor.FoundPort) > 0;
-        var bearing = found
-            ? MathF.Atan2(aInputs.GetValueOrDefault(TargetSensor.DirectionYPort), aInputs.GetValueOrDefault(TargetSensor.DirectionXPort)) / MathF.PI
-            : 0;
-        var drive = found ? Math.Clamp(aInputs.GetValueOrDefault(TargetSensor.GapPort) / ArrivalGap, 0, 1) : 1;
-        var turn = Math.Clamp(TurnGain * bearing, -1, 1);
+        var course = TargetSensor.Course(aInputs);
+        var drive = course.Drive(ArrivalGap);
+        var turn = Math.Clamp(TurnGain * course.Bearing, -1, 1);
         var balance = BalanceP * aInputs.GetValueOrDefault(BalanceSensor.PitchPort) + BalanceD * aInputs.GetValueOrDefault(BalanceSensor.PitchRatePort);
 
         for (var leg = 0; leg < 2; leg++)
@@ -152,31 +132,6 @@ public sealed class BipedGaitModule : BrainModule, ITrainableModule
 
     public override void Reset() => _phase = 0;
 
-    public float[] GetParameters() => [Stride, KneeLift, KneePhase, Sway, Frequency, Lean, BalanceP, BalanceD, TurnGain];
-
-    public void SetParameters(ReadOnlySpan<float> aParameters)
-    {
-        if (aParameters.Length != Parameters)
-            throw new ArgumentException($"Expected {Parameters} parameters, got {aParameters.Length}.", nameof(aParameters));
-        Stride = Clean(aParameters[0], 0, 1);
-        KneeLift = Clean(aParameters[1], 0, 1);
-        KneePhase = Clean(aParameters[2], -MathF.PI, MathF.PI);
-        Sway = Clean(aParameters[3], -1, 1);
-        Frequency = Clean(aParameters[4], 0, 3);
-        Lean = Clean(aParameters[5], -1, 1);
-        BalanceP = Clean(aParameters[6], -5, 5);
-        BalanceD = Clean(aParameters[7], -5, 5);
-        TurnGain = Clean(aParameters[8], -3, 3);
-    }
-
-    public void Randomize(Random? aRandom = null)
-    {
-        var random = aRandom ?? Random.Shared;
-        float Between(float aMin, float aMax) => aMin + random.NextSingle() * (aMax - aMin);
-        SetParameters([Between(0, 0.6f), Between(0, 0.8f), Between(-3, 3), Between(-0.4f, 0.4f), Between(0.4f, 2.5f),
-            Between(-0.3f, 0.3f), Between(-2, 2), Between(-2, 2), Between(-1.5f, 1.5f)]);
-    }
-
     public override ModuleState CaptureState() =>
         new BipedGaitState(Stride, KneeLift, KneePhase, Sway, Frequency, Lean, BalanceP, BalanceD, TurnGain);
 
@@ -186,13 +141,4 @@ public sealed class BipedGaitModule : BrainModule, ITrainableModule
         SetParameters([state.Stride, state.KneeLift, state.KneePhase, state.Sway, state.Frequency, state.Lean,
             state.BalanceP, state.BalanceD, state.TurnGain]);
     }
-
-    public static BipedGaitModule Create(ReadOnlySpan<float> aParameters, string aName = "Chód")
-    {
-        var module = new BipedGaitModule { Name = aName };
-        module.SetParameters(aParameters);
-        return module;
-    }
-
-    private static float Clean(float aValue, float aMin, float aMax) => float.IsFinite(aValue) ? Math.Clamp(aValue, aMin, aMax) : aMin;
 }

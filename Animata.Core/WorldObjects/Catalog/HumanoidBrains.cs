@@ -42,12 +42,12 @@ public static class HumanoidBrains
             Build = aBrain => BuildStateBrain(aBrain, StandNetwork(), WalkNetwork())
         },
         new(HandPreset, "automat stanów: regulator równowagi i generator kroku z ręcznymi parametrami",
-            () => BalanceModule.Create(HandBalance), true)
+            () => new BalanceModule { Name = StandName }.WithParameters(HandBalance), true)
         {
-            Build = aBrain => BuildStateBrain(aBrain, BalanceModule.Create(HandBalance, StandName), new BipedGaitModule { Name = WalkName })
+            Build = aBrain => BuildStateBrain(aBrain, new BalanceModule { Name = StandName }.WithParameters(HandBalance), new BipedGaitModule { Name = WalkName })
         },
         new("Sieć stania", "sama sieć stania z błędnika, losowe wagi", () => StandNetwork()),
-        new("Stanie ręczne", "regulator równowagi z błędnika (kostki i biodra)", () => BalanceModule.Create(HandBalance), true),
+        new("Stanie ręczne", "regulator równowagi z błędnika (kostki i biodra)", () => new BalanceModule { Name = StandName }.WithParameters(HandBalance), true),
         new("Chód ręczny", "generator kroku: nogi w przeciwfazie, kołysanie, równowaga", () => new BipedGaitModule { Name = WalkName }, true)
     ];
 

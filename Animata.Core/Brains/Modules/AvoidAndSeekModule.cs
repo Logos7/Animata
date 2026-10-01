@@ -53,11 +53,7 @@ public sealed class AvoidAndSeekModule : BrainModule
         // żeby gęstszy wachlarz nie pchał mocniej tylko dlatego, że ma więcej promieni.
         var sideRays = _rayAngles.Count(aAngle => MathF.Abs(aAngle) > 1e-3f);
         _pushScale = sideRays > 0 ? 4f / sideRays : 0;
-        _inputs =
-        [
-            TargetSensor.FoundPort, TargetSensor.GapPort, TargetSensor.DirectionXPort, TargetSensor.DirectionYPort,
-            .. _rayPorts
-        ];
+        _inputs = [.. TargetSensor.SteeringPorts, .. _rayPorts];
         Reset();
     }
 
@@ -123,12 +119,11 @@ public sealed class AvoidAndSeekModule : BrainModule
                 push -= MathF.Sign(_rayAngles[ray]) * proximity * proximity;
         }
 
-        if (aInputs.GetValueOrDefault(TargetSensor.FoundPort) > 0)
+        var course = TargetSensor.Course(aInputs);
+        if (course.Found)
         {
-            var bearing = MathF.Atan2(
-                aInputs.GetValueOrDefault(TargetSensor.DirectionYPort),
-                aInputs.GetValueOrDefault(TargetSensor.DirectionXPort));
-            var remaining = aInputs.GetValueOrDefault(TargetSensor.GapPort) - StopGap;
+            var bearing = course.Angle;
+            var remaining = course.Gap - StopGap;
 
             if (remaining > 0)
             {

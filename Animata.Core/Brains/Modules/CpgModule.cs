@@ -14,27 +14,35 @@ namespace Animata.Core.Brains.Modules;
 /// amplituda A, częstotliwość f, przesunięcie fazy λ między stawami, TurnGain, amplituda pochylenia P, faza pochylenia ψ.
 /// Stan chwilowy: faza φ (czyści ją <see cref="Reset"/>).
 /// </summary>
-public sealed class CpgModule : BrainModule, ITrainableModule
+public sealed class CpgModule : ParametricModule
 {
-    public const int Parameters = 6;
-
     /// <summary>Szczelina do celu, poniżej której napęd maleje do zera.</summary>
     public const float ArrivalGap = 0.6f;
+
+    public static readonly ParameterSpec[] Specs =
+    [
+        new("Amplitude", 0, 1, 0, 1),
+        new("Frequency", 0, 3, 0.2f, 2),
+        new("PhaseLag", -MathF.PI, MathF.PI, -MathF.PI, MathF.PI),
+        new("TurnGain", -3, 3, -1.5f, 1.5f),
+        new("PitchAmplitude", 0, 1, 0, 0.5f),
+        new("PitchPhase", -MathF.PI, MathF.PI, -MathF.PI, MathF.PI)
+    ];
 
     private readonly Dictionary<string, float> _outputs = [];
     private string[] _ports = [];
     private float _phase;
 
-    public CpgModule(int aJoints) => SetJointCount(aJoints);
+    public CpgModule(int aJoints) : base(Specs, [0.35f, 1.2f, 0.9f, 0.5f, 0, MathF.PI / 2]) => SetJointCount(aJoints);
 
     public int Joints { get; private set; }
 
-    public float Amplitude { get; set; } = 0.35f;
-    public float Frequency { get; set; } = 1.2f;
-    public float PhaseLag { get; set; } = 0.9f;
-    public float TurnGain { get; set; } = 0.5f;
-    public float PitchAmplitude { get; set; }
-    public float PitchPhase { get; set; } = MathF.PI / 2;
+    public float Amplitude { get => Values[0]; set => Values[0] = value; }
+    public float Frequency { get => Values[1]; set => Values[1] = value; }
+    public float PhaseLag { get => Values[2]; set => Values[2] = value; }
+    public float TurnGain { get => Values[3]; set => Values[3] = value; }
+    public float PitchAmplitude { get => Values[4]; set => Values[4] = value; }
+    public float PitchPhase { get => Values[5]; set => Values[5] = value; }
 
     /// <summary>
     /// Chwyt (wspinacz): przy celu fala zwalnia do zera, ale zgięcie zostaje — zwój dalej ściska pień. Bez chwytu
@@ -58,14 +66,11 @@ public sealed class CpgModule : BrainModule, ITrainableModule
     public override IReadOnlyDictionary<string, float> Evaluate(
         IReadOnlyDictionary<string, float> aInputs, BrainContext aContext)
     {
-        var found = aInputs.GetValueOrDefault(TargetSensor.FoundPort) > 0;
-        var bearing = found
-            ? MathF.Atan2(aInputs.GetValueOrDefault(TargetSensor.DirectionYPort), aInputs.GetValueOrDefault(TargetSensor.DirectionXPort)) / MathF.PI
-            : 0;
-        var drive = found ? Math.Clamp(aInputs.GetValueOrDefault(TargetSensor.GapPort) / ArrivalGap, 0, 1) : 1;
+        var course = TargetSensor.Course(aInputs);
+        var drive = course.Drive(ArrivalGap);
         _phase = (_phase + MathF.Tau * Math.Clamp(Frequency, 0, 3) * (Grip ? drive : 1) * aContext.Delta) % MathF.Tau;
         var shape = Grip ? 1 : drive;
-        var turn = Math.Clamp(-TurnGain * bearing, -1, 1) * drive;
+        var turn = Math.Clamp(-TurnGain * course.Bearing, -1, 1) * drive;
         var amplitude = Math.Clamp(Amplitude, 0, 1) * shape;
         var pitch = Math.Clamp(PitchAmplitude, 0, 1) * shape;
 
@@ -80,29 +85,6 @@ public sealed class CpgModule : BrainModule, ITrainableModule
 
     public override void Reset() => _phase = 0;
 
-    public float[] GetParameters() => [Amplitude, Frequency, PhaseLag, TurnGain, PitchAmplitude, PitchPhase];
-
-    /// <summary>Wpisuje parametry, przycinając je do sensownych zakresów (ewolucja operuje na surowych liczbach).</summary>
-    public void SetParameters(ReadOnlySpan<float> aParameters)
-    {
-        if (aParameters.Length != Parameters)
-            throw new ArgumentException($"Expected {Parameters} parameters, got {aParameters.Length}.", nameof(aParameters));
-        Amplitude = Clean(aParameters[0], 0, 1);
-        Frequency = Clean(aParameters[1], 0, 3);
-        PhaseLag = Clean(aParameters[2], -MathF.PI, MathF.PI);
-        TurnGain = Clean(aParameters[3], -3, 3);
-        PitchAmplitude = Clean(aParameters[4], 0, 1);
-        PitchPhase = Clean(aParameters[5], -MathF.PI, MathF.PI);
-    }
-
-    public void Randomize(Random? aRandom = null)
-    {
-        var random = aRandom ?? Random.Shared;
-        float Between(float aMin, float aMax) => aMin + random.NextSingle() * (aMax - aMin);
-        SetParameters([Between(0, 1), Between(0.2f, 2), Between(-MathF.PI, MathF.PI), Between(-1.5f, 1.5f), Between(0, 0.5f),
-            Between(-MathF.PI, MathF.PI)]);
-    }
-
     public override ModuleState CaptureState() =>
         new CpgState(Joints, Amplitude, Frequency, PhaseLag, TurnGain, PitchAmplitude, PitchPhase, Grip);
 
@@ -113,13 +95,4 @@ public sealed class CpgModule : BrainModule, ITrainableModule
         SetParameters([state.Amplitude, state.Frequency, state.PhaseLag, state.TurnGain, state.PitchAmplitude, state.PitchPhase]);
         Grip = state.Grip;
     }
-
-    public static CpgModule Create(CpgState aShape, ReadOnlySpan<float> aParameters, string aName = "CPG")
-    {
-        var module = new CpgModule(aShape.Joints) { Name = aName, Grip = aShape.Grip };
-        module.SetParameters(aParameters);
-        return module;
-    }
-
-    private static float Clean(float aValue, float aMin, float aMax) => float.IsFinite(aValue) ? Math.Clamp(aValue, aMin, aMax) : aMin;
 }

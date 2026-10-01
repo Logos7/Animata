@@ -101,7 +101,7 @@ public sealed class MuscleGeometry
 /// pobudzeń: Σ r·F = τ). Do tego stałe napięcie spoczynkowe (tonus) wszystkich mięśni. Kąty z czucia stawów,
 /// prędkości — z różnicy odczytów. Cele i wzmocnienia daje klasa pochodna.
 /// </summary>
-public abstract class MuscleControlModule : BrainModule
+public abstract class MuscleControlModule : ParametricModule
 {
     private readonly float[] _angles;
     private readonly float[] _lastAngles;
@@ -111,7 +111,8 @@ public abstract class MuscleControlModule : BrainModule
     private readonly Dictionary<string, float> _outputs;
     private bool _fresh = true;
 
-    protected MuscleControlModule(MuscleGeometry aGeometry, IEnumerable<string> aExtraInputs)
+    protected MuscleControlModule(MuscleGeometry aGeometry, IEnumerable<string> aExtraInputs, IReadOnlyList<ParameterSpec> aSpecs,
+        IReadOnlyList<float> aDefaults) : base(aSpecs, aDefaults)
     {
         Geometry = aGeometry;
         var aPlan = aGeometry.Plan;
@@ -201,8 +202,6 @@ public abstract class MuscleControlModule : BrainModule
     internal (float[] Targets, float[] Kp, float[] Kd) Gains => (Targets, Kp, Kd);
 
     internal void SetTone(float aTone) => Tone = aTone;
-
-    protected static float Clean(float aValue, float aMin, float aMax) => float.IsFinite(aValue) ? Math.Clamp(aValue, aMin, aMax) : 0;
 }
 
 /// <summary>
@@ -212,22 +211,28 @@ public abstract class MuscleControlModule : BrainModule
 /// równowagi dla kostek, bioder i przechyłu, pochylenie w kostkach (rad; ujemne — goleń do przodu, ciężar nad palcami,
 /// jak u człowieka: wtedy stanie trzyma silny mięsień płaszczkowaty, a nie słaby piszczelowy przedni).
 /// </summary>
-public sealed class MuscleStandModule : MuscleControlModule, ITrainableModule
+public sealed class MuscleStandModule : MuscleControlModule
 {
-    public const int Parameters = 12;
-
     private static readonly string[] Senses =
         [BalanceSensor.PitchPort, BalanceSensor.RollPort, BalanceSensor.PitchRatePort, BalanceSensor.RollRatePort];
 
-    private readonly float[] _parameters = Defaults;
-
-    public MuscleStandModule() : base(MuscleHumanoid.Geometry, Senses) => Name = "Stanie";
+    /// <summary>Parametry stania (NaN — 0): sztywności bioder, kolan, kostek, tłumienie, tonus, P/D równowagi, pochylenie w kostkach.</summary>
+    public static readonly ParameterSpec[] Specs =
+    [
+        .. ParameterSpec.Same(0, 20, 0.5f, 6, 0, "SztywnośćBiodra", "SztywnośćKolana", "SztywnośćKostki"),
+        new("Tłumienie", 0, 1, 0, 0.3f, 0),
+        new("Tonus", 0, 0.5f, 0, 0.1f, 0),
+        .. ParameterSpec.Same(-3, 3, -1, 1, 0, "KostkaP", "KostkaD", "BiodroP", "BiodroD", "PrzechyłP", "PrzechyłD"),
+        new("Pochylenie", -0.5f, 0.5f, -0.2f, 0.1f, 0)
+    ];
 
     /// <summary>Domyślne parametry stania (przed optymalizacją).</summary>
     public static float[] Defaults => [4, 4, 4, 0.02f, 0.02f, 0, 0, 0, 0, 0, 0, -0.05f];
 
+    public MuscleStandModule() : base(MuscleHumanoid.Geometry, Senses, Specs, Defaults) => Name = "Stanie";
+
     protected override void Plan(IReadOnlyDictionary<string, float> aInputs, BrainContext aContext) =>
-        StandTargets(this, _parameters, aInputs);
+        StandTargets(this, Values, aInputs);
 
     /// <summary>Cele i wzmocnienia stania — wspólne z <see cref="MuscleGaitModule"/>, który dodaje do nich krok.</summary>
     internal static void StandTargets(MuscleControlModule aModule, ReadOnlySpan<float> p, IReadOnlyDictionary<string, float> aInputs)
@@ -264,47 +269,9 @@ public sealed class MuscleStandModule : MuscleControlModule, ITrainableModule
             aTargets[axis] = aTarget;
     }
 
-    /// <summary>Przycina parametry stania do zakresów.</summary>
-    internal static void CleanInto(ReadOnlySpan<float> aSource, Span<float> aTarget)
-    {
-        for (var index = 0; index < Parameters; index++)
-            aTarget[index] = index switch
-            {
-                < 3 => Clean(aSource[index], 0, 20),
-                3 => Clean(aSource[index], 0, 1),
-                4 => Clean(aSource[index], 0, 0.5f),
-                11 => Clean(aSource[index], -0.5f, 0.5f),
-                _ => Clean(aSource[index], -3, 3)
-            };
-    }
-
-    public float[] GetParameters() => [.. _parameters];
-
-    public void SetParameters(ReadOnlySpan<float> aParameters)
-    {
-        if (aParameters.Length != Parameters)
-            throw new ArgumentException($"Expected {Parameters} parameters, got {aParameters.Length}.", nameof(aParameters));
-        CleanInto(aParameters, _parameters);
-    }
-
-    public void Randomize(Random? aRandom = null)
-    {
-        var random = aRandom ?? Random.Shared;
-        float Between(float aMin, float aMax) => aMin + random.NextSingle() * (aMax - aMin);
-        SetParameters([Between(0.5f, 6), Between(0.5f, 6), Between(0.5f, 6), Between(0, 0.3f), Between(0, 0.1f),
-            Between(-1, 1), Between(-1, 1), Between(-1, 1), Between(-1, 1), Between(-1, 1), Between(-1, 1), Between(-0.2f, 0.1f)]);
-    }
-
-    public override ModuleState CaptureState() => new MuscleStandState([.. _parameters]);
+    public override ModuleState CaptureState() => new MuscleStandState(GetParameters());
 
     public override void RestoreState(ModuleState aState) => SetParameters(Expect<MuscleStandState>(aState).Parameters);
-
-    public static MuscleStandModule Create(ReadOnlySpan<float> aParameters, string aName = "Stanie")
-    {
-        var module = new MuscleStandModule { Name = aName };
-        module.SetParameters(aParameters);
-        return module;
-    }
 }
 
 /// <summary>
@@ -319,21 +286,23 @@ public sealed class MuscleStandModule : MuscleControlModule, ITrainableModule
 ///   pochylania — zamiast odruchu biodra ze stania);
 /// - skręt do celu: dłuższy krok nogą po zewnętrznej łuku.
 /// Przy zerowych przesunięciach to dokładnie stanie — optymalizacja startuje z czegoś, co stoi, i stopniowo uczy się
-/// kroku. 25 uczonych parametrów (<see cref="Names"/>): 13 kroku i 12 stania.
+/// kroku. 25 uczonych parametrów (<see cref="Specs"/>): 13 kroku i 12 stania.
 /// </summary>
-public sealed class MuscleGaitModule : MuscleControlModule, ITrainableModule
+public sealed class MuscleGaitModule : MuscleControlModule
 {
     private const int Stand = 13;   // od tego indeksu — parametry stania w kolejności MuscleStandModule
 
-    public static readonly string[] Names =
+    /// <summary>
+    /// 13 parametrów kroku (okres 0.3–3 s, przesunięcia ±3; NaN — 0), potem 12 stania (<see cref="MuscleStandModule.Specs"/>).
+    /// Losowanie: przesunięcia kroku mnożone przez 0.5–1.5 (<see cref="Randomize"/>).
+    /// </summary>
+    public static readonly ParameterSpec[] Specs =
     [
-        "Okres", "Biodro1", "Biodro2", "Kolano1", "Kolano2", "KostkaPrzen", "KolanoPodp", "KostkaPodp",
-        "SprzęgV", "SprzęgP", "PrędkośćCel", "TułówP", "TułówD",
-        "SztywnośćBiodra", "SztywnośćKolana", "SztywnośćKostki", "Tłumienie", "Tonus",
-        "KostkaP", "KostkaD", "BiodroP", "BiodroD", "PrzechyłP", "PrzechyłD", "Pochylenie"
+        new("Okres", 0.3f, 3, 0.3f, 3, 0),
+        .. ParameterSpec.Same(-3, 3, -3, 3, 0, "Biodro1", "Biodro2", "Kolano1", "Kolano2", "KostkaPrzen", "KolanoPodp", "KostkaPodp",
+            "SprzęgV", "SprzęgP", "PrędkośćCel", "TułówP", "TułówD"),
+        .. MuscleStandModule.Specs
     ];
-
-    public static int Parameters => Names.Length;
 
     /// <summary>Skręt: o tyle (ułamek kroku na kąt do celu / π) wydłuża się krok nogi po zewnętrznej łuku.</summary>
     public const float TurnGain = 0.4f;
@@ -347,23 +316,20 @@ public sealed class MuscleGaitModule : MuscleControlModule, ITrainableModule
         BalanceSensor.RollRatePort, BalanceSensor.VelocityXPort, BalanceSensor.VelocityYPort
     ];
 
-    private readonly float[] _parameters = [0.8f, 0.2f, 0.1f, 0.4f, 0.1f, 0, 0, 0, 0.2f, 0.1f, 0.4f, 0, 0, .. MuscleStandModule.Defaults];
     private float _phase;
 
-    public MuscleGaitModule() : base(MuscleHumanoid.Geometry, Senses) => Name = "Chód";
+    public MuscleGaitModule() : base(MuscleHumanoid.Geometry, Senses, Specs,
+        [0.8f, 0.2f, 0.1f, 0.4f, 0.1f, 0, 0, 0, 0.2f, 0.1f, 0.4f, 0, 0, .. MuscleStandModule.Defaults]) => Name = "Chód";
 
     /// <summary>Faza kroku [0, 1).</summary>
     public float Phase => _phase;
 
     protected override void Plan(IReadOnlyDictionary<string, float> aInputs, BrainContext aContext)
     {
-        var p = _parameters;
+        var p = Values;
         MuscleStandModule.StandTargets(this, p.AsSpan(Stand), aInputs);
         _phase = (_phase + Math.Max(0, aContext.Delta) / Math.Max(0.3f, p[0])) % 1;
-        var found = aInputs.GetValueOrDefault(TargetSensor.FoundPort) > 0;
-        var bearing = found
-            ? MathF.Atan2(aInputs.GetValueOrDefault(TargetSensor.DirectionYPort), aInputs.GetValueOrDefault(TargetSensor.DirectionXPort)) / MathF.PI
-            : 0;
+        var bearing = TargetSensor.Course(aInputs).Bearing;
         var pitch = aInputs.GetValueOrDefault(BalanceSensor.PitchPort);
         var velocityX = 2 * aInputs.GetValueOrDefault(BalanceSensor.VelocityXPort);
         var velocityY = 2 * aInputs.GetValueOrDefault(BalanceSensor.VelocityYPort);
@@ -411,19 +377,8 @@ public sealed class MuscleGaitModule : MuscleControlModule, ITrainableModule
         _phase = 0;
     }
 
-    public float[] GetParameters() => [.. _parameters];
-
-    public void SetParameters(ReadOnlySpan<float> aParameters)
-    {
-        if (aParameters.Length != Parameters)
-            throw new ArgumentException($"Expected {Parameters} parameters, got {aParameters.Length}.", nameof(aParameters));
-        _parameters[0] = Clean(aParameters[0], 0.3f, 3);
-        for (var index = 1; index < Stand; index++)
-            _parameters[index] = Clean(aParameters[index], -3, 3);
-        MuscleStandModule.CleanInto(aParameters[Stand..], _parameters.AsSpan(Stand));
-    }
-
-    public void Randomize(Random? aRandom = null)
+    /// <summary>Przesunięcia kroku (bez okresu i stania) mnożone przez losowe 0.5–1.5 — start blisko stania.</summary>
+    public override void Randomize(Random? aRandom = null)
     {
         var random = aRandom ?? Random.Shared;
         var values = GetParameters();
@@ -432,14 +387,7 @@ public sealed class MuscleGaitModule : MuscleControlModule, ITrainableModule
         SetParameters(values);
     }
 
-    public override ModuleState CaptureState() => new MuscleGaitState([.. _parameters]);
+    public override ModuleState CaptureState() => new MuscleGaitState(GetParameters());
 
     public override void RestoreState(ModuleState aState) => SetParameters(Expect<MuscleGaitState>(aState).Parameters);
-
-    public static MuscleGaitModule Create(ReadOnlySpan<float> aParameters, string aName = "Chód")
-    {
-        var module = new MuscleGaitModule { Name = aName };
-        module.SetParameters(aParameters);
-        return module;
-    }
 }

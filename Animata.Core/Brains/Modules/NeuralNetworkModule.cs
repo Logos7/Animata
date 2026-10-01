@@ -53,19 +53,6 @@ public sealed class NeuralNetworkModule : BrainModule, ITrainableModule
         SetBindings(state, inputs);
     }
 
-    /// <summary>
-    /// Nowy moduł o kształcie sieci i powiązaniach portów z <paramref name="aShape"/> (jego wagi są pomijane)
-    /// i podanych parametrach (kolejność jak <see cref="NeuralNetwork.GetParameters"/>).
-    /// </summary>
-    public static NeuralNetworkModule Create(NeuralNetworkState aShape, ReadOnlySpan<float> aParameters, string aName = "Neural")
-    {
-        var inputs = CompileInputs(aShape);
-        var module = new NeuralNetworkModule(new NeuralNetwork(aShape.Layers)) { Name = aName };
-        module.Network.SetParameters(aParameters);
-        module.SetBindings(aShape, inputs);
-        return module;
-    }
-
     private static NeuralInput[] CompileInputs(NeuralNetworkState aState) =>
         aState.InputExpressions.Select(aExpression => new NeuralInput(aExpression)).ToArray();
 

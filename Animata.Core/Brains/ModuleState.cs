@@ -45,6 +45,26 @@ public abstract record ModuleState
     /// (podgraf: jego wnętrze to struktura, zapisuje się osobno). Nowy typ modułu: rekord stanu z tą metodą i wpis JsonDerivedType wyżej.
     /// </summary>
     public virtual BrainModule? CreateModule(Guid aId) => null;
+
+    /// <summary>
+    /// Uczony moduł o kształcie tego stanu (porty, liczba stawów, wyrażenia) i podanych parametrach — w ukrytych próbach
+    /// nauki. Parametry stanu są pomijane. Stan modułu, którego nie da się uczyć → <see cref="NotSupportedException"/>.
+    /// </summary>
+    public BrainModule CreateTrainable(ReadOnlySpan<float> aParameters, string aName)
+    {
+        if (CreateModule(Guid.NewGuid()) is not ITrainableModule trainable)
+            throw new NotSupportedException($"{GetType().Name} is not a trainable module state.");
+        var module = (BrainModule)trainable;
+        module.RestoreState(this);
+        trainable.SetParameters(aParameters);
+        module.Name = aName;
+        return module;
+    }
+
+    /// <summary>Liczba uczonych parametrów modułu o tym kształcie (<see cref="NotSupportedException"/>, gdy moduł nie jest uczony).</summary>
+    public virtual int CountParameters() => CreateModule(Guid.Empty) is ITrainableModule trainable
+        ? trainable.GetParameters().Length
+        : throw new NotSupportedException($"{GetType().Name} is not a trainable module state.");
 }
 
 public sealed record ApproachTargetState(float TurnGain, float StopGap, float SlowdownGap) : ModuleState
@@ -98,6 +118,8 @@ public sealed record NeuralNetworkState(
     [JsonIgnore]
     public int ParameterCount => Weights.Sum(aLayer => aLayer.Sum(aNeuron => aNeuron.Length)) + Biases.Sum(aLayer => aLayer.Length);
 
+    public override int CountParameters() => ParameterCount;
+
     public override BrainModule CreateModule(Guid aId) => new NeuralNetworkModule(new NeuralNetwork([.. Layers])) { Id = aId };
 }
 
@@ -149,13 +171,13 @@ public sealed record BipedGaitState(
     public override BrainModule CreateModule(Guid aId) => new BipedGaitModule { Id = aId };
 }
 
-/// <summary>Stan stania mięśniowego: <see cref="MuscleStandModule.Parameters"/> parametrów.</summary>
+/// <summary>Stan stania mięśniowego: parametry jak <see cref="MuscleStandModule.Specs"/>.</summary>
 public sealed record MuscleStandState(float[] Parameters) : ModuleState
 {
     public override BrainModule CreateModule(Guid aId) => new MuscleStandModule { Id = aId };
 }
 
-/// <summary>Stan chodu mięśniowego: parametry automatu kroku (<see cref="MuscleGaitModule.Names"/>).</summary>
+/// <summary>Stan chodu mięśniowego: parametry automatu kroku (<see cref="MuscleGaitModule.Specs"/>).</summary>
 public sealed record MuscleGaitState(float[] Parameters) : ModuleState
 {
     public override BrainModule CreateModule(Guid aId) => new MuscleGaitModule { Id = aId };

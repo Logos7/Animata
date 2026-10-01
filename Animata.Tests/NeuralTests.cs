@@ -67,7 +67,7 @@ public class NeuralTests
         var state = (NeuralNetworkState)template.CaptureState();
         var parameters = Enumerable.Repeat(0.5f, state.ParameterCount).ToArray();
 
-        var module = NeuralNetworkModule.Create(state, parameters);
+        var module = (NeuralNetworkModule)state.CreateTrainable(parameters, "Neural");
 
         Assert.Equal(parameters, module.Network.GetParameters());
         Assert.Equal(template.Ports, module.Ports);

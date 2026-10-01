@@ -208,8 +208,7 @@ public sealed class TrainingController : IDisposable
     {
         var builder = new System.Text.StringBuilder(aCreature.TrainingRigFor(aModule)?.Name ?? aCreature.GetType().Name);
         if (aModule.CaptureState() is { } state)
-            builder.Append('|').Append(TrainableModules.Create(state, new float[TrainableModules.ParameterCount(state)], aModule.Name)
-                .CaptureState()?.ToJson());
+            builder.Append('|').Append(state.CreateTrainable(new float[state.CountParameters()], aModule.Name).CaptureState()?.ToJson());
         foreach (var owner in aCreature.Body.Sensors.Cast<object>().Concat(aCreature.Body.Actuators))
             foreach (var (name, value) in Settings.Capture(owner))
                 if (Settings.Find(owner, name)?.Type != typeof(Guid?))

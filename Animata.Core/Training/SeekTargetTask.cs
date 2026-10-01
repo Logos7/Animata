@@ -401,7 +401,7 @@ public static class SeekRigs
         ActiveEntity reference;
         try
         {
-            var controller = TrainableModules.Create(shape, new float[TrainableModules.ParameterCount(shape)], module.Name);
+            var controller = shape.CreateTrainable(new float[shape.CountParameters()], module.Name);
             reference = aRig.CreateCreature(Guid.Empty, controller);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or BrainException or NotSupportedException)
@@ -482,7 +482,7 @@ public sealed class SeekTargetTask
     {
         _template = aTemplate;
         _moduleName = aModuleName;
-        ParameterCount = TrainableModules.ParameterCount(aTemplate);
+        ParameterCount = aTemplate.CountParameters();
         Rig = aRig;
         Options = aOptions ?? aRig.DefaultOptions;
         _validation = CreateValidationEpisodes(Options);
@@ -688,7 +688,7 @@ public sealed class SeekTargetTask
         return aRig.Effort(command);
     }
 
-    private BrainModule CreateModule(float[] aParameters) => TrainableModules.Create(_template, aParameters, _moduleName);
+    private BrainModule CreateModule(float[] aParameters) => _template.CreateTrainable(aParameters, _moduleName);
 
     /// <summary>
     /// „Kontakt” z przeszkodą: obrys stwora (okrąg <see cref="Entity.BoundingRadius"/>) dotyka cylindra. Celowo obrys, a nie

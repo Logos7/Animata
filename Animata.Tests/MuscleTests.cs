@@ -151,7 +151,7 @@ public class MuscleTests
     {
         using var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(10, 10));
-        var humanoid = WorldObjectCatalog.CreateMuscleHumanoid(Vector3.Zero, 0, null, MuscleStandModule.Create(MuscleHumanoidBrains.HandStand));
+        var humanoid = WorldObjectCatalog.CreateMuscleHumanoid(Vector3.Zero, 0, null, new MuscleStandModule().WithParameters(MuscleHumanoidBrains.HandStand));
         world.Add(humanoid);
         for (var tick = 0; tick < 300; tick++)
         {

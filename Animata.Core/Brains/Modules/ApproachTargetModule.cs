@@ -46,12 +46,11 @@ public sealed class ApproachTargetModule : BrainModule
         var turn = 0f;
         var step = 0f;
 
-        if (aInputs.GetValueOrDefault(TargetSensor.FoundPort) > 0)
+        var course = TargetSensor.Course(aInputs);
+        if (course.Found)
         {
-            var angle = MathF.Atan2(
-                aInputs.GetValueOrDefault(TargetSensor.DirectionYPort),
-                aInputs.GetValueOrDefault(TargetSensor.DirectionXPort));
-            var remaining = aInputs.GetValueOrDefault(TargetSensor.GapPort) - StopGap;
+            var angle = course.Angle;
+            var remaining = course.Gap - StopGap;
 
             turn = Math.Clamp(angle * TurnGain, -1, 1);
             if (remaining > 0)

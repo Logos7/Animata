@@ -19,24 +19,24 @@ public static class MuscleHumanoidBrains
     public static IReadOnlyList<BrainPreset> Presets(Creature aCreature) =>
     [
         new(HandPreset, "automat stanów: regulator stania i automat kroku sterujące mięśniami (parametry z optymalizacji)",
-            () => MuscleStandModule.Create(HandStand), true)
+            () => new MuscleStandModule().WithParameters(HandStand), true)
         {
-            Build = aBrain => BuildStateBrain(aBrain, MuscleStandModule.Create(HandStand, StandName), MuscleGaitModule.Create(HandGait, WalkName))
+            Build = aBrain => BuildStateBrain(aBrain, new MuscleStandModule { Name = StandName }.WithParameters(HandStand), new MuscleGaitModule { Name = WalkName }.WithParameters(HandGait))
         },
         new(NetworkPreset, "automat stanów: sieć stania i sieć chodu, każda steruje 24 mięśniami; losowe wagi",
             () => StandNetwork(), false)
         {
             Build = aBrain => BuildStateBrain(aBrain, StandNetwork(), WalkNetwork())
         },
-        new("Stanie mięśniami", "regulator PD stawów przełożony na mięśnie + odruchy równowagi", () => MuscleStandModule.Create(HandStand), true),
-        new("Chód mięśniami", "automat kroku (jak SIMBICON) przełożony na mięśnie", () => MuscleGaitModule.Create(HandGait, WalkName), true)
+        new("Stanie mięśniami", "regulator PD stawów przełożony na mięśnie + odruchy równowagi", () => new MuscleStandModule().WithParameters(HandStand), true),
+        new("Chód mięśniami", "automat kroku (jak SIMBICON) przełożony na mięśnie", () => new MuscleGaitModule { Name = WalkName }.WithParameters(HandGait), true)
     ];
 
     /// <summary>Parametry stania (<see cref="MuscleStandModule"/>) — z pomiaru/optymalizacji.</summary>
-    public static readonly float[] HandStand = MuscleStandModule.Create([3.67f, 4.16f, 3.87f, 0, 0.05f, 0.41f, 0.25f, -0.02f, 0.07f, -0.1f, 0.15f, -0.03f]).GetParameters();
+    public static readonly float[] HandStand = new MuscleStandModule().WithParameters([3.67f, 4.16f, 3.87f, 0, 0.05f, 0.41f, 0.25f, -0.02f, 0.07f, -0.1f, 0.15f, -0.03f]).GetParameters();
 
-    /// <summary>Parametry chodu (<see cref="MuscleGaitModule.Names"/>) — z pomiaru/optymalizacji.</summary>
-    public static readonly float[] HandGait = MuscleGaitModule.Create([0.8f, 0.2f, 0.1f, 0.4f, 0.1f, 0, 0, 0, 0.2f, 0.1f, 0.4f, 0, 0, .. HandStand]).GetParameters();
+    /// <summary>Parametry chodu (<see cref="MuscleGaitModule.Specs"/>) — z pomiaru/optymalizacji.</summary>
+    public static readonly float[] HandGait = new MuscleGaitModule().WithParameters([0.8f, 0.2f, 0.1f, 0.4f, 0.1f, 0, 0, 0, 0.2f, 0.1f, 0.4f, 0, 0, .. HandStand]).GetParameters();
 
     /// <summary>Zmysły → stanie i chód → automat (Found, Gap) → mięśnie „Muscles”.</summary>
     public static IReadOnlyList<BrainModule> BuildStateBrain(Brain aBrain, BrainModule aStand, BrainModule aWalk)
