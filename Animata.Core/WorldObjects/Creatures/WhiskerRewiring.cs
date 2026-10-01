@@ -8,7 +8,7 @@ namespace Animata.Core.WorldObjects;
 
 /// <summary>
 /// Zmiana liczby wąsów stwora w miejscu: ten sam stwór, ten sam <see cref="RaySensor"/> (ten sam slot) i ten sam mózg.
-/// - sensor dostaje nowe kąty (wachlarz <see cref="WorldObjectCatalog.WhiskerSpread"/>), porty Ray0…Ray{n−1};
+/// - sensor dostaje nowe kąty (wachlarz <see cref="Car.WhiskerSpread"/>), porty Ray0…Ray{n−1};
 /// - węzeł tego sensora w grafie ma porty sensora na żywo, więc od razu widzi nowe;
 /// - AvoidAndSeek dostaje nowe kąty (parametry zostają);
 /// - sieć, której wejście to dokładnie port wąsa („Ray3”), dostaje po jednym wejściu na nowy wąs; waga nowego wąsa
@@ -26,7 +26,7 @@ public static class WhiskerRewiring
 {
     public static void SetCount(ActiveEntity aCreature, int aCount)
     {
-        var angles = WorldObjectCatalog.WhiskerAnglesFor(aCount);
+        var angles = Car.WhiskerAnglesFor(aCount);
         var sensor = aCreature.Body.Sensors.OfType<RaySensor>().FirstOrDefault()
             ?? throw new InvalidOperationException("Ten stwór nie ma wąsów.");
         if (sensor.Angles.Count == aCount)
@@ -54,10 +54,10 @@ public static class WhiskerRewiring
     /// </summary>
     public static NeuralNetworkState Remap(NeuralNetworkState aState, int aCount, string aName = "Neural")
     {
-        var newAngles = WorldObjectCatalog.WhiskerAnglesFor(aCount);
+        var newAngles = Car.WhiskerAnglesFor(aCount);
         var oldRayPorts = aState.Ports.Where(RaySensor.IsPortName).ToList();
         IReadOnlyList<float> oldAngles = oldRayPorts.Count > 0
-            ? RaySensor.Fan(oldRayPorts.Count, WorldObjectCatalog.WhiskerSpread).Angles
+            ? RaySensor.Fan(oldRayPorts.Count, Car.WhiskerSpread).Angles
             : Array.Empty<float>();
 
         // Wejście sieci → numer wąsa, gdy wyrażenie to dokładnie port wąsa.

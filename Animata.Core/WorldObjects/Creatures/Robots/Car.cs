@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Animata.Core.Actuators;
 using Animata.Core.Bodies;
 using Animata.Core.Entities;
@@ -28,6 +29,42 @@ public static class Car
     /// <summary>Ustawienie „Wąsy”: liczba wąsów autka.</summary>
     public const string WhiskersSetting = "Whiskers";
 
+    /// <summary>Domyślna liczba wąsów autka: 5 promieni co 30° (−60°…+60°) — na niej dobrano parametry sterownika.</summary>
+    public const int DefaultWhiskers = 5;
+
+    /// <summary>Najwięcej wąsów autka (co 5° w wachlarzu 120°).</summary>
+    public const int MaxWhiskers = 25;
+
+    /// <summary>Szerokość wachlarza wąsów autka (rad), niezależnie od ich liczby.</summary>
+    public const float WhiskerSpread = 120 * MathF.PI / 180;
+
+    public const float WhiskerRange = 3;
+
+    /// <summary>Dozwolone liczby wąsów autka: 1, 3, …, <see cref="MaxWhiskers"/>.</summary>
+    public static IReadOnlyList<int> WhiskerCounts { get; } =
+        [.. Enumerable.Range(0, MaxWhiskers / 2 + 1).Select(aIndex => 2 * aIndex + 1)];
+
+    /// <summary>Nieparzysta, od 1 do <see cref="MaxWhiskers"/> — środkowy wąs zawsze patrzy prosto przed maskę.</summary>
+    public static bool IsValidWhiskerCount(int aCount) => aCount is >= 1 and <= MaxWhiskers && aCount % 2 == 1;
+
+    /// <summary>Rzuca <see cref="ArgumentOutOfRangeException"/>, gdy liczba wąsów nie jest nieparzysta od 1 do <see cref="MaxWhiskers"/>.</summary>
+    public static void CheckWhiskerCount(int aCount, [CallerArgumentExpression(nameof(aCount))] string? aName = null)
+    {
+        if (!IsValidWhiskerCount(aCount))
+            throw new ArgumentOutOfRangeException(aName, aCount, $"Autko ma nieparzystą liczbę wąsów od 1 do {MaxWhiskers}.");
+    }
+
+    /// <summary>Kąty wąsów autka: <paramref name="aCount"/> promieni równo w wachlarzu <see cref="WhiskerSpread"/>.</summary>
+    public static float[] WhiskerAnglesFor(int aCount)
+    {
+        CheckWhiskerCount(aCount);
+        return [.. RaySensor.Fan(aCount, WhiskerSpread).Angles];
+    }
+
+    /// <summary>Liczba wąsów stwora (promieni jego pierwszego <see cref="RaySensor"/>), 0 — bez wąsów.</summary>
+    public static int WhiskerCountOf(Entity aEntity) =>
+        aEntity.Body.Sensors.OfType<RaySensor>().FirstOrDefault()?.Angles.Count ?? 0;
+
     private static readonly CreatureBlueprint Body = new(DefaultPlan(),
         [new SlotSpec("Eye", nameof(TargetSensor)), new SlotSpec("Whiskers", nameof(RaySensor))],
         [new SlotSpec("Wheels", nameof(SteeringDriveActuator))])
@@ -48,23 +85,23 @@ public static class Car
             // sieć dostaje przeliczone wagi. Nie zapisuje się — w pliku są kąty.
             new DesignSetting(WhiskersSetting, typeof(int), new SettingAttribute("Wąsy")
             {
-                Min = 1, Max = WorldObjectCatalog.MaxWhiskers, Step = 2, Reshapes = true, Slots = "Whiskers", Derived = true,
+                Min = 1, Max = MaxWhiskers, Step = 2, Reshapes = true, Slots = "Whiskers", Derived = true,
                 Tip = "Liczba wąsów (nieparzysta, wachlarz 120°). Mózg dopasowuje się sam: sieć dostaje przeliczone wagi, a nie losowe."
-            }, WorldObjectCatalog.DefaultWhiskers)
+            }, DefaultWhiskers)
             {
-                Get = aCar => WorldObjectCatalog.WhiskerCountOf(aCar),
+                Get = aCar => WhiskerCountOf(aCar),
                 Set = (aCar, aValue) => WhiskerRewiring.SetCount(aCar, Convert.ToInt32(aValue, System.Globalization.CultureInfo.InvariantCulture))
             }
         ],
         Presets = aCar =>
         [
             new("Sieć neuronowa", "wejścia: cel i wąsy, 2 warstwy ukryte, losowe wagi",
-                () => WorldObjectCatalog.CreateCarNeuralModule(WorldObjectCatalog.WhiskerCountOf(aCar), WorldObjectCatalog.DefaultCarHidden)),
+                () => WorldObjectCatalog.CreateCarNeuralModule(WhiskerCountOf(aCar), WorldObjectCatalog.DefaultCarHidden)),
             new("Sterownik omijania", "AvoidAndSeek: omija przeszkody wąsami i jedzie do celu",
-                () => WorldObjectCatalog.CreateAvoidController(WorldObjectCatalog.WhiskerCountOf(aCar)), true)
+                () => WorldObjectCatalog.CreateAvoidController(WhiskerCountOf(aCar)), true)
         ],
-        TrainingRig = aCar => WorldObjectCatalog.IsValidWhiskerCount(WorldObjectCatalog.WhiskerCountOf(aCar))
-            ? SeekRigs.CarWith(WorldObjectCatalog.WhiskerCountOf(aCar))
+        TrainingRig = aCar => IsValidWhiskerCount(WhiskerCountOf(aCar))
+            ? SeekRigs.CarWith(WhiskerCountOf(aCar))
             : SeekRigs.Car,
         Describe = aCar => $"Autko · {Length:0.##} × {Width:0.##} × {Height:0.##} m · obrys r {aCar.BoundingRadius:0.##}"
     };

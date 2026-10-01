@@ -1,10 +1,6 @@
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using Animata.Core.Actuators;
-using Animata.Core.Bodies;
-using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
-using Animata.Core.Brains.Neural;
 using Animata.Core.Sensors;
 
 namespace Animata.Core.WorldObjects;
@@ -38,25 +34,14 @@ public static partial class WorldObjectCatalog
     public static CpgModule CreateCpg(int aSegments = Snake.DefaultSegments) => new(aSegments - 1) { Name = "CPG" };
 
     /// <summary>
-    /// Wąż: oko (slot „Eye”) na głowie, czucie stawów („Joints”), zegar rytmu („Clock”), czucie terenu („Feel”), kręgosłup („Spine”),
-    /// mózg sensory → controller → spine.
+    /// Wąż o <paramref name="aSegments"/> segmentach z oczami na celu i podanym sterownikiem: sensory → controller → kręgosłup.
     /// Controller musi mieć wyjścia Yaw{i}/Pitch{i} dla wszystkich n−1 stawów (np. <see cref="CreateCpg"/>).
     /// </summary>
     public static Creature CreateSnake(Vector3 aPosition, float aYaw, Vector3 aColor, Guid? aTargetId, BrainModule aController,
         int aSegments = Snake.DefaultSegments)
     {
         Snake.CheckLength(aSegments);
-        return new Spawn(Snake.Design.Type)
-        {
-            Settings = Spawn.Configure<Creature>(aSnake =>
-            {
-                Snake.SetSegments(aSnake, aSegments);
-                aSnake.Color = aColor;
-            }),
-            Slots = Spawn.Aim(aTargetId),
-            Brain = Spawn.Controller(aController),
-            Pose = Spawn.At(aPosition, aYaw)
-        }.Build<Creature>();
+        return Create(Snake.Design, aPosition, aYaw, aTargetId, aController, aColor, aSnake => Snake.SetSegments(aSnake, aSegments));
     }
 
     /// <summary>
@@ -66,10 +51,7 @@ public static partial class WorldObjectCatalog
     public static Creature CreateLearningSnake(Vector3 aPosition, float aYaw, Guid? aTargetId, int aSegments = Snake.DefaultSegments)
     {
         var cpg = CreateCpg(aSegments);
-        var snake = CreateSnake(aPosition, aYaw, RandomColor(), aTargetId, cpg, aSegments);
-        snake.Brain!.Capture("ręczne parametry", cpg);
-        cpg.Randomize();
-        return snake;
+        return WithHandSnapshot(CreateSnake(aPosition, aYaw, RandomColor(), aTargetId, cpg, aSegments), cpg);
     }
 
     /// <summary>
@@ -86,13 +68,10 @@ public static partial class WorldObjectCatalog
             "Found * DirectionY", "Found * DirectionX", "Found * DirectionZ", "Found * Gap / 4",
             FeelSensor.AheadPort, FeelSensor.HeadPitchPort
         ];
-        var outputs = JointNetworkOutputs(aSegments - 1);
-        var hidden = aHidden.Length > 0 ? aHidden : SnakeHiddenLayers;
-        var module = new NeuralNetworkModule(new NeuralNetwork([inputs.Length, .. hidden, outputs.Length])) { Name = "Neural" };
-        module.Ports.AddRange([ClockSensor.SinPort, ClockSensor.CosPort, .. TargetSensor.SteeringPorts, TargetSensor.DirectionZPort,
-            FeelSensor.AheadPort, FeelSensor.HeadPitchPort]);
-        module.Inputs.AddRange(inputs.Select(aExpression => new NeuralInput(aExpression)));
-        module.Outputs.AddRange(outputs.Select(aPort => new NeuralOutput(aPort)));
+        var outputs = Enumerable.Range(0, aSegments - 1).SelectMany(aJoint => new[] { SpineActuator.YawPort(aJoint), SpineActuator.PitchPort(aJoint) });
+        var module = NeuralNetworkModule.Build("Neural",
+            [ClockSensor.SinPort, ClockSensor.CosPort, .. TargetSensor.SteeringPorts, TargetSensor.DirectionZPort, FeelSensor.AheadPort, FeelSensor.HeadPitchPort],
+            inputs, outputs, aHidden.Length > 0 ? aHidden : SnakeHiddenLayers);
         // Czucie terenu startuje z zerowymi wagami: sieć zaczyna tak, jakby go nie było, a ewolucja dokłada je, gdy pomaga
         // (z losowymi wagami od początku zaszumiało start — w pomiarze uczyła się wolniej).
         for (var input = inputs.Length - 2; input < inputs.Length; input++)
@@ -107,5 +86,4 @@ public static partial class WorldObjectCatalog
     /// <summary>Wąż z własną siecią neuronową (losowe wagi) — uczy się pełzać bez gotowego CPG, z zegarem rytmu.</summary>
     public static Creature CreateNeuralSnake(Vector3 aPosition, float aYaw, Guid? aTargetId, int aSegments = Snake.DefaultSegments) =>
         CreateSnake(aPosition, aYaw, RandomColor(), aTargetId, CreateSnakeNeuralModule(aSegments), aSegments);
-
 }

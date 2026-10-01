@@ -135,7 +135,7 @@ public class PersistenceTests
         {
             Assert.Equal(json, WorldFile.ToJson(WorldFile.Capture(restored, "test")));
             var twin = (Creature)restored.Find(car.Id)!;
-            Assert.Equal(9, WorldObjectCatalog.WhiskerCountOf(twin));
+            Assert.Equal(9, Car.WhiskerCountOf(twin));
             var twinGroup = twin.Brain!.Graph.Modules.OfType<CompositeModule>().Single();
             Assert.Equal(group.Id, twinGroup.Id);
             Assert.Equal(new Vector2(120, 40), twin.Brain.Graph.Positions[group.Id]);

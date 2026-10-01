@@ -16,6 +16,25 @@ public sealed class NeuralNetworkModule : BrainModule, ITrainableModule
 
     public NeuralNetworkModule(NeuralNetwork aNetwork) => Network = aNetwork;
 
+    /// <summary>
+    /// Sieć z portami wejściowymi <paramref name="aPorts"/>, wejściami-wyrażeniami <paramref name="aInputs"/> i wyjściami
+    /// <paramref name="aOutputs"/>; warstwy [wejścia, ..<paramref name="aHidden"/>, wyjścia], wagi losowe (±1/√wejść).
+    /// </summary>
+    public static NeuralNetworkModule Build(string aName, IEnumerable<string> aPorts, IReadOnlyList<string> aInputs,
+        IReadOnlyList<NeuralOutput> aOutputs, IReadOnlyList<int> aHidden)
+    {
+        var module = new NeuralNetworkModule(new NeuralNetwork([aInputs.Count, .. aHidden, aOutputs.Count])) { Name = aName };
+        module.Ports.AddRange(aPorts);
+        module.Inputs.AddRange(aInputs.Select(aExpression => new NeuralInput(aExpression)));
+        module.Outputs.AddRange(aOutputs);
+        return module;
+    }
+
+    /// <summary>Jak wyżej, wyjścia to porty bez skali i przesunięcia.</summary>
+    public static NeuralNetworkModule Build(string aName, IEnumerable<string> aPorts, IReadOnlyList<string> aInputs,
+        IEnumerable<string> aOutputs, IReadOnlyList<int> aHidden) =>
+        Build(aName, aPorts, aInputs, [.. aOutputs.Select(aPort => new NeuralOutput(aPort))], aHidden);
+
     public NeuralNetwork Network { get; }
 
     public int ParameterCount => Network.ParameterCount;

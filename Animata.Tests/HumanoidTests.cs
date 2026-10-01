@@ -95,7 +95,7 @@ public class HumanoidTests : IDisposable
     [Fact]
     public void StateBrain_HasTwoNetworks_AndSurvivesSaveAndLoad()
     {
-        var humanoid = WorldObjectCatalog.CreateHumanoid(Vector3.Zero, 0, null, HumanoidBrains.NetworkPreset);
+        var humanoid = WorldObjectCatalog.Create(Humanoid.Design, Vector3.Zero, 0, null, HumanoidBrains.NetworkPreset);
         var graph = humanoid.Brain!.Graph;
         Assert.Equal(2, graph.Modules.OfType<NeuralNetworkModule>().Count());
         var machine = graph.Modules.OfType<StateMachineModule>().Single();
@@ -104,7 +104,7 @@ public class HumanoidTests : IDisposable
 
         machine.BlendSeconds = 0.25f;
         var json = BrainFile.ToJson(BrainFile.Capture(humanoid.Brain, "humanoid"));
-        var copy = WorldObjectCatalog.CreateHumanoid(Vector3.Zero, 0, null, HumanoidBrains.NetworkPreset);
+        var copy = WorldObjectCatalog.Create(Humanoid.Design, Vector3.Zero, 0, null, HumanoidBrains.NetworkPreset);
         BrainFile.Load(copy.Brain!, BrainFile.FromJson(json));
         Assert.Equal(json, BrainFile.ToJson(BrainFile.Capture(copy.Brain!, "humanoid")));
         Assert.Equal(0.25f, copy.Brain!.Graph.Modules.OfType<StateMachineModule>().Single().BlendSeconds);
@@ -120,7 +120,7 @@ public class HumanoidTests : IDisposable
         var target = WorldObjectCatalog.CreateSphere(new Vector3(aDistance, 0, 0));
         world.Add(target);
         Terrain.Snap(world, target);
-        var humanoid = WorldObjectCatalog.CreateHumanoid(Vector3.Zero, 0, target.Id, HumanoidBrains.HandPreset);
+        var humanoid = WorldObjectCatalog.Create(Humanoid.Design, Vector3.Zero, 0, target.Id, HumanoidBrains.HandPreset);
         world.Add(humanoid);
         for (var tick = 0; tick < 15; tick++)
             world.Update(Delta);
@@ -135,7 +135,7 @@ public class HumanoidTests : IDisposable
         var ball = WorldObjectCatalog.CreateSphere(new Vector3(4, 0, 0));
         world.Add(ball);
         Terrain.Snap(world, ball);
-        var humanoid = WorldObjectCatalog.CreateHumanoid(new Vector3(0, -1, 0), 0, ball.Id, HumanoidBrains.HandPreset);
+        var humanoid = WorldObjectCatalog.Create(Humanoid.Design, new Vector3(0, -1, 0), 0, ball.Id, HumanoidBrains.HandPreset);
         world.Add(humanoid);
         var machine = humanoid.Brain!.Graph.Modules.OfType<StateMachineModule>().Single();
         float Distance() => Vector2.Distance(new Vector2(humanoid.PartPositions[0].X, humanoid.PartPositions[0].Y),
@@ -196,7 +196,7 @@ public class HumanoidTests : IDisposable
     {
         var training = new TrainingController(new SnapshotHistory(), 1000, TestWorlds.Quick);
         _controllers.Add(training);
-        var humanoid = WorldObjectCatalog.CreateHumanoid(Vector3.Zero, 0, null, HumanoidBrains.NetworkPreset);
+        var humanoid = WorldObjectCatalog.Create(Humanoid.Design, Vector3.Zero, 0, null, HumanoidBrains.NetworkPreset);
         Assert.True(training.Start(humanoid, aSeed: 1), training.LastStartError);
         var sessions = training.ProgressesOf(humanoid.Brain!);
         Assert.Equal(2, sessions.Count);

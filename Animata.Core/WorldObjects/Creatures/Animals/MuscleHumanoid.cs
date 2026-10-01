@@ -39,18 +39,7 @@ public static class MuscleHumanoid
     /// <summary>Porty mięśni (pobudzenia), lewa noga, potem prawa.</summary>
     public static readonly string[] MusclePorts = [.. Plan.MuscleList.Select(aMuscle => aMuscle.Name)];
 
-    private static readonly CreatureBlueprint Body = new(Plan,
-        [
-            new SlotSpec("Eye", nameof(TargetSensor)),
-            new SlotSpec("Joints", nameof(JointSensor)),
-            new SlotSpec("Clock", nameof(ClockSensor)) { Settings = SlotSpec.Values((nameof(ClockSensor.Frequency), 1f)) },
-            new SlotSpec("Balance", nameof(BalanceSensor)),
-            new SlotSpec("Touch", nameof(TouchSensor))
-            {
-                Touch = [new TouchPoint("StopaL", "StopaL"), new TouchPoint("StopaP", "StopaP"), new TouchPoint("Tułów", "Tułów")]
-            },
-            new SlotSpec("MuscleSense", nameof(MuscleSensor))
-        ],
+    private static readonly CreatureBlueprint Body = new(Plan, [.. Humanoid.Senses, new SlotSpec("MuscleSense", nameof(MuscleSensor))],
         [new SlotSpec("Body", nameof(SpineActuator)), new SlotSpec("Muscles", nameof(MuscleActuator))])
     {
         ServoFrequency = 60,
@@ -65,7 +54,7 @@ public static class MuscleHumanoid
         Blueprint = _ => Body,
         Presets = aCreature => MuscleHumanoidBrains.Presets(aCreature),
         TrainingRig = _ => SeekRigs.MuscleWalk,
-        ModuleRig = (_, aModule) => aModule.Name == MuscleHumanoidBrains.StandName ? SeekRigs.MuscleStand : SeekRigs.MuscleWalk,
+        ModuleRig = (_, aModule) => aModule.Name == HumanoidBrains.StandName ? SeekRigs.MuscleStand : SeekRigs.MuscleWalk,
         Describe = aCreature => $"Humanoid mięśniowy · {aCreature.MuscleCount} mięśni · {aCreature.JointCount} stawów · fizyka Bepu"
     };
 

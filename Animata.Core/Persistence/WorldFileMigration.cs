@@ -169,14 +169,14 @@ public static class WorldFileMigration
             {
                 Copy("Color");
                 Eye();
-                var count = aOld["Whiskers"]?.GetValue<int>() ?? WorldObjectCatalog.DefaultWhiskers;
-                var angles = WorldObjectCatalog.IsValidWhiskerCount(count)
-                    ? WorldObjectCatalog.WhiskerAnglesFor(count)
-                    : [.. RaySensor.Fan(Math.Max(1, count), WorldObjectCatalog.WhiskerSpread).Angles];
+                var count = aOld["Whiskers"]?.GetValue<int>() ?? Car.DefaultWhiskers;
+                var angles = Car.IsValidWhiskerCount(count)
+                    ? Car.WhiskerAnglesFor(count)
+                    : [.. RaySensor.Fan(Math.Max(1, count), Car.WhiskerSpread).Angles];
                 sensors!["Whiskers"] = new JsonObject
                 {
                     ["RayAngles"] = new JsonArray([.. angles.Select(aAngle => (JsonNode)aAngle)]),
-                    ["Range"] = aOld["WhiskerRange"]?.DeepClone() ?? WorldObjectCatalog.WhiskerRange
+                    ["Range"] = aOld["WhiskerRange"]?.DeepClone() ?? Car.WhiskerRange
                 };
                 if (aOld["Drive"] is JsonObject drive)
                     actuators = new JsonObject

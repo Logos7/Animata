@@ -57,10 +57,10 @@ public class SettingsTests
 
         var car = WorldObjectCatalog.CreateNeuralCar(Vector3.Zero, 0, null);
         var whiskers = Settings.Find(car, Car.WhiskersSetting)!;
-        Assert.Equal(WorldObjectCatalog.WhiskerCounts, whiskers.Choices());
+        Assert.Equal(Car.WhiskerCounts, whiskers.Choices());
         Assert.Throws<ArgumentOutOfRangeException>(() => whiskers.Set(car, 4));
         whiskers.Set(car, 9);
-        Assert.Equal(9, WorldObjectCatalog.WhiskerCountOf(car));
+        Assert.Equal(9, Car.WhiskerCountOf(car));
         Assert.Equal(3 + 9, car.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().Network.Layers[0]);
 
         // Stopnie w edytorze, radiany w ciele.
@@ -79,7 +79,7 @@ public class SettingsTests
         using var world = new Animata.Core.Worlds.World();
         world.Add(car);
         using var restored = WorldFile.Restore(WorldFile.FromJson(WorldFile.ToJson(WorldFile.Capture(world)))).World;
-        Assert.Equal(7, WorldObjectCatalog.WhiskerCountOf(restored.Entities.OfDesign(Car.Design).Single()));
+        Assert.Equal(7, Car.WhiskerCountOf(restored.Entities.OfDesign(Car.Design).Single()));
     }
 
     [Fact]

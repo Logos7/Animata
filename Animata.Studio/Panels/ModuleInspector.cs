@@ -6,7 +6,6 @@ using Avalonia.Media;
 using Animata.Core.Actuators;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
-using Animata.Core.Brains.Neural;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
 using Animata.Core.WorldObjects;
@@ -496,22 +495,15 @@ public sealed class ModuleInspector
     {
         var eye = aCreature.Body.Sensors.Any(aSensor => aSensor.OutputPorts.Contains(TargetSensor.GapPort));
         return eye
-            ? new StateMachineModule(["A", "B"], [TargetSensor.FoundPort, TargetSensor.GapPort], aPorts,
-                [new StateTransition("A", "B", "Found * Gap", true, 0.8f), new StateTransition("B", "A", "Gap + 10 * (1 - Found)", false, 0.4f)])
-            { Name = "Automat" }
+            ? HumanoidBrains.StateMachine(aPorts, "A", "B")
             : new StateMachineModule(["A", "B"], [], aPorts) { Name = "Automat" };
     }
 
     /// <summary>Mała sieć 2-4-2 z losowymi wagami; porty i wyrażenia zmienia się w inspektorze.</summary>
     private static NeuralNetworkModule NewNetwork()
     {
-        var module = new NeuralNetworkModule(new NeuralNetwork(2, 4, 2)) { Name = "Sieć" };
+        var module = NeuralNetworkModule.Build("Sieć", ["A", "B"], ["A", "B"], ["Out0", "Out1"], [4]);
         module.Network.Randomize();
-        module.Ports.AddRange(["A", "B"]);
-        module.Inputs.Add(new NeuralInput("A"));
-        module.Inputs.Add(new NeuralInput("B"));
-        module.Outputs.Add(new NeuralOutput("Out0"));
-        module.Outputs.Add(new NeuralOutput("Out1"));
         return module;
     }
 }

@@ -1,8 +1,6 @@
 using System.Numerics;
 using Animata.Core.Actuators;
-using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
-using Animata.Core.Brains.Neural;
 using Animata.Core.Sensors;
 
 namespace Animata.Core.WorldObjects;
@@ -11,17 +9,9 @@ namespace Animata.Core.WorldObjects;
 public static partial class WorldObjectCatalog
 {
     /// <summary>Sieć walca z losowymi wagami: te same wejścia i wyjścia co <see cref="CreateCylinderNeuralModule()"/>, podane warstwy ukryte.</summary>
-    public static NeuralNetworkModule CreateCylinderNeuralModule(params int[] aHidden)
-    {
-        var module = new NeuralNetworkModule(new NeuralNetwork([3, .. aHidden, 2])) { Name = "Neural" };
-        module.Ports.AddRange(TargetSensor.SteeringPorts);
-        module.Inputs.Add(new NeuralInput("Found * DirectionY"));
-        module.Inputs.Add(new NeuralInput("Found * Gap"));
-        module.Inputs.Add(new NeuralInput("Found * DirectionX"));
-        module.Outputs.Add(new NeuralOutput(DiskDriveActuator.TurnPort));
-        module.Outputs.Add(new NeuralOutput(DiskDriveActuator.StepPort));
-        return module;
-    }
+    public static NeuralNetworkModule CreateCylinderNeuralModule(params int[] aHidden) =>
+        NeuralNetworkModule.Build("Neural", TargetSensor.SteeringPorts, ["Found * DirectionY", "Found * Gap", "Found * DirectionX"],
+            [DiskDriveActuator.TurnPort, DiskDriveActuator.StepPort], aHidden);
 
     /// <summary>
     /// Sieć 3-6-2 z ręcznie ustawionymi wagami startowymi (punkt wyjścia do ewolucji):
@@ -50,23 +40,11 @@ public static partial class WorldObjectCatalog
         return module;
     }
 
-    /// <summary>Stwór z okiem namierzającym cel i napędem różnicowym, sterowany podanym modułem.</summary>
-    public static Creature CreateSeeker(Vector3 aPosition, Vector3 aColor, Guid? aTargetId, BrainModule aController)
-    {
-        return new Spawn(Disc.Design.Type)
-        {
-            Settings = Spawn.Configure<Creature>(aCreature => aCreature.Color = aColor),
-            Slots = Spawn.Aim(aTargetId),
-            Brain = Spawn.Controller(aController),
-            Pose = Spawn.At(aPosition)
-        }.Build<Creature>();
-    }
-
     public static Creature CreateControllerSeeker(Vector3 aPosition, Guid? aTargetId) =>
-        CreateSeeker(aPosition, RandomColor(), aTargetId, new ApproachTargetModule { Name = "Approach" });
+        Create(Disc.Design, aPosition, 0, aTargetId, new ApproachTargetModule { Name = "Approach" }, RandomColor());
 
     public static Creature CreateNeuralSeeker(Vector3 aPosition, Guid? aTargetId) =>
-        CreateSeeker(aPosition, RandomColor(), aTargetId, CreateCylinderNeuralModule());
+        Create(Disc.Design, aPosition, 0, aTargetId, CreateCylinderNeuralModule(), RandomColor());
 
     /// <summary>
     /// Walec z siecią gotową do nauki: ręczne wagi zapisane w mózgu jako snapshot „ręczne wagi”, sieć wylosowana.
@@ -74,9 +52,6 @@ public static partial class WorldObjectCatalog
     public static Creature CreateLearningSeeker(Vector3 aPosition, Guid? aTargetId)
     {
         var creature = CreateNeuralSeeker(aPosition, aTargetId);
-        var network = creature.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
-        creature.Brain.Capture("ręczne wagi", network);
-        network.Network.Randomize();
-        return creature;
+        return WithHandSnapshot(creature, creature.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single(), "ręczne wagi");
     }
 }

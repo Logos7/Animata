@@ -74,7 +74,7 @@ public static class SlotTypes
     private static readonly Dictionary<string, Func<SlotSpec, BodyPlan, Sensor>> SensorFactories = new()
     {
         [nameof(TargetSensor)] = (_, _) => new TargetSensor(),
-        [nameof(RaySensor)] = (_, _) => new RaySensor(WorldObjectCatalog.WhiskerAnglesFor(WorldObjectCatalog.DefaultWhiskers), WorldObjectCatalog.WhiskerRange),
+        [nameof(RaySensor)] = (_, _) => new RaySensor(Car.WhiskerAnglesFor(Car.DefaultWhiskers), Car.WhiskerRange),
         [nameof(JointSensor)] = (_, aPlan) => new JointSensor(aPlan),
         [nameof(ClockSensor)] = (_, _) => new ClockSensor(),
         [nameof(FeelSensor)] = (_, _) => new FeelSensor(),

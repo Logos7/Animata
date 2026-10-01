@@ -67,7 +67,7 @@ public class EntityTypeTests
         using var restored = WorldFile.Restore(WorldFile.FromJson(WorldFile.ToJson(WorldFile.Capture(world)))).World;
         var twinCar = (Creature)restored.Find(car.Id)!;
         var twinSpider = (Creature)restored.Find(spider.Id)!;
-        Assert.Equal(9, WorldObjectCatalog.WhiskerCountOf(twinCar));
+        Assert.Equal(9, Car.WhiskerCountOf(twinCar));
         Assert.Equal(2.25f, twinCar.Body.Sensors.OfType<RaySensor>().Single().Range);
         Assert.Equal(0.5f, twinCar.Body.Actuators.OfType<SteeringDriveActuator>().Single().MaxReverseSpeed);
         Assert.Equal(1.8f, twinSpider.Body.Sensors.OfType<ClockSensor>().Single().Frequency);
@@ -88,7 +88,7 @@ public class EntityTypeTests
         var ball = world.Entities.OfType<Sphere>().Single();
 
         var car = world.Entities.OfDesign(Car.Design).Single(aCar => aCar.Name == "Autko 7");
-        Assert.Equal(7, WorldObjectCatalog.WhiskerCountOf(car));
+        Assert.Equal(7, Car.WhiskerCountOf(car));
         Assert.Equal(2.5f, car.Body.Sensors.OfType<RaySensor>().Single().Range);
         var steering = car.Body.Actuators.OfType<SteeringDriveActuator>().Single();
         Assert.Equal(3.1f, steering.MaxSpeed);

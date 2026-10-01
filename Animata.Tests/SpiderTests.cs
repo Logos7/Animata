@@ -18,7 +18,7 @@ public class SpiderTests
         aWorld.Add(WorldObjectCatalog.CreateFloor(30, 30));
         var target = WorldObjectCatalog.CreateSphere(aTarget);
         aWorld.Add(target);
-        var spider = WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, Vector3.One, target.Id, new GaitModule());
+        var spider = WorldObjectCatalog.Create(Spider.Design, Vector3.Zero, 0, target.Id, new GaitModule(), Vector3.One);
         aWorld.Add(spider);
         for (var tick = 0; tick < aSeconds / Delta; tick++)
             aWorld.Update(Delta);
@@ -90,21 +90,21 @@ public class SpiderTests
     {
         using var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(10, 10));
-        var spider = WorldObjectCatalog.CreateSpider(Vector3.Zero, 0, Vector3.One, null, new GaitModule { Stride = 0, Lift = 0, KneeSwing = 0 });
+        var spider = WorldObjectCatalog.Create(Spider.Design, Vector3.Zero, 0, null, new GaitModule { Stride = 0, Lift = 0, KneeSwing = 0 }, Vector3.One);
         world.Add(spider);
         for (var tick = 0; tick < 30; tick++)
             world.Update(Delta);
         var touch = spider.Body.Sensors.OfType<TouchSensor>().Single().Read(spider, world);
         Assert.All(Spider.TouchPorts.Take(4), aPort => Assert.Equal(1f, touch[aPort]));
         Assert.Equal(0f, touch["Belly"]);
-        Assert.Equal(0f, SeekRigs.SpiderPosture(spider));
+        Assert.Equal(0f, Spider.Posture(spider));
 
         // Na grzbiecie: brzuch (tułów) dotyka ziemi, postawa najgorsza.
         spider.Place(new Vector3(0, 0, 0.1f), Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI));
         for (var tick = 0; tick < 30; tick++)
             world.Update(Delta);
         Assert.Equal(1f, spider.Body.Sensors.OfType<TouchSensor>().Single().Read(spider, world)["Belly"]);
-        Assert.Equal(1f, SeekRigs.SpiderPosture(spider));
+        Assert.Equal(1f, Spider.Posture(spider));
         var feel = spider.Body.Sensors.OfType<FeelSensor>().Single().Read(spider, world);
         Assert.True(feel.ContainsKey(FeelSensor.HeadRollPort));
     }

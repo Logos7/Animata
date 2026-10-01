@@ -151,7 +151,7 @@ public class MuscleTests
     {
         using var world = new World();
         world.Add(WorldObjectCatalog.CreateFloor(10, 10));
-        var humanoid = WorldObjectCatalog.CreateMuscleHumanoid(Vector3.Zero, 0, null, new MuscleStandModule().WithParameters(MuscleHumanoidBrains.HandStand));
+        var humanoid = WorldObjectCatalog.Create(MuscleHumanoid.Design, Vector3.Zero, 0, null, new MuscleStandModule().WithParameters(MuscleHumanoidBrains.HandStand));
         world.Add(humanoid);
         for (var tick = 0; tick < 300; tick++)
         {
@@ -176,14 +176,14 @@ public class MuscleTests
     [Fact]
     public void StateBrain_Installs_AndSurvivesSaveAndLoad()
     {
-        var humanoid = WorldObjectCatalog.CreateMuscleHumanoid(Vector3.Zero, 0, null, MuscleHumanoidBrains.HandPreset);
+        var humanoid = WorldObjectCatalog.Create(MuscleHumanoid.Design, Vector3.Zero, 0, null, MuscleHumanoidBrains.HandPreset);
         var graph = humanoid.Brain!.Graph;
         Assert.Single(graph.Modules.OfType<MuscleStandModule>());
         Assert.Single(graph.Modules.OfType<MuscleGaitModule>());
         Assert.Equal(MuscleHumanoid.MusclePorts, graph.Modules.OfType<StateMachineModule>().Single().Ports);
         graph.Validate();
         var json = BrainFile.ToJson(BrainFile.Capture(humanoid.Brain, "mięśnie"));
-        var copy = WorldObjectCatalog.CreateMuscleHumanoid(Vector3.Zero, 0, null, MuscleHumanoidBrains.NetworkPreset);
+        var copy = WorldObjectCatalog.Create(MuscleHumanoid.Design, Vector3.Zero, 0, null, MuscleHumanoidBrains.NetworkPreset);
         BrainFile.Load(copy.Brain!, BrainFile.FromJson(json));
         Assert.Equal(json, BrainFile.ToJson(BrainFile.Capture(copy.Brain!, "mięśnie")));
     }
@@ -191,7 +191,7 @@ public class MuscleTests
     [Fact]
     public void Rigs_TrainStandingAndWalking_Separately()
     {
-        var humanoid = WorldObjectCatalog.CreateMuscleHumanoid(Vector3.Zero, 0, null, MuscleHumanoidBrains.HandPreset);
+        var humanoid = WorldObjectCatalog.Create(MuscleHumanoid.Design, Vector3.Zero, 0, null, MuscleHumanoidBrains.HandPreset);
         var stand = humanoid.Brain!.Graph.Modules.OfType<MuscleStandModule>().Single();
         var walk = humanoid.Brain.Graph.Modules.OfType<MuscleGaitModule>().Single();
         Assert.Same(SeekRigs.MuscleStand, SeekRigs.For(humanoid, stand));

@@ -79,6 +79,44 @@ public static partial class WorldObjectCatalog
             throw new ArgumentException($"{aModule} has inputs no sensor provides: {string.Join(", ", missing)}.", nameof(aModule));
     }
 
+    /// <summary>
+    /// Stwór z projektu: oczy na celu, mózg sensory → <paramref name="aController"/> → napędy (<see cref="BuildBrain"/>),
+    /// poza. <paramref name="aSettings"/> — ustawienia projektu (np. segmenty węża), <paramref name="aColor"/> — kolor
+    /// (null — z projektu), <paramref name="aSlots"/> — ustawienia gniazd przed celowaniem oczu (np. kąty wąsów).
+    /// </summary>
+    public static Creature Create(CreatureDesign aDesign, Vector3 aPosition, float aYaw, Guid? aTargetId, BrainModule aController,
+        Vector3? aColor = null, Action<Creature>? aSettings = null, Action<ActiveEntity>? aSlots = null) =>
+        Create(aDesign, aPosition, aYaw, aTargetId, Spawn.Controller(aController), aColor, aSettings, aSlots);
+
+    /// <summary>Stwór z projektu z gotowym mózgiem o podanej nazwie (<see cref="ActiveEntity.BrainPresets"/>), oczy na celu.</summary>
+    public static Creature Create(CreatureDesign aDesign, Vector3 aPosition, float aYaw, Guid? aTargetId, string aPreset) =>
+        Create(aDesign, aPosition, aYaw, aTargetId, Spawn.Preset(aCreature => aCreature.BrainPresets.Single(aChoice => aChoice.Name == aPreset)));
+
+    private static Creature Create(CreatureDesign aDesign, Vector3 aPosition, float aYaw, Guid? aTargetId, Action<ActiveEntity> aBrain,
+        Vector3? aColor = null, Action<Creature>? aSettings = null, Action<ActiveEntity>? aSlots = null) => new Spawn(aDesign.Type)
+    {
+        Settings = aColor is null && aSettings is null ? null : Spawn.Configure<Creature>(aCreature =>
+        {
+            aSettings?.Invoke(aCreature);
+            if (aColor is { } color)
+                aCreature.Color = color;
+        }),
+        Slots = Spawn.Then(aSlots, Spawn.Aim(aTargetId)),
+        Brain = aBrain,
+        Pose = Spawn.At(aPosition, aYaw)
+    }.Build<Creature>();
+
+    /// <summary>
+    /// Stwór gotowy do nauki od zera: bieżące (ręczne) parametry modułu zapisane jako snapshot <paramref name="aLabel"/>,
+    /// moduł wylosowany.
+    /// </summary>
+    public static Creature WithHandSnapshot(Creature aCreature, BrainModule aModule, string aLabel = "ręczne parametry")
+    {
+        aCreature.Brain!.Capture(aLabel, aModule);
+        ((ITrainableModule)aModule).Randomize();
+        return aCreature;
+    }
+
     /// <summary>Oczy stwora (<see cref="TargetSensor"/>) patrzą na podaną encję (null — bez celu).</summary>
     public static void Aim(ActiveEntity aCreature, Guid? aTargetId)
     {
@@ -119,10 +157,6 @@ public static partial class WorldObjectCatalog
         Name = "Podłoga",
         Pose = Spawn.At(new Vector3(0, 0, -0.2f))
     }.Build<Box>();
-
-    /// <summary>Wyjścia sieci sterującej stawami (wąż, pająk): Yaw0, Pitch0, Yaw1, Pitch1, … — nowy staw dopisuje się na końcu.</summary>
-    public static string[] JointNetworkOutputs(int aJoints) =>
-        [.. Enumerable.Range(0, aJoints).SelectMany(aJoint => new[] { SpineActuator.YawPort(aJoint), SpineActuator.PitchPort(aJoint) })];
 
     /// <summary>
     /// Losowy kolor stwora (odcień dowolny, nasycenie i jasność umiarkowane). Kolor nic nie znaczy — ustawia go użytkownik,

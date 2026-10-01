@@ -41,7 +41,7 @@ public class SnakeTests
         Assert.Equal(0f, floor.Top, 5);
         Assert.Equal(0, floor.BoundingRadius);
         Assert.NotNull(world.Physics);
-        Assert.All(car.Body.Sensors.OfType<RaySensor>().Single().LastDistances, aDistance => Assert.Equal(WorldObjectCatalog.WhiskerRange, aDistance));
+        Assert.All(car.Body.Sensors.OfType<RaySensor>().Single().LastDistances, aDistance => Assert.Equal(Car.WhiskerRange, aDistance));
     }
 
     // ---------- ciała z klocków ----------

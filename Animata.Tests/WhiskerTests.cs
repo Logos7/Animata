@@ -15,7 +15,7 @@ public class WhiskerTests
     public static TheoryData<int> ValidCounts()
     {
         var data = new TheoryData<int>();
-        foreach (var count in WorldObjectCatalog.WhiskerCounts)
+        foreach (var count in Car.WhiskerCounts)
             data.Add(count);
         return data;
     }
@@ -29,8 +29,8 @@ public class WhiskerTests
     [InlineData(27)]
     public void InvalidCount_Throws(int aCount)
     {
-        Assert.False(WorldObjectCatalog.IsValidWhiskerCount(aCount));
-        Assert.Throws<ArgumentOutOfRangeException>(() => WorldObjectCatalog.WhiskerAnglesFor(aCount));
+        Assert.False(Car.IsValidWhiskerCount(aCount));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Car.WhiskerAnglesFor(aCount));
         Assert.Throws<ArgumentOutOfRangeException>(() => WorldObjectCatalog.CreateControllerCar(Vector3.Zero, 0, null, aCount));
         Assert.Throws<ArgumentOutOfRangeException>(() => SeekRigs.CarWith(aCount));
     }
@@ -39,7 +39,7 @@ public class WhiskerTests
     [MemberData(nameof(ValidCounts))]
     public void Angles_AreSymmetricFanWithMiddleStraightAhead(int aCount)
     {
-        var angles = WorldObjectCatalog.WhiskerAnglesFor(aCount);
+        var angles = Car.WhiskerAnglesFor(aCount);
 
         Assert.Equal(aCount, angles.Length);
         Assert.True(MathF.Abs(angles[aCount / 2]) < 1e-5f);
@@ -47,8 +47,8 @@ public class WhiskerTests
             Assert.Equal(-angles[aCount - 1 - index], angles[index], 5);
         if (aCount > 1)
         {
-            Assert.Equal(-WorldObjectCatalog.WhiskerSpread / 2, angles[0], 5);
-            Assert.Equal(WorldObjectCatalog.WhiskerSpread / 2, angles[^1], 5);
+            Assert.Equal(-Car.WhiskerSpread / 2, angles[0], 5);
+            Assert.Equal(Car.WhiskerSpread / 2, angles[^1], 5);
         }
     }
 
@@ -67,8 +67,8 @@ public class WhiskerTests
         for (var tick = 0; tick < 10; tick++)
             world.Update(1f / 30f);
 
-        Assert.Equal(aCount, WorldObjectCatalog.WhiskerCountOf(controllerCar));
-        Assert.Equal(aCount, WorldObjectCatalog.WhiskerCountOf(neuralCar));
+        Assert.Equal(aCount, Car.WhiskerCountOf(controllerCar));
+        Assert.Equal(aCount, Car.WhiskerCountOf(neuralCar));
         var network = neuralCar.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single();
         Assert.Equal((3 + aCount) * 8 + 8 + 8 * 2 + 2, network.Network.ParameterCount);
     }
@@ -81,7 +81,7 @@ public class WhiskerTests
         var template = (NeuralNetworkState)car.Brain!.Graph.Modules.OfType<NeuralNetworkModule>().Single().CaptureState();
 
         Assert.Same(SeekRigs.CarWith(9), rig);
-        Assert.Equal(9, WorldObjectCatalog.WhiskerCountOf(rig.CreateCreature(Guid.Empty, WorldObjectCatalog.CreateAvoidController(9))));
+        Assert.Equal(9, Car.WhiskerCountOf(rig.CreateCreature(Guid.Empty, WorldObjectCatalog.CreateAvoidController(9))));
         _ = new SeekTargetTask(template, rig);
 
         // Sieć z 9 wejściami Ray{i} nie zbuduje się w ciele z 5 wąsami — błąd, nie ciche zera.
@@ -186,7 +186,7 @@ public class WhiskerTests
         var error = Assert.Throws<InvalidOperationException>(() => WhiskerRewiring.SetCount(car, 9));
 
         Assert.Contains("Ray0 + Ray4", error.Message);
-        Assert.Equal(5, WorldObjectCatalog.WhiskerCountOf(car));
+        Assert.Equal(5, Car.WhiskerCountOf(car));
         Assert.Equal(8, network.Network.Layers[0]);
     }
 }

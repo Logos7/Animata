@@ -101,6 +101,20 @@ public static class Spider
         Describe = aSpider => $"Pająk · {Legs} nogi · {aSpider.JointCount} stawów · fizyka Bepu"
     };
 
+    /// <summary>
+    /// Zła postawa pająka (kara w nauce): 1, gdy tułów leży na ziemi albo pająk jest przewrócony (tułów pochylony o 60°
+    /// i więcej), pomiędzy — rośnie z przechyleniem.
+    /// </summary>
+    public static float Posture(ActiveEntity aCreature)
+    {
+        if (!Design.Is(aCreature) || aCreature is not Creature { PartOrientations.Count: > 0 } spider)
+            return 0;
+        if (spider.IsPartTouching(0))
+            return 1;
+        var up = Vector3.Transform(Vector3.UnitZ, spider.PartOrientations[0]).Z;
+        return Math.Clamp((0.95f - up) / 0.45f, 0, 1);
+    }
+
     public static BodyPlan DefaultPlan(float aCoxaMass = 0.3f, float aFemurMass = 0.3f, float aShinMass = 0.25f, float aStrength = 10, float aKneeStrength = 10)
     {
         var builder = new BodyPlanBuilder()

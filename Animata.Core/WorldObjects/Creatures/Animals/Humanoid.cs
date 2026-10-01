@@ -42,6 +42,9 @@ public static class Humanoid
 
     public static readonly string[] Sides = ["L", "P"];
 
+    /// <summary>Strony z kierunkiem osi Y: lewa +1, prawa −1.</summary>
+    private static readonly (string Side, float Sign)[] SideSigns = [("L", 1f), ("P", -1f)];
+
     // Indeksy stawów w planie (kolejność dodawania).
     public const int Waist = 0;
     public static int Hip(int aSide) => 1 + 3 * aSide;
@@ -56,17 +59,20 @@ public static class Humanoid
     /// <summary>Porty napędu stawów „Body” (ruchome osie planu): najpierw skręty (Yaw), potem pochylenia (Pitch).</summary>
     public static readonly string[] Ports = SpineActuator.PortsFor(Plan);
 
-    private static readonly CreatureBlueprint Body = new(Plan,
-        [
-            new SlotSpec("Eye", nameof(TargetSensor)),
-            new SlotSpec("Joints", nameof(JointSensor)),
-            new SlotSpec("Clock", nameof(ClockSensor)) { Settings = SlotSpec.Values((nameof(ClockSensor.Frequency), 1f)) },
-            new SlotSpec("Balance", nameof(BalanceSensor)),
-            new SlotSpec("Touch", nameof(TouchSensor))
-            {
-                Touch = [new TouchPoint("StopaL", "StopaL"), new TouchPoint("StopaP", "StopaP"), new TouchPoint("Tułów", "Tułów")]
-            }
-        ],
+    /// <summary>Zmysły humanoida (wspólne z <see cref="MuscleHumanoid"/>); dotyk: stopy i tułów (tułów na ziemi = upadek).</summary>
+    internal static readonly SlotSpec[] Senses =
+    [
+        new SlotSpec("Eye", nameof(TargetSensor)),
+        new SlotSpec("Joints", nameof(JointSensor)),
+        new SlotSpec("Clock", nameof(ClockSensor)) { Settings = SlotSpec.Values((nameof(ClockSensor.Frequency), 1f)) },
+        new SlotSpec("Balance", nameof(BalanceSensor)),
+        new SlotSpec("Touch", nameof(TouchSensor))
+        {
+            Touch = [new TouchPoint("StopaL", "StopaL"), new TouchPoint("StopaP", "StopaP"), new TouchPoint("Tułów", "Tułów")]
+        }
+    ];
+
+    private static readonly CreatureBlueprint Body = new(Plan, Senses,
         [new SlotSpec("Body", nameof(SpineActuator))])
     {
         ServoFrequency = 60,
@@ -110,7 +116,7 @@ public static class Humanoid
             .Part(new PartPlan("Miednica", PartShape.Box, new Vector3(0.18f, 0.3f, 0.12f), 3, new Vector3(0, 0, HipZ + 0.07f), Quaternion.Identity, 0.5f))
             .Part(new PartPlan("Tułów", PartShape.Box, new Vector3(0.34f, 0.32f, 0.18f), 5, new Vector3(0, 0, WaistZ + 0.18f), down, 0.5f))
             .Part(new PartPlan("Głowa", PartShape.Sphere, new Vector3(0.1f, 0, 0), 1.2f, new Vector3(0, 0, 1.46f), Quaternion.Identity, 0.5f));
-        foreach (var (side, sign) in new[] { ("L", 1f), ("P", -1f) })
+        foreach (var (side, sign) in SideSigns)
         {
             var y = sign * HipWidth;
             builder.Part(new PartPlan($"Udo{side}", PartShape.Capsule, new Vector3(0.055f, HipZ - KneeZ - 0.13f, 0), 2,
@@ -120,7 +126,7 @@ public static class Humanoid
             builder.Part(new PartPlan($"Stopa{side}", PartShape.Box, new Vector3(FootHeight, FootWidth, FootLength), aFootMass,
                 new Vector3(aFootX, y, FootHeight / 2), down, 1.0f));
         }
-        foreach (var (side, sign) in new[] { ("L", 1f), ("P", -1f) })
+        foreach (var (side, sign) in SideSigns)
         {
             var y = sign * ShoulderY;
             builder.Part(new PartPlan($"Ramię{side}", PartShape.Capsule, new Vector3(0.04f, ShoulderZ - ElbowZ - 0.1f, 0), 0.7f,
@@ -130,7 +136,7 @@ public static class Humanoid
         }
 
         builder.Joint("Talia", "Miednica", "Tułów", new Vector3(0, 0, WaistZ), aMaxYaw: 0.3f, aMaxPitch: 0.5f, aStrength: 120);
-        foreach (var (side, sign) in new[] { ("L", 1f), ("P", -1f) })
+        foreach (var (side, sign) in SideSigns)
         {
             var y = sign * HipWidth;
             // Odwiedzenie: skręt wokół osi Z członu (do przodu) — dla lewej nogi dodatni na zewnątrz, dla prawej ujemny.
@@ -143,7 +149,7 @@ public static class Humanoid
                 new JointPlan($"Kostka{side}", $"Goleń{side}", $"Stopa{side}", new Vector3(0, y, AnkleZ), JointKind.Ball, 0.35f, 0.6f, 100)
             ]);
         }
-        foreach (var (side, sign) in new[] { ("L", 1f), ("P", -1f) })
+        foreach (var (side, sign) in SideSigns)
         {
             var y = sign * ShoulderY;
             var (abductMin, abductMax) = sign > 0 ? (-0.2f, 1.5f) : (-1.5f, 0.2f);
