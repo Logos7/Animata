@@ -54,6 +54,10 @@ public sealed class StudioWindow : Window
         {
             Description = "Dwa humanoidy z mózgiem ze stanami: stoją, gdy kula jest blisko, idą, gdy daleko. Jeden ma ręczne stanie i krok, drugi dwie sieci do nauczenia."
         });
+        AddScene(new StudioSession("Humanoid mięśniowy", WorldObjectCatalog.CreateMuscleHumanoidScene)
+        {
+            Description = "Humanoid, którego nogami ruszają 24 mięśnie zamiast serw (model Hilla). Mięśnie widać: blade — luźne, czerwone — napięte. Stoi przy kuli; odsuń kulę — spróbuje iść (na razie się przewraca). Obok humanoid na serwach."
+        });
         AddScene(new StudioSession("Wspinaczka", WorldObjectCatalog.CreateClimbScene)
         {
             Description = "Dwa węże owinięte wokół pni: jeden toczy się w górę ręcznym ruchem, drugi ma sieć, która musi się tego nauczyć."

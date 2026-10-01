@@ -27,6 +27,7 @@ public sealed class SceneRenderer : IDisposable
     private readonly PerspectiveCamera _camera;
     private readonly FlyCameraController _cameraController;
     private readonly WhiskerRenderer _whiskers;
+    private readonly MuscleRenderer _muscles;
     private readonly Dictionary<Guid, MeshGeometryModel3D> _models = [];
     private readonly Dictionary<Guid, ModelState> _states = [];
     private readonly Dictionary<Guid, PartModels> _parts = [];
@@ -79,6 +80,7 @@ public sealed class SceneRenderer : IDisposable
         _root.ClipToBounds = true;
         _cameraController.ContextClicked += OnContextClicked;
         _whiskers = new WhiskerRenderer(_viewport);
+        _muscles = new MuscleRenderer(_viewport);
         _viewport.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, true);
         _viewport.AddHandler(InputElement.PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel, true);
         _viewport.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel, true);
@@ -189,6 +191,7 @@ public sealed class SceneRenderer : IDisposable
         }
 
         _whiskers.Sync(aWorld);
+        _muscles.Sync(aWorld);
     }
 
     public void UpdateCamera(float aDelta) => _cameraController.Update(aDelta);

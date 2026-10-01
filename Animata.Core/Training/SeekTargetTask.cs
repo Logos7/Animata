@@ -116,7 +116,11 @@ public sealed record SeekRig(
     SeekTargetOptions DefaultOptions,
     Action<World>? PrepareWorld = null,
     Func<ActiveEntity, float>? Posture = null,
-    Action<World, Sphere, ActiveEntity, SeekEpisode>? Setup = null);
+    Action<World, Sphere, ActiveEntity, SeekEpisode>? Setup = null)
+{
+    /// <summary>Algorytm nauki na tym rigu (domyślnie genetyczny; mięśniowe ciała — CMA-ES).</summary>
+    public EvolutionAlgorithm Algorithm { get; init; } = EvolutionAlgorithm.Genetic;
+}
 
 public static class SeekRigs
 {
@@ -331,6 +335,22 @@ public static class SeekRigs
         },
         AddFloor,
         Humanoid.Posture);
+
+    /// <summary>Humanoid mięśniowy stoi w miejscu: jak <see cref="HumanoidStand"/> (10 s, pchnięcie 0.3–1 m/s, kara za odejście).</summary>
+    public static readonly SeekRig MuscleStand = HumanoidStand with
+    {
+        Name = "humanoid mięśniowy · stanie",
+        Algorithm = EvolutionAlgorithm.CmaEs,
+        CreateCreature = (aTargetId, aController) => WorldObjectCatalog.CreateMuscleHumanoid(System.Numerics.Vector3.Zero, 0, aTargetId, aController)
+    };
+
+    /// <summary>Humanoid mięśniowy idzie do celu: jak <see cref="HumanoidWalk"/> (12 s, cel 2–5 m).</summary>
+    public static readonly SeekRig MuscleWalk = HumanoidWalk with
+    {
+        Name = "humanoid mięśniowy · chód",
+        Algorithm = EvolutionAlgorithm.CmaEs,
+        CreateCreature = (aTargetId, aController) => WorldObjectCatalog.CreateMuscleHumanoid(System.Numerics.Vector3.Zero, 0, aTargetId, aController)
+    };
 
     /// <summary>
     /// Zła postawa pająka: 1, gdy tułów leży na ziemi albo pająk jest przewrócony (tułów pochylony o 60° i więcej),

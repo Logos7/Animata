@@ -107,7 +107,7 @@ public sealed class TrainingController : IDisposable
                 LastStartError = $"{module.Name}: {exception.Message}";
                 continue;
             }
-            var evolution = new Evolution(((ITrainableModule)module).GetParameters(), new EvolutionOptions { Seed = seed + started });
+            var evolution = new Evolution(((ITrainableModule)module).GetParameters(), new EvolutionOptions { Seed = seed + started, Algorithm = rig.Algorithm });
             var trainer = new BackgroundTrainer(evolution, task.Evaluate, _maxGenerations, task.Validate);
             _sessions.Add(new Session(aCreature, brain, module, trainer, modules.Count > 1 ? $"{rig.Name} ({module.Name})" : rig.Name,
                 Setup(aCreature, module)));

@@ -32,7 +32,7 @@ public sealed class JointSensor : Sensor
     public void SetJoints(Bodies.BodyPlan aPlan)
     {
         Joints = aPlan.Joints.Count;
-        SetPorts(SpineActuator.PortsFor(aPlan));
+        SetPorts(SpineActuator.SensedPortsFor(aPlan));
     }
 
     private void SetPorts(string[] aPorts)

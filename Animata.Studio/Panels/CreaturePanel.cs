@@ -459,6 +459,8 @@ public sealed class CreaturePanel : StudioPanel
             GaitModule => "generator chodu",
             BalanceModule => "regulator równowagi",
             BipedGaitModule => "generator kroku",
+            MuscleStandModule => "stanie na mięśniach",
+            MuscleGaitModule => "chód na mięśniach",
             StateMachineModule => "automat stanów",
             AvoidAndSeekModule or ApproachTargetModule => "sterownik",
             _ => null

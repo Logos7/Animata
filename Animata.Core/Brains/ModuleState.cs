@@ -26,6 +26,8 @@ namespace Animata.Core.Brains;
 [JsonDerivedType(typeof(StateMachineState), "stateMachine")]
 [JsonDerivedType(typeof(BalanceState), "balance")]
 [JsonDerivedType(typeof(BipedGaitState), "bipedGait")]
+[JsonDerivedType(typeof(MuscleStandState), "muscleStand")]
+[JsonDerivedType(typeof(MuscleGaitState), "muscleGait")]
 public abstract record ModuleState
 {
     public string ToJson() => JsonSerializer.Serialize(this);
@@ -145,4 +147,16 @@ public sealed record BipedGaitState(
     float Stride, float KneeLift, float KneePhase, float Sway, float Frequency, float Lean, float BalanceP, float BalanceD, float TurnGain) : ModuleState
 {
     public override BrainModule CreateModule(Guid aId) => new BipedGaitModule { Id = aId };
+}
+
+/// <summary>Stan stania mięśniowego: <see cref="MuscleStandModule.Parameters"/> parametrów.</summary>
+public sealed record MuscleStandState(float[] Parameters) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new MuscleStandModule { Id = aId };
+}
+
+/// <summary>Stan chodu mięśniowego: parametry automatu kroku (<see cref="MuscleGaitModule.Names"/>).</summary>
+public sealed record MuscleGaitState(float[] Parameters) : ModuleState
+{
+    public override BrainModule CreateModule(Guid aId) => new MuscleGaitModule { Id = aId };
 }

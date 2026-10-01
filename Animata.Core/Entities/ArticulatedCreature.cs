@@ -52,6 +52,17 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     private float[] _sentPitch = [];
     private float[] _yaw = [];
     private float[] _pitch = [];
+    // Mięśnie: części i punkty przyczepów (w układzie części planu), stan i silniki liniowe w fizyce.
+    private ConstraintHandle[] _muscleMotors = [];
+    private int[] _muscleOrigin = [];
+    private int[] _muscleInsertion = [];
+    private Vector3[] _muscleOriginLocal = [];
+    private Vector3[] _muscleInsertionLocal = [];
+    private float[] _excitation = [];
+    private float[] _activation = [];
+    private float[] _muscleLength = [];
+    private float[] _muscleSpeed = [];
+    private float[] _muscleForce = [];
     private Vector3 _publishedPosition;
     private Quaternion _publishedRotation = Quaternion.Identity;
 
@@ -71,6 +82,34 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     public override EntityCategory Category => EntityCategory.Creature;
 
     public int JointCount => Plan.Joints.Count;
+
+    public int MuscleCount => _excitation.Length;
+
+    /// <summary>Stała czasowa narastania aktywacji mięśnia (s) — pobudzenie dochodzi do włókien z opóźnieniem.</summary>
+    public const float ActivationTime = 0.01f;
+
+    /// <summary>Stała czasowa wygasania aktywacji (s).</summary>
+    public const float DeactivationTime = 0.04f;
+
+    /// <summary>Pobudzenie mięśnia [0, 1] z mózgu; działa od następnego kroku fizyki (przez aktywację z opóźnieniem).</summary>
+    public void SetMuscleExcitation(int aMuscle, float aExcitation) =>
+        _excitation[aMuscle] = float.IsFinite(aExcitation) ? Math.Clamp(aExcitation, 0, 1) : 0;
+
+    /// <summary>Aktywacja mięśnia [0, 1] w ostatnim kroku.</summary>
+    public float MuscleActivation(int aMuscle) => _activation[aMuscle];
+
+    /// <summary>Długość mięśnia (m) po ostatnim kroku.</summary>
+    public float MuscleLength(int aMuscle) => _muscleLength[aMuscle];
+
+    /// <summary>Szybkość wydłużania mięśnia (m/s, ujemna = skracanie) po ostatnim kroku.</summary>
+    public float MuscleSpeed(int aMuscle) => _muscleSpeed[aMuscle];
+
+    /// <summary>Przyczepy mięśnia w świecie (początkowy, końcowy) — w bieżącej pozie ciała.</summary>
+    public (Vector3 Origin, Vector3 Insertion) MuscleEnds(int aMuscle) =>
+        (MusclePoint(_muscleOrigin[aMuscle], _muscleOriginLocal[aMuscle]), MusclePoint(_muscleInsertion[aMuscle], _muscleInsertionLocal[aMuscle]));
+
+    /// <summary>Siła mięśnia (N) w ostatnim kroku.</summary>
+    public float MuscleForce(int aMuscle) => _muscleForce[aMuscle];
 
     /// <summary>Pozycje części w świecie (po ostatnim kroku fizyki albo z pozy spoczynkowej przed podpięciem).</summary>
     public IReadOnlyList<Vector3> PartPositions => _positions;
@@ -140,6 +179,8 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         PushPoses();
         Array.Clear(_yaw);
         Array.Clear(_pitch);
+        Array.Clear(_activation);
+        MeasureMuscles();
         _publishedPosition = Body.Position;
         _publishedRotation = Body.Rotation;
     }
@@ -166,7 +207,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                 if (done[child] || !done[parent])
                     continue;
                 var plan = Plan.Joints[joint];
-                var (yaw, pitch) = plan.Kind == JointKind.Ball ? aBend(joint) : (0f, 0f);
+                var (yaw, pitch) = plan.Bends ? aBend(joint) : (0f, 0f);
                 yaw = Math.Clamp(yaw, plan.YawMin, plan.MaxYaw);
                 pitch = Math.Clamp(pitch, plan.PitchMin, plan.MaxPitch);
                 var parentPart = Plan.Parts[parent];
@@ -178,7 +219,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                 var anchor = _positions[parent] + Vector3.Transform(toAnchor, _orientations[parent]);
                 _positions[child] = anchor + Vector3.Transform(fromAnchor, orientation);
                 _orientations[child] = orientation;
-                if (plan.Kind == JointKind.Ball)
+                if (plan.Bends)
                 {
                     _targetYaw[joint] = yaw;
                     _targetPitch[joint] = pitch;
@@ -303,6 +344,9 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                     _sentTorque[index] = 0;
                     break;
                 }
+                case JointKind.Passive:
+                    AddPassiveJoint(aPhysics, index, a, b, toParent, childBepu);
+                    break;
                 default:
                 {
                     var socket = new BallSocket
@@ -319,6 +363,21 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                 }
             }
         }
+
+        for (var muscle = 0; muscle < _muscleMotors.Length; muscle++)
+        {
+            var origin = Plan.Parts[_muscleOrigin[muscle]];
+            var insertion = Plan.Parts[_muscleInsertion[muscle]];
+            _muscleMotors[muscle] = aPhysics.AddConstraint(_bodies[_muscleOrigin[muscle]], _bodies[_muscleInsertion[muscle]], new LinearAxisMotor
+            {
+                LocalOffsetA = Vector3.Transform(_muscleOriginLocal[muscle], Quaternion.Inverse(FixOf(origin))),
+                LocalOffsetB = Vector3.Transform(_muscleInsertionLocal[muscle], Quaternion.Inverse(FixOf(insertion))),
+                LocalAxis = Vector3.UnitX,
+                TargetVelocity = 0,
+                Settings = new MotorSettings(0, 1e-6f)
+            });
+        }
+        MeasureMuscles();
 
         // Części odległe w drzewie stawów o 1 albo 2 (staw, albo wspólny sąsiad — np. udo pająka i tułów przez
         // przyspawane biodro) nie zderzają się ze sobą; dalsze tak (wąż nie przenika sam przez siebie).
@@ -357,6 +416,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         Array.Clear(_bodies);
         Array.Clear(_servos);
         Array.Clear(_motors);
+        Array.Clear(_muscleMotors);
         _physics = null;
     }
 
@@ -385,6 +445,9 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                     _sentYaw[joint] = _targetYaw[joint];
                     _sentPitch[joint] = _targetPitch[joint];
                     break;
+                case JointKind.Passive:
+                    UpdateDamper(aPhysics, joint);
+                    break;
                 case JointKind.Wheel:
                     if (_wheelSteer[joint] != _sentSteer[joint])
                     {
@@ -400,6 +463,8 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                     break;
             }
         }
+
+        UpdateMuscles(aPhysics, aDelta);
 
         // Łuski: tarcie Coulomba w bok i do tyłu wzdłuż podłoża — prędkość maleje najwyżej o μ·g·Δt (do zera).
         for (var index = 0; index < _bodies.Length; index++)
@@ -433,8 +498,208 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         }
 
         MeasureJoints();
+        MeasureMuscles();
         PublishFromRoot();
     }
+
+    // ---------- mięśnie ----------
+
+    /// <summary>Punkt przyczepu w świecie: punkt w układzie części → bieżąca poza części.</summary>
+    private Vector3 MusclePoint(int aPart, Vector3 aLocal) => _positions[aPart] + Vector3.Transform(aLocal, _orientations[aPart]);
+
+    /// <summary>Długości i szybkości mięśni z bieżących póz (i prędkości ciał, jeśli stwór jest w fizyce).</summary>
+    private void MeasureMuscles()
+    {
+        for (var muscle = 0; muscle < _muscleLength.Length; muscle++)
+        {
+            var origin = MusclePoint(_muscleOrigin[muscle], _muscleOriginLocal[muscle]);
+            var insertion = MusclePoint(_muscleInsertion[muscle], _muscleInsertionLocal[muscle]);
+            var line = origin - insertion;
+            var length = line.Length();
+            _muscleLength[muscle] = length;
+            if (_physics is not { } physics || length < 1e-6f)
+            {
+                _muscleSpeed[muscle] = 0;
+                continue;
+            }
+            var a = physics.Body(_bodies[_muscleOrigin[muscle]]);
+            var b = physics.Body(_bodies[_muscleInsertion[muscle]]);
+            var velocityA = a.Velocity.Linear + Vector3.Cross(a.Velocity.Angular, origin - _positions[_muscleOrigin[muscle]]);
+            var velocityB = b.Velocity.Linear + Vector3.Cross(b.Velocity.Angular, insertion - _positions[_muscleInsertion[muscle]]);
+            _muscleSpeed[muscle] = Vector3.Dot(line / length, velocityA - velocityB);
+        }
+    }
+
+    /// <summary>
+    /// Aktywacja goni pobudzenie (wykładniczo, szybciej w górę niż w dół). Siła z modelu Hilla (<see cref="MusclePlan"/>):
+    /// F = F0 · (a · fL · fV + fP). Zależność od szybkości (fV) jest liczona niejawnie, przez solver fizyki: mięsień to
+    /// silnik liniowy między przyczepami — tłumik o współczynniku c = a · fL · F0 / v₀, który dąży do skracania
+    /// z szybkością v* = F / c. W bezruchu daje F; przy skracaniu siła maleje liniowo (do zera przy v₀ = vmax/5 —
+    /// styczna do krzywej Hilla), przy rozciąganiu rośnie, najwyżej do 1.5 · a · fL · F0 + fP · F0. Tłumik liczony
+    /// w każdym podkroku solvera jest stabilny; jawna fV zmieniana raz na krok świata (1/30 s) drgała.
+    /// Współczynnik tłumienia Bepu jest skalowany masą — dzieli się go przez masę efektywną osi mięśnia.
+    /// </summary>
+    private void UpdateMuscles(PhysicsWorld aPhysics, float aDelta)
+    {
+        for (var muscle = 0; muscle < _muscleMotors.Length; muscle++)
+        {
+            var plan = Plan.MuscleList[muscle];
+            var target = _excitation[muscle];
+            var time = target > _activation[muscle] ? ActivationTime : DeactivationTime;
+            _activation[muscle] += (target - _activation[muscle]) * (1 - MathF.Exp(-aDelta / time));
+
+            var optimal = plan.Optimal;
+            var relative = _muscleLength[muscle] / optimal;
+            var active = plan.MaxForce * _activation[muscle] * MusclePlan.ForceLength(relative);
+            var passive = plan.MaxForce * MusclePlan.Passive(relative);
+            var isometric = active + passive;
+            var linear = plan.MaxVelocity * optimal / 5;   // m/s: tu siła czynna spada do zera
+            var damping = MathF.Max(active, 0.01f * plan.MaxForce) / linear;
+            _muscleForce[muscle] = Math.Clamp(isometric + damping * _muscleSpeed[muscle], 0, 1.5f * active + passive);
+
+            var originPart = _muscleOrigin[muscle];
+            var insertionPart = _muscleInsertion[muscle];
+            var origin = MusclePoint(originPart, _muscleOriginLocal[muscle]);
+            var insertion = MusclePoint(insertionPart, _muscleInsertionLocal[muscle]);
+            var line = origin - insertion;
+            if (line.LengthSquared() < 1e-12f)
+                continue;
+            var direction = Vector3.Normalize(line);
+            var bodyA = aPhysics.Body(_bodies[originPart]);
+            var bodyB = aPhysics.Body(_bodies[insertionPart]);
+            var inverseMass = AxisInverseMass(bodyA, origin - _positions[originPart], direction)
+                + AxisInverseMass(bodyB, insertion - _positions[insertionPart], direction);
+            var orientationA = Quaternion.Normalize(_orientations[originPart] * FixOf(Plan.Parts[originPart]));
+            aPhysics.UpdateConstraint(_muscleMotors[muscle], new LinearAxisMotor
+            {
+                LocalOffsetA = Vector3.Transform(_muscleOriginLocal[muscle], Quaternion.Inverse(FixOf(Plan.Parts[originPart]))),
+                LocalOffsetB = Vector3.Transform(_muscleInsertionLocal[muscle], Quaternion.Inverse(FixOf(Plan.Parts[insertionPart]))),
+                LocalAxis = Vector3.Transform(direction, Quaternion.Inverse(orientationA)),
+                TargetVelocity = isometric > 0 ? MuscleShortening * isometric / damping : 0,
+                Settings = isometric > 0
+                    ? new MotorSettings(1.5f * active + passive, 1 / (damping * inverseMass))
+                    : new MotorSettings(0, 1)
+            });
+        }
+    }
+
+    /// <summary>
+    /// Tłumik stawu biernego: c = <see cref="JointPlan.Strength"/> (N·m·s/rad). Bepu skaluje tłumienie bezwładnością,
+    /// więc dzieli się c przez bezwładność efektywną wokół osi pochylenia (odwrotności bezwładności obu członów).
+    /// </summary>
+    private void UpdateDamper(PhysicsWorld aPhysics, int aJoint)
+    {
+        var damping = Plan.Joints[aJoint].Strength;
+        var a = aPhysics.Body(_bodies[_parents[aJoint]]);
+        var b = aPhysics.Body(_bodies[_children[aJoint]]);
+        var axis = Vector3.Transform(Vector3.UnitY, _orientations[_children[aJoint]]);
+        var inverse = AxisInverseInertia(a, axis) + AxisInverseInertia(b, axis);
+        aPhysics.UpdateConstraint(_servos[aJoint], new AngularMotor
+        {
+            TargetVelocityLocalA = Vector3.Zero,
+            Settings = new MotorSettings(MaxDamperTorque, 1 / (damping * inverse))
+        });
+    }
+
+    /// <summary>Największy moment tłumika stawu (N·m).</summary>
+    private const float MaxDamperTorque = 1000;
+
+    private static float AxisInverseInertia(BodyReference aBody, Vector3 aAxis)
+    {
+        var local = Vector3.Transform(aAxis, Quaternion.Inverse(aBody.Pose.Orientation));
+        var tensor = aBody.LocalInertia.InverseInertiaTensor;
+        var rotated = new Vector3(
+            tensor.XX * local.X + tensor.YX * local.Y + tensor.ZX * local.Z,
+            tensor.YX * local.X + tensor.YY * local.Y + tensor.ZY * local.Z,
+            tensor.ZX * local.X + tensor.ZY * local.Y + tensor.ZZ * local.Z);
+        return Vector3.Dot(local, rotated);
+    }
+
+    /// <summary>Odwrotność masy efektywnej ciała w punkcie (ramię <paramref name="aArm"/> od środka) wzdłuż kierunku.</summary>
+    private static float AxisInverseMass(BodyReference aBody, Vector3 aArm, Vector3 aDirection)
+    {
+        var inertia = aBody.LocalInertia;
+        var orientation = aBody.Pose.Orientation;
+        var angular = Vector3.Transform(Vector3.Cross(aArm, aDirection), Quaternion.Inverse(orientation));
+        var tensor = inertia.InverseInertiaTensor;
+        var rotated = new Vector3(
+            tensor.XX * angular.X + tensor.YX * angular.Y + tensor.ZX * angular.Z,
+            tensor.YX * angular.X + tensor.YY * angular.Y + tensor.ZY * angular.Z,
+            tensor.ZX * angular.X + tensor.ZY * angular.Y + tensor.ZZ * angular.Z);
+        return inertia.InverseMass + Vector3.Dot(angular, rotated);
+    }
+
+    /// <summary>Znak prędkości celu silnika liniowego, która skraca mięsień (ustalony pomiarem w teście).</summary>
+    internal const float MuscleShortening = 1;
+
+    /// <summary>
+    /// Staw bierny: przegub kulowy, więzy osi (zawias — samo pochylenie, obrotnica — sam skręt, przegub Cardana — oba)
+    /// i ograniczniki skrętu i pochylenia (TwistLimit wokół osi Z i Y dziecka w pozie spoczynkowej — dla obrotu
+    /// Rz(skręt)·Ry(pochylenie) skręt wokół Z to dokładnie skręt, a wokół Y dokładnie pochylenie).
+    /// </summary>
+    private void AddPassiveJoint(PhysicsWorld aPhysics, int aJoint, BodyHandle aA, BodyHandle aB, Quaternion aToParent, Quaternion aChildBepu)
+    {
+        var joint = Plan.Joints[aJoint];
+        var parent = Plan.Parts[_parents[aJoint]];
+        var child = Plan.Parts[_children[aJoint]];
+        aPhysics.AddConstraint(aA, aB, new BallSocket
+        {
+            LocalOffsetA = Vector3.Transform(joint.Anchor - parent.Position, aToParent),
+            LocalOffsetB = Vector3.Transform(joint.Anchor - child.Position, Quaternion.Inverse(aChildBepu)),
+            SpringSettings = new SpringSettings(LimitFrequency, 1)
+        });
+        // Baza dziecka w pozie spoczynkowej w układzie Bepu rodzica (A) i dziecka (B).
+        var restInA = Quaternion.Normalize(aToParent * child.Orientation);
+        var restInB = Quaternion.Inverse(FixOf(child));
+        var toY = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2);   // oś Z bazy → oś Y dziecka
+        if (joint.HasYaw && joint.HasPitch)
+            aPhysics.AddConstraint(aA, aB, new AngularSwivelHinge
+            {
+                LocalSwivelAxisA = Vector3.Transform(Vector3.UnitZ, restInA),
+                LocalHingeAxisB = Vector3.Transform(Vector3.UnitY, restInB),
+                SpringSettings = new SpringSettings(30, 1)
+            });
+        else
+        {
+            var axis = joint.HasYaw ? Vector3.UnitZ : Vector3.UnitY;
+            aPhysics.AddConstraint(aA, aB, new AngularHinge
+            {
+                LocalHingeAxisA = Vector3.Transform(axis, restInA),
+                LocalHingeAxisB = Vector3.Transform(axis, restInB),
+                SpringSettings = new SpringSettings(30, 1)
+            });
+        }
+        if (joint.HasYaw)
+            aPhysics.AddConstraint(aA, aB, new TwistLimit
+            {
+                LocalBasisA = restInA,
+                LocalBasisB = restInB,
+                MinimumAngle = joint.YawMin,
+                MaximumAngle = joint.MaxYaw,
+                SpringSettings = new SpringSettings(LimitFrequency, 1)
+            });
+        // Tłumienie stawu (tkanki, maź): tłumik kątowy o współczynniku Strength (N·m·s/rad), liczony w solverze.
+        _servos[aJoint] = aPhysics.AddConstraint(aA, aB, new AngularMotor
+        {
+            TargetVelocityLocalA = Vector3.Zero,
+            Settings = new MotorSettings(0, 1)
+        });
+        if (joint.HasPitch)
+            aPhysics.AddConstraint(aA, aB, new TwistLimit
+            {
+                LocalBasisA = Quaternion.Normalize(restInA * toY),
+                LocalBasisB = Quaternion.Normalize(restInB * toY),
+                MinimumAngle = PassivePitchSign > 0 ? joint.PitchMin : -joint.MaxPitch,
+                MaximumAngle = PassivePitchSign > 0 ? joint.MaxPitch : -joint.PitchMin,
+                SpringSettings = new SpringSettings(LimitFrequency, 1)
+            });
+    }
+
+    /// <summary>Sztywność ograniczników stawów biernych (Hz).</summary>
+    public static float LimitFrequency { get; set; } = 120;
+
+    /// <summary>Znak pochylenia mierzonego przez ogranicznik wokół osi Y (ustalony pomiarem w teście).</summary>
+    internal const float PassivePitchSign = 1;
 
     // ---------- pomocnicze ----------
 
@@ -469,7 +734,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     {
         for (var joint = 0; joint < _yaw.Length; joint++)
         {
-            if (Plan.Joints[joint].Kind != JointKind.Ball)
+            if (!Plan.Joints[joint].Bends)
                 continue;
             var relative = Quaternion.Inverse(_orientations[_parents[joint]]) * _orientations[_children[joint]];
             var bend = Quaternion.Inverse(_restRelative[joint]) * relative;
@@ -512,6 +777,29 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         }
         for (var index = 0; index < parts; index++)
             (_positions[index], _orientations[index]) = RestPose(index);
+
+        var muscles = aPlan.MuscleList.Count;
+        _muscleMotors = new ConstraintHandle[muscles];
+        _muscleOrigin = new int[muscles];
+        _muscleInsertion = new int[muscles];
+        _muscleOriginLocal = new Vector3[muscles];
+        _muscleInsertionLocal = new Vector3[muscles];
+        _excitation = new float[muscles];
+        _activation = new float[muscles];
+        _muscleLength = new float[muscles];
+        _muscleSpeed = new float[muscles];
+        _muscleForce = new float[muscles];
+        for (var muscle = 0; muscle < muscles; muscle++)
+        {
+            var plan = aPlan.MuscleList[muscle];
+            _muscleOrigin[muscle] = aPlan.IndexOf(plan.Origin);
+            _muscleInsertion[muscle] = aPlan.IndexOf(plan.Insertion);
+            var origin = aPlan.Parts[_muscleOrigin[muscle]];
+            var insertion = aPlan.Parts[_muscleInsertion[muscle]];
+            _muscleOriginLocal[muscle] = Vector3.Transform(plan.OriginPoint - origin.Position, Quaternion.Inverse(origin.Orientation));
+            _muscleInsertionLocal[muscle] = Vector3.Transform(plan.InsertionPoint - insertion.Position, Quaternion.Inverse(insertion.Orientation));
+            _muscleLength[muscle] = plan.RestLength;
+        }
     }
 
     /// <summary>Poza spoczynkowa części w świecie przy obecnej pozie stwora.</summary>

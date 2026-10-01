@@ -24,6 +24,8 @@ public static class TrainableModules
         GaitState => GaitModule.Parameters,
         BalanceState => BalanceModule.Parameters,
         BipedGaitState => BipedGaitModule.Parameters,
+        MuscleStandState => MuscleStandModule.Parameters,
+        MuscleGaitState => MuscleGaitModule.Parameters,
         _ => throw new NotSupportedException($"{aShape.GetType().Name} is not a trainable module state.")
     };
 
@@ -34,6 +36,8 @@ public static class TrainableModules
         GaitState => GaitModule.Create(aParameters, aName),
         BalanceState => BalanceModule.Create(aParameters, aName),
         BipedGaitState => BipedGaitModule.Create(aParameters, aName),
+        MuscleStandState => MuscleStandModule.Create(aParameters, aName),
+        MuscleGaitState => MuscleGaitModule.Create(aParameters, aName),
         _ => throw new NotSupportedException($"{aShape.GetType().Name} is not a trainable module state.")
     };
 }

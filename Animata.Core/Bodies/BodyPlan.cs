@@ -37,7 +37,14 @@ public enum JointKind
     /// <see cref="JointPlan.Anchor"/> to górny punkt zawieszenia; koło w spoczynku wisi <see cref="JointPlan.Suspension"/> niżej.
     /// Prędkość i skręt zadaje napęd przez <see cref="Entities.ArticulatedCreature.SetWheelTarget"/>.
     /// </summary>
-    Wheel
+    Wheel,
+
+    /// <summary>
+    /// Staw bierny: te same osie i zakresy co <see cref="Ball"/> (skręt wokół osi Z dziecka, pochylenie wokół jego osi Y,
+    /// bez skręcania wokół osi X), ale bez serwa — zakres trzymają twarde ograniczniki w fizyce, a ruch robią mięśnie
+    /// (<see cref="MusclePlan"/>) albo siły z zewnątrz. Nie ma portów napędu stawów; czucie stawów go widzi.
+    /// </summary>
+    Passive
 }
 
 /// <summary>
@@ -74,7 +81,7 @@ public sealed record PartPlan(
 /// od <see cref="PitchMin"/> do <see cref="MaxPitch"/>. Bez <see cref="MinYaw"/>/<see cref="MinPitch"/> zakres jest symetryczny
 /// (±Max); podane — staw może być jednokierunkowy (np. kolano: zgina się tylko w jedną stronę, 0 = do wyprostu). Oś
 /// o zakresie 0–0 jest zablokowana: staw z samym pochyleniem to zawias. <see cref="Strength"/> — największy moment serwa
-/// albo silnika koła (N·m).
+/// albo silnika koła (N·m); w stawie biernym — tłumienie (N·m·s/rad).
 /// Pola kół: <see cref="Steerable"/>, <see cref="Driven"/>, <see cref="Suspension"/> (skok zawieszenia, m),
 /// <see cref="SuspensionFrequency"/> (sztywność sprężyny, Hz).
 /// </summary>
@@ -100,11 +107,20 @@ public sealed record JointPlan(
     /// <summary>Najmniejsze pochylenie (≤ 0): <see cref="MinPitch"/> albo −<see cref="MaxPitch"/>.</summary>
     public float PitchMin => MinPitch ?? -MaxPitch;
 
+    /// <summary>Czy staw się zgina (kulowy z serwem albo bierny) — ma kąty skrętu i pochylenia.</summary>
+    public bool Bends => Kind is JointKind.Ball or JointKind.Passive;
+
     /// <summary>Czy skręt jest ruchomy (niezerowy zakres).</summary>
-    public bool HasYaw => Kind == JointKind.Ball && (MaxYaw > 0 || YawMin < 0);
+    public bool HasYaw => Bends && (MaxYaw > 0 || YawMin < 0);
 
     /// <summary>Czy pochylenie jest ruchome (niezerowy zakres).</summary>
-    public bool HasPitch => Kind == JointKind.Ball && (MaxPitch > 0 || PitchMin < 0);
+    public bool HasPitch => Bends && (MaxPitch > 0 || PitchMin < 0);
+
+    /// <summary>Czy oś skrętu ma serwo (port napędu stawów).</summary>
+    public bool DrivesYaw => Kind == JointKind.Ball && HasYaw;
+
+    /// <summary>Czy oś pochylenia ma serwo (port napędu stawów).</summary>
+    public bool DrivesPitch => Kind == JointKind.Ball && HasPitch;
 
     /// <summary>Komenda [-1, 1] → kąt: ujemna część skaluje się dolną granicą, dodatnia górną (0 = poza spoczynkowa).</summary>
     public static float Angle(float aCommand, float aMin, float aMax) => aCommand >= 0 ? aCommand * aMax : aCommand * -aMin;
@@ -120,9 +136,13 @@ public sealed record JointPlan(
 /// To czyste dane — da się je zapisać, wygenerować z parametrów (np. liczby segmentów) i przebudować nimi stwora.
 /// Buduje się je przez <see cref="BodyPlanBuilder"/>, który sprawdza spójność.
 /// </summary>
-public sealed record BodyPlan(IReadOnlyList<PartPlan> Parts, IReadOnlyList<JointPlan> Joints)
+public sealed record BodyPlan(IReadOnlyList<PartPlan> Parts, IReadOnlyList<JointPlan> Joints, IReadOnlyList<MusclePlan>? Muscles = null)
 {
     public PartPlan Root => Parts[0];
+
+    /// <summary>Mięśnie ciała (puste, gdy ciało ich nie ma).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<MusclePlan> MuscleList => Muscles ?? [];
 
     public int IndexOf(string aPart)
     {
@@ -147,6 +167,7 @@ public sealed class BodyPlanBuilder
 {
     private readonly List<PartPlan> _parts = [];
     private readonly List<JointPlan> _joints = [];
+    private readonly List<MusclePlan> _muscles = [];
 
     public BodyPlanBuilder Part(string aName, PartShape aShape, Vector3 aSize, float aMass, Vector3 aPosition,
         Quaternion? aOrientation = null, float aFriction = 0.6f)
@@ -205,6 +226,31 @@ public sealed class BodyPlanBuilder
         return this;
     }
 
+    /// <summary>
+    /// Staw bierny (<see cref="JointKind.Passive"/>): zakresy skrętu i pochylenia (min ≤ 0 ≤ max; 0–0 — oś zablokowana),
+    /// bez serwa — ruszają nim mięśnie. <paramref name="aDamping"/> — tłumienie stawu (N·m·s/rad), w planie jako Strength.
+    /// </summary>
+    public BodyPlanBuilder Passive(string aName, string aParent, string aChild, Vector3 aAnchor,
+        float aMinYaw, float aMaxYaw, float aMinPitch, float aMaxPitch, float aDamping = 2)
+    {
+        _joints.Add(new JointPlan(aName, aParent, aChild, aAnchor, JointKind.Passive, aMaxYaw, aMaxPitch, aDamping, MinYaw: aMinYaw, MinPitch: aMinPitch));
+        return this;
+    }
+
+    /// <summary>Mięsień (<see cref="MusclePlan"/>).</summary>
+    public BodyPlanBuilder Muscle(MusclePlan aMuscle)
+    {
+        _muscles.Add(aMuscle);
+        return this;
+    }
+
+    /// <summary>Mięśnie z gotowych opisów (np. plan wczytany z pliku).</summary>
+    public BodyPlanBuilder Muscles(IEnumerable<MusclePlan> aMuscles)
+    {
+        _muscles.AddRange(aMuscles);
+        return this;
+    }
+
     /// <summary>Stawy z gotowych opisów (np. plan wczytany z pliku).</summary>
     public BodyPlanBuilder Joints(IEnumerable<JointPlan> aJoints)
     {
@@ -260,6 +306,58 @@ public sealed class BodyPlanBuilder
             }
         }
 
-        return new BodyPlan([.. _parts], [.. _joints]);
+        var muscleNames = new HashSet<string>();
+        foreach (var muscle in _muscles)
+        {
+            if (string.IsNullOrWhiteSpace(muscle.Name) || !muscleNames.Add(muscle.Name))
+                throw new ArgumentException($"Muscle name \"{muscle.Name}\" is empty or repeated.");
+            if (!names.Contains(muscle.Origin) || !names.Contains(muscle.Insertion) || muscle.Origin == muscle.Insertion)
+                throw new ArgumentException($"Muscle \"{muscle.Name}\" must connect two different existing parts.");
+            if (!(muscle.MaxForce > 0) || muscle.OptimalLength is <= 0 || !(muscle.MaxVelocity > 0) ||
+                !(Vector3.Distance(muscle.OriginPoint, muscle.InsertionPoint) > 1e-3f))
+                throw new ArgumentException($"Muscle \"{muscle.Name}\" needs a positive force, length and speed.");
+        }
+
+        return new BodyPlan([.. _parts], [.. _joints], _muscles.Count > 0 ? [.. _muscles] : null);
     }
+}
+
+/// <summary>
+/// Mięsień (model Hilla ze sztywnym ścięgnem): linia od przyczepu początkowego (<see cref="OriginPoint"/> na części
+/// <see cref="Origin"/>) do końcowego (<see cref="InsertionPoint"/> na <see cref="Insertion"/>) — punkty w układzie stwora
+/// w pozie spoczynkowej. Mięsień tylko ciągnie, z siłą F = <see cref="MaxForce"/> · (a · fL · fV + fP):
+/// a — aktywacja (pobudzenie z mózgu z opóźnieniem), fL — siła od długości (najwięcej przy <see cref="OptimalLength"/>,
+/// domyślnie długość w pozie spoczynkowej; krzywa Geyera i Herra 2010), fV — od szybkości: liniowa styczna do krzywej
+/// Hilla, liczona niejawnie w solverze (skracanie z szybkością <see cref="MaxVelocity"/>/5 długości optymalnych na sekundę
+/// zeruje siłę czynną, rozciąganie wzmacnia ją najwyżej do 1.5×), fP — bierna sprężystość, gdy rozciągnięty ponad
+/// długość optymalną. Mięsień może przechodzić przez kilka stawów (dwustawowy).
+/// </summary>
+public sealed record MusclePlan(
+    string Name,
+    string Origin,
+    Vector3 OriginPoint,
+    string Insertion,
+    Vector3 InsertionPoint,
+    float MaxForce,
+    float? OptimalLength = null,
+    float MaxVelocity = 10)
+{
+    /// <summary>Długość w pozie spoczynkowej (m).</summary>
+    public float RestLength => Vector3.Distance(OriginPoint, InsertionPoint);
+
+    /// <summary>Długość optymalna (m): podana albo spoczynkowa.</summary>
+    public float Optimal => OptimalLength ?? RestLength;
+
+    /// <summary>Szerokość krzywej siła–długość (w długościach optymalnych) i stała jej kształtu (Geyer i Herr).</summary>
+    public const float Width = 0.56f;
+
+    private static readonly float LengthCurve = MathF.Log(0.05f);
+
+    /// <summary>Siła od długości: 1 przy długości optymalnej, 0.05 przy odchyleniu o <see cref="Width"/>.</summary>
+    public static float ForceLength(float aRelativeLength) =>
+        MathF.Exp(LengthCurve * MathF.Pow(MathF.Abs((aRelativeLength - 1) / Width), 3));
+
+    /// <summary>Bierna sprężystość: 0 do długości optymalnej, potem kwadratowo (1 przy +<see cref="Width"/>).</summary>
+    public static float Passive(float aRelativeLength) =>
+        aRelativeLength > 1 ? MathF.Pow((aRelativeLength - 1) / Width, 2) : 0;
 }

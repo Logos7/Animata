@@ -41,6 +41,7 @@ public static class EntityTypes
         Snake.Design.Type,
         Spider.Design.Type,
         Humanoid.Design.Type,
+        MuscleHumanoid.Design.Type,
         new("sphere", "Kula", "target", typeof(Sphere), () => new Sphere()),
         new("cylinder", "Cylinder", "pillar", typeof(Cylinder), () => new Cylinder()),
         new("box", "Klocek", "slab", typeof(Box), () => new Box())

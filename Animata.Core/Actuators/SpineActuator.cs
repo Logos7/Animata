@@ -30,6 +30,13 @@ public sealed class SpineActuator : Actuator
     /// </summary>
     public static string[] PortsFor(Bodies.BodyPlan aPlan) =>
     [
+        .. Enumerable.Range(0, aPlan.Joints.Count).Where(aJoint => aPlan.Joints[aJoint].DrivesYaw).Select(YawPort),
+        .. Enumerable.Range(0, aPlan.Joints.Count).Where(aJoint => aPlan.Joints[aJoint].DrivesPitch).Select(PitchPort)
+    ];
+
+    /// <summary>Porty czucia stawów: ruchome osie wszystkich zginanych stawów (z serwem i biernych), Yaw, potem Pitch.</summary>
+    public static string[] SensedPortsFor(Bodies.BodyPlan aPlan) =>
+    [
         .. Enumerable.Range(0, aPlan.Joints.Count).Where(aJoint => aPlan.Joints[aJoint].HasYaw).Select(YawPort),
         .. Enumerable.Range(0, aPlan.Joints.Count).Where(aJoint => aPlan.Joints[aJoint].HasPitch).Select(PitchPort)
     ];

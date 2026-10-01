@@ -322,6 +322,12 @@ classDiagram
     +Ports
     +Posture()
   }
+  class MuscleHumanoid {
+    <<static>>
+    +Design
+    +MusclePorts
+    +LegMusclesOf(side)
+  }
   class Box {
     +Size
     +Color
@@ -346,6 +352,7 @@ classDiagram
   Snake ..> CreatureDesign : definiuje
   Spider ..> CreatureDesign : definiuje
   Humanoid ..> CreatureDesign : definiuje
+  MuscleHumanoid ..> CreatureDesign : definiuje
   StaticEntity <|-- PhysicalStaticEntity
   StaticEntity <|-- Sphere
   PhysicalStaticEntity <|-- Box
@@ -518,6 +525,17 @@ classDiagram
   class BodyPlan {
     +Parts
     +Joints
+    +Muscles
+  }
+  class MusclePlan {
+    +Name
+    +Origin, OriginPoint
+    +Insertion, InsertionPoint
+    +MaxForce
+    +OptimalLength
+    +MaxVelocity
+    +ForceLength()
+    +Passive()
   }
   class PartPlan {
     +Name
@@ -542,6 +560,8 @@ classDiagram
     +Strength
     +HasYaw
     +HasPitch
+    +Bends
+    +DrivesYaw/DrivesPitch
   }
   class PartShape {
     <<enum>>
@@ -549,7 +569,7 @@ classDiagram
   }
   class JointKind {
     <<enum>>
-    Ball Fixed Wheel
+    Ball Fixed Wheel Passive
   }
   class BodyPlanBuilder {
     +Part()
@@ -558,6 +578,8 @@ classDiagram
     +Swivel()
     +Weld()
     +Wheel()
+    +Passive()
+    +Muscle()
     +Build()
   }
   class ArticulatedCreature {
@@ -565,18 +587,23 @@ classDiagram
     -servos
     +SetJointTarget()
     +SetWheelTarget()
+    +SetMuscleExcitation()
+    +MuscleActivation/Length/Force()
     +IsPartTouching()
   }
   BodyPlan "1" *-- "*" PartPlan
   BodyPlan "1" *-- "*" JointPlan
+  BodyPlan "1" *-- "*" MusclePlan
   PartPlan ..> PartShape
   JointPlan ..> JointKind
   BodyPlanBuilder ..> BodyPlan : waliduje i buduje
   ArticulatedCreature *-- BodyPlan
-  ArticulatedCreature ..> PhysicsWorld : część = bryła, staw = serwo
+  ArticulatedCreature ..> PhysicsWorld : część = bryła, staw = serwo, mięsień = silnik liniowy
 ```
 
 *Staw kulowy to BallSocket + AngularServo (skręt i pochylenie w osiach dziecka), z zakresem od Min do Max wokół pozy spoczynkowej — może być jednokierunkowy (kolano pająka: tylko zgięcie). Zawias (`Hinge`) i obrotnica (`Swivel`) to staw kulowy z zablokowaną jedną osią; porty kręgosłupa i czucia stawów są tylko dla ruchomych osi. Koło to zawieszenie, prowadnica, zawias i opcjonalnie silnik. Części 1–2 stawy od siebie się nie zderzają.*
+
+*Staw bierny (`Passive`) to te same osie bez serwa: BallSocket, więzy osi (AngularHinge albo AngularSwivelHinge), ograniczniki TwistLimit wokół osi skrętu i pochylenia i tłumik kątowy (Strength = N·m·s/rad). Rusza nim mięsień: silnik liniowy (LinearAxisMotor) między przyczepami, z siłą z modelu Hilla — długość i aktywacja co krok, szybkość niejawnie w solverze (tłumik, który dąży do skracania), więc nie drga przy kroku świata 1/30 s.*
 
 <a id="zmysly"></a>
 
@@ -633,7 +660,17 @@ classDiagram
     +DriveTorque
   }
   class SpineActuator {
-    Yaw0… Pitch0…
+    Yaw0… Pitch0… (stawy z serwem)
+  }
+  class MuscleActuator {
+    pobudzenie na mięsień 0…1
+  }
+  class BalanceSensor {
+    +Gain
+    +RateGain → Pitch Roll PitchRate RollRate Height VelX VelY
+  }
+  class MuscleSensor {
+    → Dł… Szyb… Siła… na mięsień
   }
   Sensor <|-- TargetSensor
   Sensor <|-- RaySensor
@@ -641,9 +678,12 @@ classDiagram
   Sensor <|-- ClockSensor
   Sensor <|-- FeelSensor
   Sensor <|-- TouchSensor
+  Sensor <|-- BalanceSensor
+  Sensor <|-- MuscleSensor
   Actuator <|-- DiskDriveActuator
   Actuator <|-- SteeringDriveActuator
   Actuator <|-- SpineActuator
+  Actuator <|-- MuscleActuator
 ```
 
 *Po strzałce „→” są porty wyjściowe zmysłu; w napędach przed kropką porty komend, po niej ustawienia `[Setting]`.*
@@ -661,6 +701,7 @@ Mózg łączy się z ciałem po nazwie gniazda (`Slot`), nie po Id. Ten sam móz
 | Wąż | Eye: TargetSensor · Joints: JointSensor · Clock: ClockSensor (1.2 Hz) · Feel: FeelSensor | Spine: SpineActuator | sieć, CPG pełzanie, CPG toczenie | SnakeWith(n) · ClimbWith(n) |
 | Pająk | Eye: TargetSensor · Joints: JointSensor (12 osi) · Clock: ClockSensor (2.5 Hz) · Feel: FeelSensor · Touch: TouchSensor | Legs: SpineActuator (12 osi: zamach, uniesienie, kolano × 4 nogi) | sieć, kłus | Spider |
 | Humanoid | Eye: TargetSensor · Joints: JointSensor (18 osi) · Clock: ClockSensor (1 Hz) · Balance: BalanceSensor · Touch: TouchSensor (stopy, tułów) | Body: SpineActuator (18 osi: talia, biodra, kolana, kostki, barki, łokcie) | stój i idź (dwie sieci + automat), stój i idź ręcznie, sieć stania, stanie ręczne, chód ręczny | moduł stania: HumanoidStand · reszta: HumanoidWalk (`ModuleRig`) |
+| Humanoid mięśniowy | jak Humanoid (Joints: także 12 osi biernych nóg) · MuscleSense: MuscleSensor (72 porty) | Body: SpineActuator (talia, barki, łokcie) · Muscles: MuscleActuator (24 mięśnie nóg) | stój i idź · mięśnie, stój i idź · dwie sieci, stanie mięśniami, chód mięśniami | stanie: MuscleStand · reszta: MuscleWalk (CMA-ES) |
 | Nowy stwór | dowolne, w `CreatureBlueprint.Sensors` | dowolne, także kilka | `CreatureDesign.Presets` (domyślnie ogólna sieć) | `TrainingRig` ?? Generic |
 
 <a id="mozg"></a>
@@ -747,6 +788,10 @@ classDiagram
   BrainModule <|-- BalanceModule
   BrainModule <|-- BipedGaitModule
   BrainModule <|-- StateMachineModule
+  BrainModule <|-- MuscleControlModule
+  MuscleControlModule <|-- MuscleStandModule
+  MuscleControlModule <|-- MuscleGaitModule
+  MuscleControlModule *-- MuscleGeometry : ramiona sił
   BrainModule <|-- ApproachTargetModule
   BrainModule <|-- AvoidAndSeekModule
   BrainModule <|-- RouterModule
@@ -759,6 +804,8 @@ classDiagram
   ITrainableModule <|.. GaitModule
   ITrainableModule <|.. BalanceModule
   ITrainableModule <|.. BipedGaitModule
+  ITrainableModule <|.. MuscleStandModule
+  ITrainableModule <|.. MuscleGaitModule
   StateMachineModule "1" *-- "*" StateTransition
   StateTransition ..> SensorExpression : warunek
   TrainableModules ..> ITrainableModule
@@ -822,6 +869,8 @@ classDiagram
   ModuleState <|-- BalanceState
   ModuleState <|-- BipedGaitState
   ModuleState <|-- StateMachineState
+  ModuleState <|-- MuscleStandState
+  ModuleState <|-- MuscleGaitState
   ModuleState <|-- ApproachTargetState
   ModuleState <|-- AvoidAndSeekState
   ModuleState <|-- ConstantState
@@ -888,7 +937,13 @@ classDiagram
     +Best
     +Generation
   }
+  class CmaEs {
+    +Step(fitness, gen)
+    +Best
+    +Sigma
+  }
   class EvolutionOptions {
+    +Algorithm Genetic|CmaEs
     +PopulationSize 48
     +EliteCount 6
     +MutationSigma
@@ -915,6 +970,7 @@ classDiagram
     +PrepareWorld
     +Posture
     +Setup
+    +Algorithm
   }
   class SeekRigs {
     <<static>>
@@ -925,6 +981,8 @@ classDiagram
     +Spider
     +HumanoidStand
     +HumanoidWalk
+    +MuscleStand
+    +MuscleWalk
     +Generic()
     +For(creature, module)
   }
@@ -936,6 +994,7 @@ classDiagram
   TrainingController "1" *-- "*" BackgroundTrainer : jedna nauka na moduł
   BackgroundTrainer *-- Evolution
   Evolution *-- EvolutionOptions
+  Evolution *-- CmaEs : gdy Algorithm = CmaEs
   BackgroundTrainer ..> SeekTargetTask : fitness i walidacja
   BackgroundTrainer ..> TrainingProgress
   SeekTargetTask *-- SeekRig

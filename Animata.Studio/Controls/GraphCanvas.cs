@@ -192,6 +192,8 @@ public sealed class GraphCanvas : ThemedControl
         StateMachineModule machine => $"stan: {machine.CurrentName}",
         BalanceModule => "równowaga",
         BipedGaitModule biped => $"krok · {biped.Frequency:0.#} Hz",
+        MuscleStandModule => "stanie · mięśnie",
+        MuscleGaitModule gait => $"krok · mięśnie · faza {gait.Phase:0.00}",
         _ => string.Empty
     };
 
@@ -208,7 +210,7 @@ public sealed class GraphCanvas : ThemedControl
         ConstantModule => Icons.Constant,
         CpgModule => Icons.Snake,
         GaitModule => Icons.Spider,
-        BalanceModule or BipedGaitModule => Icons.Humanoid,
+        BalanceModule or BipedGaitModule or MuscleStandModule or MuscleGaitModule => Icons.Humanoid,
         StateMachineModule => Icons.States,
         _ => Icons.Brain
     };
@@ -217,7 +219,7 @@ public sealed class GraphCanvas : ThemedControl
     {
         SensorModule or CompositeModule or SubgraphInputModule or SubgraphOutputModule => StudioTheme.Palette.Accent,
         ActuatorModule => StudioTheme.Palette.WireCommand,
-        NeuralNetworkModule or CpgModule or GaitModule or BalanceModule or BipedGaitModule => StudioPalette.Neural,
+        NeuralNetworkModule or CpgModule or GaitModule or BalanceModule or BipedGaitModule or MuscleStandModule or MuscleGaitModule => StudioPalette.Neural,
         StateMachineModule => StudioPalette.Controller,
         AvoidAndSeekModule or ApproachTargetModule => StudioPalette.Controller,
         _ => StudioTheme.Palette.Text3

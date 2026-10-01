@@ -60,6 +60,7 @@ public sealed record CreatureBlueprint(BodyPlan Plan, IReadOnlyList<SlotSpec> Se
         foreach (var part in blueprint.Plan.Parts)
             builder.Part(part);
         builder.Joints(blueprint.Plan.Joints);
+        builder.Muscles(blueprint.Plan.MuscleList);
         return blueprint with { Plan = builder.Build() };
     }
 }
@@ -78,6 +79,7 @@ public static class SlotTypes
         [nameof(ClockSensor)] = (_, _) => new ClockSensor(),
         [nameof(FeelSensor)] = (_, _) => new FeelSensor(),
         [nameof(BalanceSensor)] = (_, _) => new BalanceSensor(),
+        [nameof(MuscleSensor)] = (_, aPlan) => new MuscleSensor(aPlan),
         [nameof(TouchSensor)] = (aSpec, _) => new TouchSensor([.. (aSpec.Touch ?? []).Select(aPoint => (aPoint.Port, aPoint.Part))])
     };
 
@@ -85,7 +87,8 @@ public static class SlotTypes
     {
         [nameof(DiskDriveActuator)] = (_, _) => new DiskDriveActuator(),
         [nameof(SteeringDriveActuator)] = (_, _) => new SteeringDriveActuator(),
-        [nameof(SpineActuator)] = (_, aPlan) => new SpineActuator(aPlan)
+        [nameof(SpineActuator)] = (_, aPlan) => new SpineActuator(aPlan),
+        [nameof(MuscleActuator)] = (_, aPlan) => new MuscleActuator(aPlan)
     };
 
     public static IEnumerable<string> Sensors

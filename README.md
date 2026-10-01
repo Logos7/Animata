@@ -38,7 +38,8 @@ and let it run on.
   locked box — selectable, but it cannot be moved or deleted until unlocked. Every creature is built from blocks
   (parts and joints, a `BodyPlan`) and lives in real 3D rigid-body physics (BepuPhysics 2). Four creatures:
   a **car** (box body on four wheel bodies with suspension, front-wheel steering, rear-wheel drive), a **cylinder**
-  (disc on two driven side wheels and two support balls, turns in place), a **snake**, a **spider** and a **humanoid**. There is one
+  (disc on two driven side wheels and two support balls, turns in place), a **snake**, a **spider**, a **humanoid** and a
+  **muscle humanoid**. There is one
   creature class; what makes a snake a snake is its **design** — data, not code: the body plan (parts and joints),
   the sensor and drive slots, the settings, the ready-made brains and the training setup. A body blueprint can be
   written to JSON and read back, and a creature made from a blueprint alone gets a general neural network that
@@ -79,6 +80,23 @@ and let it run on.
   first hand-tuned step generator fell in every trial; evolving its nine parameters (30 generations) turned it into a
   swaying shuffle without knee lift that stays upright in 8/8 trials and reaches the target in 7/8 — that is now the
   hand-tuned walk. The walking *network* from random weights so far only learns to stand still (30 generations).
+- **A humanoid moved by muscles.** Inspired by Geijtenbeek, van de Panne and van der Stappen, *Flexible Muscle-Based
+  Locomotion for Bipedal Creatures* (2013): the same body as the humanoid, but hips, knees and ankles are **passive
+  joints** (no servo; hard limits and joint damping in the physics) moved by **24 leg muscles**, 12 per leg, including
+  two-joint ones (hamstrings, rectus femoris, gastrocnemius). A muscle is a line between two attachment points that only
+  pulls, with a Hill-type force: activation (excitation from the brain with a delay) × force–length curve, plus passive
+  stretch; the force–velocity part is solved implicitly by the physics solver (a damper that drives the muscle towards
+  shortening), because computing it once per 1/30 s world step made the muscles shake. A muscle sense reports each
+  muscle's length, speed and force; the trunk and arms stay on servos. The controllers turn a joint-space PD goal into
+  muscle excitations through the muscles' moment arms (computed from the geometry). **Training uses CMA-ES**, as in the
+  paper, now available next to the genetic algorithm for any rig. Honest numbers: standing on 10 s trials with a push —
+  the start controller stands in 2/8 trials, after 20 CMA-ES generations 5/8 (the servo humanoid: 7/8), and without
+  pushes it stands still for as long as you watch. On this problem CMA-ES and the genetic algorithm came out even
+  (validation cost 0.405 and 0.383, both 5/8); the muscle rigs use CMA-ES like the paper. **Walking on muscles does not work yet**: the step automaton
+  (SIMBICON-like, on top of the standing controller) steps in place for a second or two and then falls backwards, and
+  30–40 CMA-ES generations from three different starts did not find a gait — the paper's optimisations ran for hours on
+  many cores, here a generation takes ~35 s on two. The brain has the same two states as the servo humanoid, so it
+  stands near the target and tries to walk when it is far.
 - **Bodies that don't pass through themselves.** Parts of one creature collide with each other unless they are
   neighbours in the joint tree (one or two joints apart), so a coiled snake stays coiled and legs don't cross.
   Joint angles are measured around the child part's own axes, so a leg pointing sideways bends like one pointing forward.
@@ -154,6 +172,7 @@ Roughly in this direction, one experiment at a time:
 
 - more senses and richer brain modules (memory, timing, learning inside a lifetime, not only across generations);
 - neural brains that learn what hand-tuned ones already do — climbing and two-legged walking are the open cases;
+- walking on muscles (longer CMA-ES runs, a better step controller, and later evolving the muscle routing itself);
 - more body plans (five legs, grippers) and a body editor for building creatures from blocks in the Studio;
 - a living ecosystem: food, energy, reproduction and inheritance of body and brain;
 - moving creatures (body and brain) between worlds; slopes, trees and richer terrain.

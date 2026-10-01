@@ -1,7 +1,23 @@
 namespace Animata.Core.Training;
 
+/// <summary>Algorytm optymalizacji parametrów.</summary>
+public enum EvolutionAlgorithm
+{
+    /// <summary>Algorytm genetyczny: elity, krzyżowanie, mutacja gaussowska z mnożnikami σ.</summary>
+    Genetic,
+
+    /// <summary>
+    /// CMA-ES (Hansen): rozkład normalny, którego średnia, kowariancja i krok uczą się z najlepszych prób — dopasowuje się
+    /// do kształtu i skali problemu (np. sztywności rzędu 1 obok kątów rzędu 0.1). Jak w pracy Geijtenbeeka i in. (2013).
+    /// </summary>
+    CmaEs
+}
+
 public sealed record EvolutionOptions
 {
+    /// <summary>Algorytm (domyślnie genetyczny).</summary>
+    public EvolutionAlgorithm Algorithm { get; init; } = EvolutionAlgorithm.Genetic;
+
     public int PopulationSize { get; init; } = 48;
 
     /// <summary>Najlepsi przechodzą bez zmian do następnego pokolenia i są rodzicami.</summary>
@@ -41,8 +57,20 @@ public sealed class Evolution
     private float[][] _population;
     private readonly float[] _fitness;
 
+    private readonly CmaEs? _cma;
+
     public Evolution(ReadOnlySpan<float> aStart, EvolutionOptions aOptions)
     {
+        if (aOptions.Algorithm == EvolutionAlgorithm.CmaEs)
+        {
+            _options = aOptions;
+            _random = new Random(aOptions.Seed);
+            _fitness = [];
+            _population = [];
+            _cma = new CmaEs(aStart, aOptions);
+            Best = aStart.ToArray();
+            return;
+        }
         if (aOptions.PopulationSize < 2 || aOptions.EliteCount < 1 || aOptions.EliteCount >= aOptions.PopulationSize)
             throw new ArgumentException("Population must be at least 2 and larger than the elite.", nameof(aOptions));
 
@@ -64,6 +92,14 @@ public sealed class Evolution
     /// <summary>Ocenia bieżące pokolenie i tworzy następne. Zwraca fitness najlepszego osobnika.</summary>
     public float Step(Func<float[], int, float> aFitness)
     {
+        if (_cma is { } cma)
+        {
+            cma.Step(aFitness, Generation);
+            Best = (float[])cma.Best.Clone();
+            BestFitness = cma.BestFitness;
+            Generation++;
+            return BestFitness;
+        }
         var generation = Generation;
         Parallel.For(0, _population.Length, new ParallelOptions { MaxDegreeOfParallelism = _options.MaxParallelism }, aIndex =>
         {

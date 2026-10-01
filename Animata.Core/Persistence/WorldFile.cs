@@ -167,7 +167,7 @@ public static class WorldFile
     {
         var bent = false;
         for (var joint = 0; joint < aCreature.JointCount && !bent; joint++)
-            bent = aCreature.Plan.Joints[joint].Kind == Bodies.JointKind.Ball &&
+            bent = aCreature.Plan.Joints[joint].Bends &&
                    (MathF.Abs(aCreature.JointYaw(joint)) >= 1e-3f || MathF.Abs(aCreature.JointPitch(joint)) >= 1e-3f);
         if (!bent)
             return null;
