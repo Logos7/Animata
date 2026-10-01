@@ -75,8 +75,6 @@ public static class Snake
     public const string SegmentsSetting = "Segments";
     public const string ClimberSetting = "Climber";
 
-    public static bool Is(Entity aEntity) => aEntity is Creature creature && creature.Design == Design;
-
     /// <summary>
     /// Oko „Eye” (głowa), czucie stawów „Joints”, zegar rytmu „Clock” (1.2 Hz), czucie terenu „Feel”, kręgosłup „Spine”
     /// (czucie i kręgosłup mają tyle stawów, ile plan).

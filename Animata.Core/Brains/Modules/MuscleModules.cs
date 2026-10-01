@@ -111,9 +111,10 @@ public abstract class MuscleControlModule : BrainModule
     private readonly Dictionary<string, float> _outputs;
     private bool _fresh = true;
 
-    protected MuscleControlModule(BodyPlan aPlan, IEnumerable<string> aExtraInputs)
+    protected MuscleControlModule(MuscleGeometry aGeometry, IEnumerable<string> aExtraInputs)
     {
-        Geometry = new MuscleGeometry(aPlan);
+        Geometry = aGeometry;
+        var aPlan = aGeometry.Plan;
         var axes = Geometry.Axes.Count;
         _angles = new float[axes];
         _lastAngles = new float[axes];
@@ -220,7 +221,7 @@ public sealed class MuscleStandModule : MuscleControlModule, ITrainableModule
 
     private readonly float[] _parameters = Defaults;
 
-    public MuscleStandModule() : base(MuscleHumanoid.DefaultPlan(), Senses) => Name = "Stanie";
+    public MuscleStandModule() : base(MuscleHumanoid.Geometry, Senses) => Name = "Stanie";
 
     /// <summary>Domyślne parametry stania (przed optymalizacją).</summary>
     public static float[] Defaults => [4, 4, 4, 0.02f, 0.02f, 0, 0, 0, 0, 0, 0, -0.05f];
@@ -242,17 +243,17 @@ public sealed class MuscleStandModule : MuscleControlModule, ITrainableModule
         for (var axis = 0; axis < geometry.Axes.Count; axis++)
         {
             var joint = geometry.Axes[axis].Joint;
-            var stiffness = 100 * (joint == MuscleHumanoid.Knee(0) || joint == MuscleHumanoid.Knee(1) ? p[1]
-                : joint == MuscleHumanoid.Ankle(0) || joint == MuscleHumanoid.Ankle(1) ? p[2] : p[0]);
+            var stiffness = 100 * (joint == Humanoid.Knee(0) || joint == Humanoid.Knee(1) ? p[1]
+                : joint == Humanoid.Ankle(0) || joint == Humanoid.Ankle(1) ? p[2] : p[0]);
             kp[axis] = stiffness;
             kd[axis] = stiffness * p[3];
         }
         for (var side = 0; side < 2; side++)
         {
-            Set(geometry, targets, MuscleHumanoid.Ankle(side), false, p[11] + p[5] * pitch + p[6] * pitchRate);
-            Set(geometry, targets, MuscleHumanoid.Hip(side), false, p[7] * pitch + p[8] * pitchRate);
-            Set(geometry, targets, MuscleHumanoid.Ankle(side), true, p[9] * roll + p[10] * rollRate);
-            Set(geometry, targets, MuscleHumanoid.Hip(side), true, p[9] * roll + p[10] * rollRate);
+            Set(geometry, targets, Humanoid.Ankle(side), false, p[11] + p[5] * pitch + p[6] * pitchRate);
+            Set(geometry, targets, Humanoid.Hip(side), false, p[7] * pitch + p[8] * pitchRate);
+            Set(geometry, targets, Humanoid.Ankle(side), true, p[9] * roll + p[10] * rollRate);
+            Set(geometry, targets, Humanoid.Hip(side), true, p[9] * roll + p[10] * rollRate);
         }
     }
 
@@ -349,7 +350,7 @@ public sealed class MuscleGaitModule : MuscleControlModule, ITrainableModule
     private readonly float[] _parameters = [0.8f, 0.2f, 0.1f, 0.4f, 0.1f, 0, 0, 0, 0.2f, 0.1f, 0.4f, 0, 0, .. MuscleStandModule.Defaults];
     private float _phase;
 
-    public MuscleGaitModule() : base(MuscleHumanoid.DefaultPlan(), Senses) => Name = "Chód";
+    public MuscleGaitModule() : base(MuscleHumanoid.Geometry, Senses) => Name = "Chód";
 
     /// <summary>Faza kroku [0, 1).</summary>
     public float Phase => _phase;
@@ -377,20 +378,20 @@ public sealed class MuscleGaitModule : MuscleControlModule, ITrainableModule
                 var early = local < 0.25f;
                 var stride = (early ? p[1] : p[2]) * (1 + outward * turn) + p[8] * (velocityX - p[10]) + p[9] * pitch;
                 // Cel uda w świecie (jak SIMBICON): kąt uda = pochylenie miednicy + kąt biodra (odczyt błędnika = 2 · kąt).
-                Add(MuscleHumanoid.Hip(side), false, -stride - pitch / 2);
-                Add(MuscleHumanoid.Knee(side), false, early ? p[3] : p[4]);
-                Add(MuscleHumanoid.Ankle(side), false, p[5]);
-                Add(MuscleHumanoid.Hip(side), true, SideGain * velocityY);
+                Add(Humanoid.Hip(side), false, -stride - pitch / 2);
+                Add(Humanoid.Knee(side), false, early ? p[3] : p[4]);
+                Add(Humanoid.Ankle(side), false, p[5]);
+                Add(Humanoid.Hip(side), true, SideGain * velocityY);
             }
             else
             {
-                Add(MuscleHumanoid.Knee(side), false, p[6]);
-                Add(MuscleHumanoid.Ankle(side), false, p[7]);
+                Add(Humanoid.Knee(side), false, p[6]);
+                Add(Humanoid.Ankle(side), false, p[7]);
                 // Biodro podporowe trzyma miednicę: moment zginacza przy stopie na ziemi pochyla ją do przodu, prostownika —
                 // do tyłu; miednica odchylona do tyłu (pochylenie &lt; 0) → cel poniżej obecnego kąta.
                 if (p[11] != 0 || p[12] != 0)
                 {
-                    var hip = Geometry.IndexOf(MuscleHumanoid.Hip(side), false);
+                    var hip = Geometry.IndexOf(Humanoid.Hip(side), false);
                     Targets[hip] = Angles[hip] + p[11] * pitch + p[12] * aInputs.GetValueOrDefault(BalanceSensor.PitchRatePort);
                 }
             }

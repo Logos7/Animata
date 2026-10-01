@@ -91,24 +91,6 @@ public static class SlotTypes
         [nameof(MuscleActuator)] = (_, aPlan) => new MuscleActuator(aPlan)
     };
 
-    public static IEnumerable<string> Sensors
-    {
-        get
-        {
-            lock (SensorFactories)
-                return [.. SensorFactories.Keys];
-        }
-    }
-
-    public static IEnumerable<string> Actuators
-    {
-        get
-        {
-            lock (ActuatorFactories)
-                return [.. ActuatorFactories.Keys];
-        }
-    }
-
     /// <summary>Dopisuje rodzaj zmysłu (nazwa zajęta → <see cref="ArgumentException"/>).</summary>
     public static void Register(string aName, Func<SlotSpec, BodyPlan, Sensor> aCreate)
     {

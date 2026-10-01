@@ -1,8 +1,6 @@
-using System.Numerics;
 using Animata.Core.Bodies;
 using Animata.Core.Physics;
 using BepuPhysics;
-using BepuPhysics.Collidables;
 
 namespace Animata.Core.Entities;
 
@@ -21,11 +19,6 @@ public abstract class PhysicalStaticEntity(Body aBody) : StaticEntity(aBody), IP
 
     /// <summary>Dodaje bryłę do fizyki i zwraca jej uchwyt.</summary>
     protected abstract StaticHandle Build(PhysicsWorld aPhysics);
-
-    /// <summary>Pionowy walec stojący podstawą na <paramref name="aFoot"/> (walec Bepu leży wzdłuż Y — obrót o 90° wokół X).</summary>
-    protected static StaticHandle AddUprightCylinder(PhysicsWorld aPhysics, Vector3 aFoot, float aRadius, float aHeight, float? aGrip = null) =>
-        aPhysics.AddStatic(new Cylinder(aRadius, aHeight),
-            new RigidPose(aFoot + new Vector3(0, 0, aHeight / 2), Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2)), aGrip);
 
     bool IPhysicalEntity.IsDynamic => false;
 

@@ -95,7 +95,7 @@ public class SpiderTests
         for (var tick = 0; tick < 30; tick++)
             world.Update(Delta);
         var touch = spider.Body.Sensors.OfType<TouchSensor>().Single().Read(spider, world);
-        Assert.All(WorldObjectCatalog.SpiderTouchPorts.Take(4), aPort => Assert.Equal(1f, touch[aPort]));
+        Assert.All(Spider.TouchPorts.Take(4), aPort => Assert.Equal(1f, touch[aPort]));
         Assert.Equal(0f, touch["Belly"]);
         Assert.Equal(0f, SeekRigs.SpiderPosture(spider));
 

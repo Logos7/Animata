@@ -6,27 +6,18 @@ namespace Animata.Core.Sensors;
 
 /// <summary>
 /// Czucie stawów (propriocepcja): Yaw{i} i Pitch{i} — zmierzone kąty stawów jako ułamek ich zakresu ([-1, 1],
-/// jak komendy <see cref="SpineActuator"/>). Porty idą za liczbą stawów ciała (<see cref="SetJointCount"/>).
+/// jak komendy <see cref="SpineActuator"/>). Porty idą za planem ciała (<see cref="SetJoints"/>).
 /// </summary>
 public sealed class JointSensor : Sensor
 {
     private string[] _ports = [];
     private readonly Dictionary<string, float> _readings = [];
 
-    public JointSensor(int aJoints) => SetJointCount(aJoints);
-
     public JointSensor(Bodies.BodyPlan aPlan) => SetJoints(aPlan);
 
     public int Joints { get; private set; }
 
     public override IReadOnlyList<string> OutputPorts => _ports;
-
-    public void SetJointCount(int aJoints)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(aJoints);
-        Joints = aJoints;
-        SetPorts(SpineActuator.PortsFor(aJoints));
-    }
 
     /// <summary>Stawy i porty z planu ciała (tylko ruchome osie — zawias nie ma portu skrętu).</summary>
     public void SetJoints(Bodies.BodyPlan aPlan)

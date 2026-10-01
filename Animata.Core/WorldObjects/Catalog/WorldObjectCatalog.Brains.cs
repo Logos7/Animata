@@ -7,9 +7,6 @@ namespace Animata.Core.WorldObjects;
 // Mózgi wymienne: to samo ciało, inny sterownik (wąż z CPG i wąż z siecią to ten sam wąż).
 public static partial class WorldObjectCatalog
 {
-    /// <summary>Gotowe mózgi pasujące do ciała stwora (definiuje je klasa stwora: <see cref="ActiveEntity.BrainPresets"/>).</summary>
-    public static IReadOnlyList<BrainPreset> BrainPresets(ActiveEntity aCreature) => aCreature.BrainPresets;
-
     /// <summary>
     /// Podmienia mózg stwora na świeży z gotowego: ten sam obiekt <see cref="Brain"/> (ciało i węzły ciała zostają),
     /// stare moduły, połączenia i snapshoty znikają. Sterownik z ręcznymi parametrami dostaje snapshot „ręczne parametry”.

@@ -77,7 +77,7 @@ public static class MuscleHumanoidBrains
 
     private static string[] LegPorts()
     {
-        var geometry = new MuscleGeometry(MuscleHumanoid.DefaultPlan());
+        var geometry = MuscleHumanoid.Geometry;
         return [.. Enumerable.Range(0, geometry.Axes.Count).Select(geometry.PortOf)];
     }
 

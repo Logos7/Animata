@@ -9,7 +9,8 @@ public sealed record CompiledExpression(
 
 /// <summary>
 /// Parser prostych wyrażeń: + - * /, unarne +/-, nawiasy, liczby (kropka dziesiętna) i zmienne
-/// ([A-Za-z_][A-Za-z0-9_]*). Zmienne rozwiązywane są ze słownika przy ewaluacji.
+/// (litera albo _, potem litery, cyfry, _ — także polskie litery, bo porty je mają: „Tułów”, „DłBiodrowyL”).
+/// Zmienne rozwiązywane są ze słownika przy ewaluacji.
 /// </summary>
 public static class SensorExpression
 {
@@ -92,10 +93,10 @@ public static class SensorExpression
                 if (End || aSource[Position++] != ')') throw new FormatException("Missing closing parenthesis.");
                 return inner;
             }
-            if (char.IsAsciiLetter(aSource[Position]) || aSource[Position] == '_')
+            if (char.IsLetter(aSource[Position]) || aSource[Position] == '_')
             {
                 var start = Position++;
-                while (!End && (char.IsAsciiLetterOrDigit(aSource[Position]) || aSource[Position] == '_')) Position++;
+                while (!End && (char.IsLetterOrDigit(aSource[Position]) || aSource[Position] == '_')) Position++;
                 var name = aSource[start..Position];
                 Variables.Add(name);
                 return aVars => aVars.TryGetValue(name, out var value) ? value

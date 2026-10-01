@@ -1,6 +1,7 @@
 using System.Numerics;
 using Animata.Core.Actuators;
 using Animata.Core.Bodies;
+using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
 using Animata.Core.Sensors;
 using Animata.Core.Training;
@@ -23,32 +24,22 @@ namespace Animata.Core.WorldObjects;
 /// </summary>
 public static class MuscleHumanoid
 {
-    public static readonly string[] Sides = Humanoid.Sides;
+    /// <summary>Plan ciała — jeden na proces (porty, gniazda i sterowniki mięśniowe go współdzielą).</summary>
+    public static BodyPlan Plan { get; } = DefaultPlan();
 
-    /// <summary>Nazwy mięśni jednej nogi (do nazwy dochodzi strona: „PośladkowyL”).</summary>
-    public static readonly string[] LegMuscles =
-    [
-        "Biodrowy", "Pośladkowy", "PośladkowyŚr", "Przywodziciel", "Kulszowy", "ProstyUda",
-        "Obszerny", "Brzuchaty", "Płaszczkowaty", "PiszczelowyP", "Strzałkowy", "PiszczelowyT"
-    ];
+    /// <summary>Ramiona sił mięśni w pozie spoczynkowej (<see cref="Plan"/>) — wspólne dla sterowników mięśniowych.</summary>
+    public static MuscleGeometry Geometry { get; } = new(Plan);
 
-    /// <summary>Mięsień nogi po nazwie i stronie (0 — lewa, 1 — prawa).</summary>
-    public static string Muscle(string aName, int aSide) => aName + Sides[aSide];
-
-    // Indeksy stawów jak w Humanoid: talia 0, biodro 1+3s, kolano 2+3s, kostka 3+3s, bark 7+2s, łokieć 8+2s.
-    public static int Hip(int aSide) => Humanoid.Hip(aSide);
-    public static int Knee(int aSide) => Humanoid.Knee(aSide);
-    public static int Ankle(int aSide) => Humanoid.Ankle(aSide);
+    /// <summary>Mięsień nogi po nazwie i stronie (0 — lewa, 1 — prawa), np. „PośladkowyL”. Stawy — jak w <see cref="Humanoid"/>.</summary>
+    public static string Muscle(string aName, int aSide) => aName + Humanoid.Sides[aSide];
 
     /// <summary>Porty serw (talia, barki, łokcie).</summary>
-    public static readonly string[] ServoPorts = SpineActuator.PortsFor(DefaultPlan());
+    public static readonly string[] ServoPorts = SpineActuator.PortsFor(Plan);
 
     /// <summary>Porty mięśni (pobudzenia), lewa noga, potem prawa.</summary>
-    public static readonly string[] MusclePorts = [.. DefaultPlan().MuscleList.Select(aMuscle => aMuscle.Name)];
+    public static readonly string[] MusclePorts = [.. Plan.MuscleList.Select(aMuscle => aMuscle.Name)];
 
-    public static bool Is(Entity aEntity) => aEntity is Creature creature && creature.Design == Design;
-
-    private static readonly CreatureBlueprint Body = new(DefaultPlan(),
+    private static readonly CreatureBlueprint Body = new(Plan,
         [
             new SlotSpec("Eye", nameof(TargetSensor)),
             new SlotSpec("Joints", nameof(JointSensor)),
@@ -106,7 +97,7 @@ public static class MuscleHumanoid
     /// </summary>
     public static IEnumerable<MusclePlan> LegMusclesOf(int aSide)
     {
-        var s = Sides[aSide];
+        var s = Humanoid.Sides[aSide];
         var mirror = aSide == 0 ? 1f : -1f;
         Vector3 P(float aX, float aY, float aZ) => new(aX, mirror * aY, aZ);
         string Pelvis = "Miednica", Thigh = $"Udo{s}", Shin = $"Goleń{s}", Foot = $"Stopa{s}";

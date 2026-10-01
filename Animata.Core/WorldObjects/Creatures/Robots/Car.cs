@@ -28,8 +28,6 @@ public static class Car
     /// <summary>Ustawienie „Wąsy”: liczba wąsów autka.</summary>
     public const string WhiskersSetting = "Whiskers";
 
-    public static bool Is(Entity aEntity) => aEntity is Creature creature && creature.Design == Design;
-
     private static readonly CreatureBlueprint Body = new(DefaultPlan(),
         [new SlotSpec("Eye", nameof(TargetSensor)), new SlotSpec("Whiskers", nameof(RaySensor))],
         [new SlotSpec("Wheels", nameof(SteeringDriveActuator))])

@@ -50,15 +50,13 @@ public static class Humanoid
     public static int Shoulder(int aSide) => 7 + 2 * aSide;
     public static int Elbow(int aSide) => 8 + 2 * aSide;
 
+    /// <summary>Plan ciała — jeden na proces.</summary>
+    public static BodyPlan Plan { get; } = DefaultPlan();
+
     /// <summary>Porty napędu stawów „Body” (ruchome osie planu): najpierw skręty (Yaw), potem pochylenia (Pitch).</summary>
-    public static readonly string[] Ports = SpineActuator.PortsFor(DefaultPlan());
+    public static readonly string[] Ports = SpineActuator.PortsFor(Plan);
 
-    public static bool Is(Entity aEntity) => aEntity is Creature creature && creature.Design == Design;
-
-    /// <summary>Porty dotyku: stopy i tułów (tułów na ziemi = upadek).</summary>
-    public static readonly string[] TouchPorts = ["StopaL", "StopaP", "Tułów"];
-
-    private static readonly CreatureBlueprint Body = new(DefaultPlan(),
+    private static readonly CreatureBlueprint Body = new(Plan,
         [
             new SlotSpec("Eye", nameof(TargetSensor)),
             new SlotSpec("Joints", nameof(JointSensor)),

@@ -13,7 +13,7 @@ public sealed class NeuralNetwork
 
     public NeuralNetwork(params int[] aLayers) => Resize(aLayers);
 
-    public void Resize(params int[] aLayers)
+    private void Resize(params int[] aLayers)
     {
         if (aLayers.Length < 2 || aLayers.Any(aSize => aSize <= 0))
             throw new ArgumentException("A network needs at least two positive layer sizes.", nameof(aLayers));

@@ -40,12 +40,12 @@ public class MuscleTests
         var plan = MuscleHumanoid.DefaultPlan();
         Assert.Equal(24, plan.MuscleList.Count);
         Assert.All(new[] { 1, 2, 3, 4, 5, 6 }, aJoint => Assert.Equal(JointKind.Passive, plan.Joints[aJoint].Kind));
-        Assert.DoesNotContain(SpineActuator.PitchPort(MuscleHumanoid.Knee(0)), MuscleHumanoid.ServoPorts);
+        Assert.DoesNotContain(SpineActuator.PitchPort(Humanoid.Knee(0)), MuscleHumanoid.ServoPorts);
         Assert.Contains(SpineActuator.PitchPort(Humanoid.Waist), MuscleHumanoid.ServoPorts);
 
         var humanoid = (Creature)MuscleHumanoid.Design.Type.Create();
         Assert.Equal(24, humanoid.MuscleCount);
-        Assert.Contains(SpineActuator.PitchPort(MuscleHumanoid.Knee(0)), humanoid.Body.Sensors.OfType<JointSensor>().Single().OutputPorts);
+        Assert.Contains(SpineActuator.PitchPort(Humanoid.Knee(0)), humanoid.Body.Sensors.OfType<JointSensor>().Single().OutputPorts);
         Assert.Equal(72, humanoid.Body.Sensors.OfType<MuscleSensor>().Single().OutputPorts.Count);
         Assert.Equal(MuscleHumanoid.MusclePorts, humanoid.Body.Actuators.OfType<MuscleActuator>().Single().InputPorts);
     }
@@ -68,17 +68,17 @@ public class MuscleTests
         float Arm(string aMuscle, int aJoint, bool aYaw = false) =>
             geometry.Arms[MuscleHumanoid.MusclePorts.ToList().IndexOf(aMuscle), geometry.IndexOf(aJoint, aYaw)];
         // Pochylenie: ujemne — kończyna do przodu (zgięcie biodra), dodatnie kolano — zgięcie, dodatnia kostka — palce w dół.
-        Assert.True(Arm("BiodrowyL", MuscleHumanoid.Hip(0)) < -0.03f);
-        Assert.True(Arm("PośladkowyL", MuscleHumanoid.Hip(0)) > 0.03f);
-        Assert.True(Arm("ObszernyL", MuscleHumanoid.Knee(0)) < -0.03f);
-        Assert.True(Arm("KulszowyL", MuscleHumanoid.Hip(0)) > 0.03f && Arm("KulszowyL", MuscleHumanoid.Knee(0)) > 0.03f);
-        Assert.True(Arm("ProstyUdaL", MuscleHumanoid.Hip(0)) < -0.03f && Arm("ProstyUdaL", MuscleHumanoid.Knee(0)) < -0.03f);
-        Assert.True(Arm("PłaszczkowatyL", MuscleHumanoid.Ankle(0)) > 0.03f);
-        Assert.True(Arm("PiszczelowyPL", MuscleHumanoid.Ankle(0)) < -0.03f);
-        Assert.Equal(0, Arm("PłaszczkowatyL", MuscleHumanoid.Knee(0)));
+        Assert.True(Arm("BiodrowyL", Humanoid.Hip(0)) < -0.03f);
+        Assert.True(Arm("PośladkowyL", Humanoid.Hip(0)) > 0.03f);
+        Assert.True(Arm("ObszernyL", Humanoid.Knee(0)) < -0.03f);
+        Assert.True(Arm("KulszowyL", Humanoid.Hip(0)) > 0.03f && Arm("KulszowyL", Humanoid.Knee(0)) > 0.03f);
+        Assert.True(Arm("ProstyUdaL", Humanoid.Hip(0)) < -0.03f && Arm("ProstyUdaL", Humanoid.Knee(0)) < -0.03f);
+        Assert.True(Arm("PłaszczkowatyL", Humanoid.Ankle(0)) > 0.03f);
+        Assert.True(Arm("PiszczelowyPL", Humanoid.Ankle(0)) < -0.03f);
+        Assert.Equal(0, Arm("PłaszczkowatyL", Humanoid.Knee(0)));
         // Odwodziciel lewej nogi — dodatni skręt biodra, prawej — ujemny.
-        Assert.True(Arm("PośladkowyŚrL", MuscleHumanoid.Hip(0), true) > 0.03f);
-        Assert.True(Arm("PośladkowyŚrP", MuscleHumanoid.Hip(1), true) < -0.03f);
+        Assert.True(Arm("PośladkowyŚrL", Humanoid.Hip(0), true) > 0.03f);
+        Assert.True(Arm("PośladkowyŚrP", Humanoid.Hip(1), true) < -0.03f);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class MuscleTests
             if (tick == 2)
                 humanoid.Push(new Vector3(1.5f, 0, 0));
             world.Update(Delta);
-            foreach (var joint in new[] { MuscleHumanoid.Hip(0), MuscleHumanoid.Knee(0), MuscleHumanoid.Ankle(0), MuscleHumanoid.Knee(1) })
+            foreach (var joint in new[] { Humanoid.Hip(0), Humanoid.Knee(0), Humanoid.Ankle(0), Humanoid.Knee(1) })
                 Assert.InRange(humanoid.JointPitch(joint), plan.Joints[joint].PitchMin - 0.15f, plan.Joints[joint].MaxPitch + 0.15f);
         }
         Assert.True(humanoid.PartPositions[0].Z < Humanoid.FallenHeight, "bez mięśni nogi się składają");
@@ -106,7 +106,7 @@ public class MuscleTests
         using var world = new World();
         var humanoid = Stand(world);
         var muscle = MuscleHumanoid.MusclePorts.ToList().IndexOf(aMuscle);
-        var joint = aMuscle == "BiodrowyL" ? MuscleHumanoid.Hip(0) : MuscleHumanoid.Knee(0);
+        var joint = aMuscle == "BiodrowyL" ? Humanoid.Hip(0) : Humanoid.Knee(0);
         var extreme = 0f;
         for (var tick = 0; tick < 12; tick++)
         {
@@ -127,8 +127,8 @@ public class MuscleTests
             world.Add(WorldObjectCatalog.CreateFloor(10, 10));
             var humanoid = new Creature(MuscleHumanoid.Design);
             humanoid.PlaceBent(Vector3.Zero, Quaternion.Identity, aJoint =>
-                aJoint == MuscleHumanoid.Knee(0) || aJoint == MuscleHumanoid.Knee(1) ? (0, 0.6f)
-                : aJoint == MuscleHumanoid.Hip(0) || aJoint == MuscleHumanoid.Hip(1) || aJoint == MuscleHumanoid.Ankle(0) || aJoint == MuscleHumanoid.Ankle(1) ? (0, -0.3f)
+                aJoint == Humanoid.Knee(0) || aJoint == Humanoid.Knee(1) ? (0, 0.6f)
+                : aJoint == Humanoid.Hip(0) || aJoint == Humanoid.Hip(1) || aJoint == Humanoid.Ankle(0) || aJoint == Humanoid.Ankle(1) ? (0, -0.3f)
                 : (0, 0));
             world.Add(humanoid);
             for (var tick = 0; tick < 20; tick++)
@@ -138,7 +138,7 @@ public class MuscleTests
                         humanoid.SetMuscleExcitation(MuscleHumanoid.MusclePorts.ToList().IndexOf(MuscleHumanoid.Muscle("Obszerny", side)), 1);
                 world.Update(Delta);
             }
-            return humanoid.JointPitch(MuscleHumanoid.Knee(0));
+            return humanoid.JointPitch(Humanoid.Knee(0));
         }
         var limp = Knee(false);
         var straightened = Knee(true);

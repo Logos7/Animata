@@ -5,13 +5,11 @@ namespace Animata.Core.Actuators;
 /// <summary>
 /// Kręgosłup stwora z części: po dwa porty na staw — Yaw{i} (skręt w bok) i Pitch{i} (pochylenie), oba ∈ [-1, 1]
 /// jako ułamek zakresu stawu. Aktuator tylko zadaje cele serw; ruch liczy fizyka (<see cref="ArticulatedCreature"/>).
-/// Liczba stawów idzie za ciałem — po przebudowie ciała woła się <see cref="SetJointCount"/>.
+/// Porty idą za ciałem — po przebudowie ciała woła się <see cref="SetJoints"/>.
 /// </summary>
 public sealed class SpineActuator : Actuator
 {
     private string[] _ports = [];
-
-    public SpineActuator(int aJoints) => SetJointCount(aJoints);
 
     public int Joints { get; private set; }
 
@@ -42,13 +40,6 @@ public sealed class SpineActuator : Actuator
     ];
 
     public SpineActuator(Bodies.BodyPlan aPlan) => SetJoints(aPlan);
-
-    public void SetJointCount(int aJoints)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(aJoints);
-        Joints = aJoints;
-        _ports = PortsFor(aJoints);
-    }
 
     /// <summary>Stawy i porty z planu ciała (tylko ruchome osie).</summary>
     public void SetJoints(Bodies.BodyPlan aPlan)

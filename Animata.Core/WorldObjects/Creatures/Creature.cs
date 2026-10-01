@@ -108,6 +108,9 @@ public sealed class CreatureDesign
         return module;
     }
 
+    /// <summary>Czy encja to stwór z tego projektu.</summary>
+    public bool Is(Entity? aEntity) => aEntity is Creature creature && creature.Design == this;
+
     public override string ToString() => $"CreatureDesign {Id}";
 }
 

@@ -45,7 +45,7 @@ public static partial class WorldObjectCatalog
     public static NeuralNetworkModule CreateSpiderNeuralModule(bool aSenses = false, params int[] aHidden)
     {
         string[] basic = [ClockSensor.SinPort, ClockSensor.CosPort, "Found * DirectionY", "Found * DirectionX", "Found * Gap / 4"];
-        string[] senses = aSenses ? [.. SpiderTouchPorts, FeelSensor.HeadPitchPort, FeelSensor.HeadRollPort] : [];
+        string[] senses = aSenses ? [.. Spider.TouchPorts, FeelSensor.HeadPitchPort, FeelSensor.HeadRollPort] : [];
         string[] inputs = [.. basic, .. senses];
         var outputs = Enumerable.Range(0, Spider.Legs).SelectMany(aLeg => new[]
         {
@@ -58,9 +58,6 @@ public static partial class WorldObjectCatalog
         module.Outputs.AddRange(outputs.Select(aPort => new NeuralOutput(aPort)));
         return module;
     }
-
-    /// <summary>Porty dotyku pająka: stopy (FootPL, FootPP, FootTL, FootTP) i brzuch (Belly).</summary>
-    public static IReadOnlyList<string> SpiderTouchPorts => Spider.TouchPorts;
 
     public static Creature CreateNeuralSpider(Vector3 aPosition, float aYaw, Guid? aTargetId) =>
         CreateSpider(aPosition, aYaw, RandomColor(), aTargetId, CreateSpiderNeuralModule());

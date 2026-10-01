@@ -360,12 +360,6 @@ public sealed class StudioSession : IDisposable
                 Terrain.Snap(World, entity);
     }
 
-    /// <summary>„1 segment”, „3 segmenty”, „8 segmentów”.</summary>
-    public static string Segments(int aCount) => Plural(aCount, "segment", "segmenty", "segmentów");
-
-    /// <summary>„1 wąs”, „3 wąsy”, „5 wąsów”, „23 wąsy”.</summary>
-    public static string Whiskers(int aCount) => Plural(aCount, "wąs", "wąsy", "wąsów");
-
     /// <summary>Podsumowanie sceny do paska stanu, np. „2 stwory · 1 kula · 5 cylindrów · 3 klocki”.</summary>
     public string Counts() => string.Join(" · ",
         Plural(Creatures.Count(), "stwór", "stwory", "stworów"),

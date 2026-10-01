@@ -109,7 +109,7 @@ public class PhysicsTests
     [Fact]
     public void Whiskers_ReportProximity_AndIgnoreTargets()
     {
-        var world = new World();
+        using var world = new World();
         var car = new Creature(Car.Design);
         var whiskers = new RaySensor([0f], aRange: 3);
         car.Body.Sensors.Add(whiskers);

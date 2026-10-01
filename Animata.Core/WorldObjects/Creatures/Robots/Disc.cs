@@ -22,8 +22,6 @@ public static class Disc
     /// <summary>Koła po bokach, w odległości ±TrackHalf od środka.</summary>
     public const float TrackHalf = 0.55f;
 
-    public static bool Is(Entity aEntity) => aEntity is Creature creature && creature.Design == Design;
-
     private static readonly CreatureBlueprint Body = new(DefaultPlan(),
         [new SlotSpec("Eye", nameof(TargetSensor))],
         [new SlotSpec("Wheels", nameof(DiskDriveActuator))])

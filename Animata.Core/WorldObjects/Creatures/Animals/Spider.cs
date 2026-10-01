@@ -60,8 +60,6 @@ public static class Spider
 
     public static readonly string[] LegNames = ["PL", "PP", "TL", "TP"];
 
-    public static bool Is(Entity aEntity) => aEntity is Creature creature && creature.Design == Design;
-
     /// <summary>Porty dotyku pająka: stopy (FootPL, FootPP, FootTL, FootTP) i brzuch (Belly).</summary>
     public static readonly string[] TouchPorts = [.. LegNames.Select(aLeg => "Foot" + aLeg), "Belly"];
 

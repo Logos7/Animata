@@ -117,7 +117,6 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
     /// <summary>Orientacje części w świecie (oś X części = jej długość).</summary>
     public IReadOnlyList<Quaternion> PartOrientations => _orientations;
 
-    /// <summary>Czy część czegoś dotykała w ostatnim kroku fizyki (klocka, cylindra, innej części).</summary>
     /// <summary>
     /// Pchnięcie: dodaje prędkość (m/s) wszystkim częściom — jak uderzenie w cały stwór. Działa tylko w świecie z fizyką;
     /// zwraca false, gdy stwór nie jest w fizyce.
@@ -135,6 +134,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         return true;
     }
 
+    /// <summary>Czy część czegoś dotykała w ostatnim kroku fizyki (klocka, cylindra, innej części).</summary>
     public bool IsPartTouching(int aPart) => _physics is { } physics && aPart < _bodies.Length && physics.IsTouching(_bodies[aPart]);
 
     /// <summary>Zmierzony skręt stawu (rad, wokół osi Z dziecka w pozie spoczynkowej).</summary>
@@ -575,7 +575,7 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
                 LocalOffsetA = Vector3.Transform(_muscleOriginLocal[muscle], Quaternion.Inverse(FixOf(Plan.Parts[originPart]))),
                 LocalOffsetB = Vector3.Transform(_muscleInsertionLocal[muscle], Quaternion.Inverse(FixOf(Plan.Parts[insertionPart]))),
                 LocalAxis = Vector3.Transform(direction, Quaternion.Inverse(orientationA)),
-                TargetVelocity = isometric > 0 ? MuscleShortening * isometric / damping : 0,
+                TargetVelocity = isometric > 0 ? isometric / damping : 0,   // dodatnia prędkość celu skraca mięsień (pomiar)
                 Settings = isometric > 0
                     ? new MotorSettings(1.5f * active + passive, 1 / (damping * inverseMass))
                     : new MotorSettings(0, 1)
@@ -628,9 +628,6 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             tensor.ZX * angular.X + tensor.ZY * angular.Y + tensor.ZZ * angular.Z);
         return inertia.InverseMass + Vector3.Dot(angular, rotated);
     }
-
-    /// <summary>Znak prędkości celu silnika liniowego, która skraca mięsień (ustalony pomiarem w teście).</summary>
-    internal const float MuscleShortening = 1;
 
     /// <summary>
     /// Staw bierny: przegub kulowy, więzy osi (zawias — samo pochylenie, obrotnica — sam skręt, przegub Cardana — oba)
@@ -689,17 +686,14 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
             {
                 LocalBasisA = Quaternion.Normalize(restInA * toY),
                 LocalBasisB = Quaternion.Normalize(restInB * toY),
-                MinimumAngle = PassivePitchSign > 0 ? joint.PitchMin : -joint.MaxPitch,
-                MaximumAngle = PassivePitchSign > 0 ? joint.MaxPitch : -joint.PitchMin,
+                MinimumAngle = joint.PitchMin,   // ogranicznik wokół osi Y mierzy pochylenie z tym samym znakiem (pomiar)
+                MaximumAngle = joint.MaxPitch,
                 SpringSettings = new SpringSettings(LimitFrequency, 1)
             });
     }
 
     /// <summary>Sztywność ograniczników stawów biernych (Hz).</summary>
-    public static float LimitFrequency { get; set; } = 120;
-
-    /// <summary>Znak pochylenia mierzonego przez ogranicznik wokół osi Y (ustalony pomiarem w teście).</summary>
-    internal const float PassivePitchSign = 1;
+    public const float LimitFrequency = 120;
 
     // ---------- pomocnicze ----------
 
@@ -853,13 +847,10 @@ public class ArticulatedCreature : ActiveEntity, IPhysicalEntity
         return new AngularAxisMotor
         {
             LocalAxisA = Vector3.UnitY,
-            TargetVelocity = WheelSpin * aSpeed / radius,
+            TargetVelocity = aSpeed / radius,   // dodatnia = do przodu (pomiar)
             Settings = new MotorSettings(MathF.Max(0, aTorque), 1e-6f)
         };
     }
-
-    /// <summary>Znak prędkości kątowej silnika koła względem kierunku jazdy (ustalony pomiarem w teście).</summary>
-    internal const float WheelSpin = 1;
 
     private static Quaternion FixOf(PartPlan aPart) => aPart.Shape == PartShape.Capsule ? CapsuleFix : Quaternion.Identity;
 

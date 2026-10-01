@@ -64,7 +64,7 @@ public static class PanelParts
         var items = new List<Control>();
         var header = new MenuItem { Header = "Nowy mózg (zastępuje obecny i jego snapshoty)", IsEnabled = false };
         items.Add(header);
-        foreach (var preset in WorldObjectCatalog.BrainPresets(aCreature))
+        foreach (var preset in aCreature.BrainPresets)
         {
             var chosen = preset;
             var item = new MenuItem { Header = preset.Name, Icon = Ui.Icon(Icons.Brain, 14) };

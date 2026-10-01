@@ -50,6 +50,7 @@ public class CompositeModuleTests
     public void Composite_PassesValuesThroughItsInnerGraph()
     {
         var (world, owner) = Stage();
+        using var owned = world;
         var graph = owner.Brain!.Graph;
         var select = graph.Add(new ConstantModule("Value", 1));
         var a = graph.Add(new ConstantModule("Value", 3));
@@ -83,6 +84,8 @@ public class CompositeModuleTests
 
         var (flatWorld, flatCar) = Build();
         var (groupedWorld, groupedCar) = Build();
+        using var flat = flatWorld;
+        using var grouped = groupedWorld;
         var graph = groupedCar.Brain!.Graph;
         var controller = graph.Modules.OfType<AvoidAndSeekModule>().Single();
         var composite = BrainGraphEditing.Group(graph, [controller], "Sterowanie");
@@ -122,6 +125,7 @@ public class CompositeModuleTests
     public void ErrorInsideSubgraph_PointsAtTheInnerModule()
     {
         var (world, owner) = Stage();
+        using var owned = world;
         var graph = owner.Brain!.Graph;
         var select = graph.Add(new ConstantModule("Value", float.NaN));
         var composite = graph.Add(RouterComposite());
@@ -135,7 +139,8 @@ public class CompositeModuleTests
     [Fact]
     public void Snapshot_CapturesAndRestoresModulesInsideSubgraphs()
     {
-        var (_, owner) = Stage();
+        var (stage, owner) = Stage();
+        using var owned = stage;
         var brain = owner.Brain!;
         var composite = brain.Graph.Add(new CompositeModule());
         var constant = composite.Inner.Add(new ConstantModule("Value", 1.5f));

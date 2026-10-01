@@ -25,7 +25,7 @@ public class BrainFileTests
         ];
         foreach (var creature in creatures)
         {
-            var presets = WorldObjectCatalog.BrainPresets(creature);
+            var presets = creature.BrainPresets;
             Assert.True(presets.Count >= 2, creature.GetType().Name);
             foreach (var preset in presets)
             {
@@ -47,7 +47,7 @@ public class BrainFileTests
     {
         var snake = NeuralSnake();
         var brain = snake.Brain!;
-        var cpg = WorldObjectCatalog.BrainPresets(snake).First(aPreset => aPreset.Name.StartsWith("CPG"));
+        var cpg = snake.BrainPresets.First(aPreset => aPreset.Name.StartsWith("CPG"));
         WorldObjectCatalog.InstallBrain(snake, cpg);
         Assert.Same(brain, snake.Brain);
         Assert.Single(brain.Graph.Modules.OfType<CpgModule>());

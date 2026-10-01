@@ -35,6 +35,12 @@ public sealed class Cylinder() : PhysicalStaticEntity(new Body())
 
     protected override object Shape => (Body.Position, Radius, Height, Grip);
 
-    protected override StaticHandle Build(PhysicsWorld aPhysics) =>
-        AddUprightCylinder(aPhysics, Body.Position, MathF.Max(0.01f, Radius), MathF.Max(0.01f, Height), Grip > 0 ? Grip : null);
+    /// <summary>Pionowy walec stojący podstawą na Body.Position (walec Bepu leży wzdłuż Y — obrót o 90° wokół X).</summary>
+    protected override StaticHandle Build(PhysicsWorld aPhysics)
+    {
+        var radius = MathF.Max(0.01f, Radius);
+        var height = MathF.Max(0.01f, Height);
+        return aPhysics.AddStatic(new BepuPhysics.Collidables.Cylinder(radius, height),
+            new RigidPose(Body.Position + new Vector3(0, 0, height / 2), Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2)), Grip > 0 ? Grip : null);
+    }
 }

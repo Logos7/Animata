@@ -264,7 +264,7 @@ public static class SeekRigs
         aWorld.Add(tree);
         aTarget.Radius = ClimbTargetRadius;
         aTarget.Body.Position = new Vector3(0, 0, tree.Height);
-        if (aCreature is Creature snake && Snake.Is(snake))
+        if (aCreature is Creature snake && Snake.Design.Is(snake))
             Snake.WrapAround(snake, tree, aEpisode.Yaw);
     }
 
@@ -358,7 +358,7 @@ public static class SeekRigs
     /// </summary>
     public static float SpiderPosture(ActiveEntity aCreature)
     {
-        if (aCreature is not Creature spider || !WorldObjects.Spider.Is(spider) || spider.PartOrientations.Count == 0)
+        if (aCreature is not Creature spider || !WorldObjects.Spider.Design.Is(spider) || spider.PartOrientations.Count == 0)
             return 0;
         if (spider.IsPartTouching(0))
             return 1;

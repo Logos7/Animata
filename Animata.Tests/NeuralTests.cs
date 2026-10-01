@@ -26,6 +26,27 @@ public class NeuralTests
     public void Expressions_RejectBadSyntax(string aExpression) =>
         Assert.Throws<FormatException>(() => SensorExpression.Compile(aExpression));
 
+    /// <summary>Porty ciał mają polskie litery (dotyk „Tułów”, czucie mięśni „DłBiodrowyL”) — wyrażenie musi je przyjąć.</summary>
+    [Fact]
+    public void Expressions_AcceptPortNamesWithPolishLetters()
+    {
+        var compiled = SensorExpression.Compile("Tułów + 2 * DłPośladkowyŚrL");
+        Assert.Equal(2, compiled.Variables.Count);
+        Assert.Contains("Tułów", compiled.Variables);
+        Assert.Equal(7f, compiled.Evaluate(new Dictionary<string, float> { ["Tułów"] = 1, ["DłPośladkowyŚrL"] = 3 }));
+    }
+
+    /// <summary>Ogólna sieć (wszystkie porty zmysłów na wejściu) daje się zbudować dla humanoida mięśniowego.</summary>
+    [Fact]
+    public void GeneralNetwork_TakesEverySensePort_OfTheMuscleHumanoid()
+    {
+        var humanoid = (Creature)MuscleHumanoid.Design.Type.Create();
+        var network = CreatureDesign.GeneralNetwork(humanoid);
+        Assert.Contains("Tułów", network.InputPorts);
+        Assert.Contains(Animata.Core.Sensors.MuscleSensor.ForcePort("PłaszczkowatyL"), network.InputPorts);
+        WorldObjectCatalog.BuildBrain(humanoid.Brain!, network);
+    }
+
     [Fact]
     public void Parameters_RoundTrip_InDocumentedOrder()
     {
