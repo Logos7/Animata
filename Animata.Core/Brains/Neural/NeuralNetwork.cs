@@ -205,6 +205,9 @@ public sealed class NeuralNetwork
     {
         if (aParameters.Length != ParameterCount)
             throw new ArgumentException($"Expected {ParameterCount} parameters, got {aParameters.Length}.", nameof(aParameters));
+        foreach (var value in aParameters)
+            if (!float.IsFinite(value))
+                throw new ArgumentException("Network parameters must be finite.", nameof(aParameters));
         var index = 0;
         for (var layer = 0; layer < _weights.Length; layer++)
             for (var neuron = 0; neuron < _weights[layer].Length; neuron++)
@@ -256,6 +259,9 @@ public sealed class NeuralNetwork
                 throw new ArgumentException($"Layer {layer} shape does not match {layers[layer - 1]}→{layers[layer]}.");
         }
 
+        if (aWeights.Any(aLayer => aLayer.Any(aNeuron => aNeuron.Any(aValue => !float.IsFinite(aValue)))) ||
+            aBiases.Any(aLayer => aLayer.Any(aValue => !float.IsFinite(aValue))))
+            throw new ArgumentException("Network parameters must be finite.");
         Resize(layers);
         for (var layer = 0; layer < _weights.Length; layer++)
             for (var neuron = 0; neuron < _weights[layer].Length; neuron++)

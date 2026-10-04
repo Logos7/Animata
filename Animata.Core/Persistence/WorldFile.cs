@@ -135,10 +135,25 @@ public static class WorldFile
             {
                 Id = ids[aDocument.Id],
                 Position = aDocument.Position + aOffset,
+                Parts = OffsetParts(aDocument.Parts, aOffset),
                 Sensors = RemapSlots(aDocument.Sensors),
                 Actuators = RemapSlots(aDocument.Actuators)
             }))
         ];
+    }
+
+    private static float[]? OffsetParts(float[]? aParts, Vector3 aOffset)
+    {
+        if (aParts is null)
+            return null;
+        var parts = (float[])aParts.Clone();
+        for (var index = 0; index + 6 < parts.Length; index += 7)
+        {
+            parts[index] += aOffset.X;
+            parts[index + 1] += aOffset.Y;
+            parts[index + 2] += aOffset.Z;
+        }
+        return parts;
     }
 
     private static EntityDocument CaptureEntity(Entity aEntity)

@@ -53,7 +53,7 @@ public sealed class Box() : PhysicalStaticEntity(new Body())
         return MathF.Abs(local.X) <= Size.X / 2 + aMargin && MathF.Abs(local.Y) <= Size.Y / 2 + aMargin;
     }
 
-    protected override object Shape => (Body.Position, Body.Rotation, Size);
+    protected override StaticShapeState Shape => new(Body.Position, Body.Rotation, Size);
 
     protected override StaticHandle Build(PhysicsWorld aPhysics)
     {

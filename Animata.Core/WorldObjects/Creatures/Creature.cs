@@ -1,3 +1,4 @@
+using Animata.Core.Bodies;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Brains.Neural;
@@ -97,8 +98,10 @@ public sealed class CreatureDesign
     /// </summary>
     public static NeuralNetworkModule GeneralNetwork(ActiveEntity aCreature, params int[] aHidden)
     {
-        var inputs = aCreature.Body.Sensors.SelectMany(aSensor => aSensor.OutputPorts).Distinct().ToArray();
-        var outputs = aCreature.Body.Actuators.SelectMany(aActuator => aActuator.InputPorts).Distinct().ToArray();
+        var inputs = BodyBindings.Ports(aCreature.Body.Sensors.SelectMany(aSensor =>
+            aSensor.OutputPorts.Select(aPort => (aSensor.Slot, aPort))));
+        var outputs = BodyBindings.Ports(aCreature.Body.Actuators.SelectMany(aActuator =>
+            aActuator.InputPorts.Select(aPort => (aActuator.Slot, aPort))));
         int[] hidden = aHidden.Length > 0 ? aHidden : [Math.Clamp((inputs.Length + outputs.Length) / 2, 4, 32)];
         var module = new NeuralNetworkModule(new NeuralNetwork([inputs.Length, .. hidden, outputs.Length])) { Name = "Neural" };
         module.Network.Randomize();

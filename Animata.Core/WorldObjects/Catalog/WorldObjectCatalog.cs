@@ -1,5 +1,6 @@
 using System.Numerics;
 using Animata.Core.Actuators;
+using Animata.Core.Bodies;
 using Animata.Core.Brains;
 using Animata.Core.Brains.Modules;
 using Animata.Core.Entities;
@@ -42,14 +43,27 @@ public static partial class WorldObjectCatalog
         var driven = 0;
         foreach (var drive in drives)
         {
-            var provided = drive.InputPorts.Where(controller.OutputPorts.Contains).ToList();
+            var provided = new List<(string Source, string Target)>();
+            foreach (var port in drive.InputPorts)
+            {
+                var qualified = BodyBindings.Qualified(drive.Slot, port);
+                if (controller.OutputPorts.Contains(qualified))
+                    provided.Add((qualified, port));
+                else if (controller.OutputPorts.Contains(port))
+                {
+                    if (drives.Count(aDrive => aDrive.InputPorts.Contains(port)) > 1)
+                        throw new ArgumentException($"Output {port} matches multiple actuators; use slot.port.", nameof(aController));
+                    provided.Add((port, port));
+                }
+            }
             if (provided.Count == 0)
                 continue;
             if (provided.Count < drive.InputPorts.Count)
                 throw new ArgumentException(
-                    $"{controller} drives {drive.Slot} only partly; missing outputs: {string.Join(", ", drive.InputPorts.Except(provided))}.",
+                    $"{controller} drives {drive.Slot} only partly; missing outputs: {string.Join(", ", drive.InputPorts.Except(provided.Select(aPort => aPort.Target)))}.",
                     nameof(aController));
-            graph.Connect(controller, drive, [.. provided]);
+            foreach (var (source, target) in provided)
+                graph.Connect(controller, source, drive, target);
             driven++;
         }
         if (driven == 0 && drives.Count > 0)
@@ -69,11 +83,18 @@ public static partial class WorldObjectCatalog
         var missing = new List<string>();
         foreach (var port in aModule.InputPorts)
         {
-            var source = sources.FirstOrDefault(aSource => aSource.OutputPorts.Contains(port));
-            if (source is null)
+            var matches = sources.SelectMany(aSource => aSource.OutputPorts
+                .Where(aPort => BodyBindings.Qualified(aSource.Slot, aPort) == port)
+                .Select(aPort => (Source: aSource, Port: aPort))).ToArray();
+            if (matches.Length == 0)
+                matches = sources.Where(aSource => aSource.OutputPorts.Contains(port))
+                    .Select(aSource => (Source: aSource, Port: port)).ToArray();
+            if (matches.Length > 1)
+                throw new ArgumentException($"Input {port} matches multiple sensors; use slot.port.", nameof(aModule));
+            if (matches.Length == 0)
                 missing.Add(port);
             else
-                aBrain.Graph.Connect(source, port, aModule, port);
+                aBrain.Graph.Connect(matches[0].Source, matches[0].Port, aModule, port);
         }
         if (missing.Count > 0)
             throw new ArgumentException($"{aModule} has inputs no sensor provides: {string.Join(", ", missing)}.", nameof(aModule));

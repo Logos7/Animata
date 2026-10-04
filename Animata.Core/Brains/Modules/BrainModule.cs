@@ -50,6 +50,13 @@ public abstract class BrainModule
     protected static TState Expect<TState>(ModuleState aState) where TState : ModuleState =>
         aState as TState ?? throw new ArgumentException($"Expected {typeof(TState).Name}, got {aState.GetType().Name}.", nameof(aState));
 
+    public virtual Func<bool> CaptureConfigurationCheck()
+    {
+        var inputs = InputPorts.ToArray();
+        var outputs = OutputPorts.ToArray();
+        return () => inputs.SequenceEqual(InputPorts) && outputs.SequenceEqual(OutputPorts);
+    }
+
     public override string ToString() =>
         string.IsNullOrEmpty(Name) ? $"{GetType().Name} {Id}" : $"{Name} ({GetType().Name})";
 }

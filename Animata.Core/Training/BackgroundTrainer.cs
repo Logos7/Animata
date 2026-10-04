@@ -1,33 +1,32 @@
 namespace Animata.Core.Training;
 
-/// <summary>
-/// Stan nauki po pokoleniu. BestFitness to wynik zwycięzcy bieżącego pokolenia (na jego losowych próbach —
-/// szum, może być gorszy od poprzedniego). Champion to najlepszy dotąd osobnik na stałym zestawie prób
-/// walidacyjnych — zmienia się tylko na lepsze; to jego warto pokazywać w scenie.
-/// </summary>
 public sealed record TrainingProgress(int Generation, float BestFitness, float[] Champion, float ChampionScore, int ChampionGeneration);
 
-/// <summary>
-/// Uruchamia optymalizator (<see cref="IOptimizer"/>) na wątku w tle. Wątek UI co klatkę pyta o nowy postęp
-/// (<see cref="TryGetProgress"/>) i sam przenosi parametry do sceny — trener nigdy nie dotyka świata sceny.
-/// </summary>
-public sealed class BackgroundTrainer : IDisposable
+public sealed class BackgroundTrainer : IDisposable, IAsyncDisposable
 {
     private readonly IOptimizer _evolution;
-    private readonly Func<float[], int, float> _fitness;
-    private readonly Func<float[], float>? _validate;
+    private readonly Func<float[], int, CancellationToken, float> _fitness;
+    private readonly Func<float[], CancellationToken, float>? _validate;
     private readonly object _gate = new();
     private readonly ManualResetEventSlim _running = new(true);
     private CancellationTokenSource? _cancellation;
     private Task? _task;
+    private Task? _cleanup;
     private TrainingProgress? _progress;
+    private Exception? _error;
     private int _version;
+    private bool _stopping;
+    private bool _disposed;
 
-    /// <param name="aValidate">
-    /// Ocena na stałym zestawie prób (większa = lepsza). Bez niej mistrzem jest po prostu zwycięzca pokolenia.
-    /// </param>
     public BackgroundTrainer(IOptimizer aEvolution, Func<float[], int, float> aFitness, int aMaxGenerations = 300,
         Func<float[], float>? aValidate = null)
+        : this(aEvolution, (aParameters, aGeneration, _) => aFitness(aParameters, aGeneration), aMaxGenerations,
+            aValidate is null ? null : (aParameters, _) => aValidate(aParameters))
+    {
+    }
+
+    public BackgroundTrainer(IOptimizer aEvolution, Func<float[], int, CancellationToken, float> aFitness,
+        int aMaxGenerations = 300, Func<float[], CancellationToken, float>? aValidate = null)
     {
         _evolution = aEvolution;
         _fitness = aFitness;
@@ -36,86 +35,134 @@ public sealed class BackgroundTrainer : IDisposable
     }
 
     public int MaxGenerations { get; }
-    public bool IsRunning => _task is { IsCompleted: false };
 
-    /// <summary>
-    /// Wstrzymanie: bieżące pokolenie się dokańcza, następne czeka, aż pauza zniknie (np. scena, której nie widać,
-    /// nie ewoluuje w tle). Nie zmienia postępu ani mistrza.
-    /// </summary>
-    public bool Paused
+    public bool IsRunning
     {
-        get => !_running.IsSet;
-        set
+        get
         {
-            if (value)
-                _running.Reset();
-            else
-                _running.Set();
+            lock (_gate)
+                return !_stopping && _task is { IsCompleted: false };
         }
     }
 
-    /// <summary>Wyjątek, który przerwał naukę (np. błąd mózgu w próbie), albo null.</summary>
-    public Exception? Error { get; private set; }
+    public Task Completion
+    {
+        get
+        {
+            lock (_gate)
+                return _task ?? Task.CompletedTask;
+        }
+    }
+
+    public bool Paused
+    {
+        get
+        {
+            lock (_gate)
+                return !_disposed && !_running.IsSet;
+        }
+        set
+        {
+            lock (_gate)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                if (value)
+                    _running.Reset();
+                else
+                    _running.Set();
+            }
+        }
+    }
+
+    public Exception? Error
+    {
+        get
+        {
+            lock (_gate)
+                return _error;
+        }
+    }
 
     public void Start()
     {
-        if (IsRunning)
-            return;
-        Error = null;
-        _cancellation = new CancellationTokenSource();
-        var token = _cancellation.Token;
-        _task = Task.Run(() =>
+        lock (_gate)
         {
-            try
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_task is { IsCompleted: false })
+                return;
+            _cancellation?.Dispose();
+            _cancellation = new CancellationTokenSource();
+            var token = _cancellation.Token;
+            _stopping = false;
+            _error = null;
+            _task = Task.Run(() => Run(token));
+        }
+    }
+
+    private void Run(CancellationToken aCancellation)
+    {
+        try
+        {
+            _running.Wait(aCancellation);
+            var champion = _evolution.Best;
+            var championScore = Validate(champion, float.NegativeInfinity, aCancellation);
+            var championGeneration = 0;
+            while (_evolution.Generation < MaxGenerations)
             {
-                // Mistrz startowy = wagi, od których zaczynamy; zastąpi go tylko ktoś lepszy na walidacji.
-                var champion = _evolution.Best;
-                var championScore = _validate?.Invoke(champion) ?? float.NegativeInfinity;
-                var championGeneration = 0;
-                while (!token.IsCancellationRequested && _evolution.Generation < MaxGenerations)
+                _running.Wait(aCancellation);
+                aCancellation.ThrowIfCancellationRequested();
+                _evolution.NextGeneration((aParameters, aGeneration) =>
+                    _fitness(aParameters, aGeneration, aCancellation), aCancellation);
+                aCancellation.ThrowIfCancellationRequested();
+                var best = _evolution.Best;
+                var score = Validate(best, _evolution.BestFitness, aCancellation);
+                if (_validate is null || score > championScore)
                 {
-                    _running.Wait(token);
-                    _evolution.NextGeneration(_fitness);
-                    var best = _evolution.Best;
-                    var score = _validate?.Invoke(best) ?? _evolution.BestFitness;
-                    if (_validate is null || score > championScore)
-                    {
-                        champion = best;
-                        championScore = score;
-                        championGeneration = _evolution.Generation;
-                    }
-                    var progress = new TrainingProgress(
-                        _evolution.Generation, _evolution.BestFitness, champion, championScore, championGeneration);
-                    lock (_gate)
-                    {
-                        _progress = progress;
-                        _version++;
-                    }
+                    champion = best;
+                    championScore = score;
+                    championGeneration = _evolution.Generation;
+                }
+                var progress = new TrainingProgress(
+                    _evolution.Generation, _evolution.BestFitness, champion, championScore, championGeneration);
+                lock (_gate)
+                {
+                    if (_stopping)
+                        return;
+                    _progress = progress;
+                    _version++;
                 }
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-            }
-            catch (Exception exception)
-            {
-                Error = exception is AggregateException { InnerException: { } inner } ? inner : exception;
-            }
-        }, token);
+        }
+        catch (OperationCanceledException) when (aCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            lock (_gate)
+                _error = exception is AggregateException { InnerException: { } inner } ? inner : exception;
+        }
     }
+
+    private float Validate(float[] aParameters, float aFallback, CancellationToken aCancellation) =>
+        _validate is null ? aFallback : TrainingScheduler.Evaluate(() => _validate(aParameters, aCancellation), aCancellation);
 
     public void Stop()
     {
-        _cancellation?.Cancel();
-        try
+        lock (_gate)
         {
-            _task?.Wait();
-        }
-        catch (AggregateException)
-        {
+            if (_stopping)
+                return;
+            _stopping = true;
+            _cancellation?.Cancel();
         }
     }
 
-    /// <summary>Zwraca true, jeśli od ostatniego odczytu (aVersion) pojawił się nowy postęp.</summary>
+    public async Task StopAsync()
+    {
+        Stop();
+        await Completion.ConfigureAwait(false);
+    }
+
     public bool TryGetProgress(ref int aVersion, out TrainingProgress? aProgress)
     {
         lock (_gate)
@@ -130,8 +177,26 @@ public sealed class BackgroundTrainer : IDisposable
 
     public void Dispose()
     {
-        Stop();
-        _cancellation?.Dispose();
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+            Stop();
+            _disposed = true;
+            _cleanup = CleanupAsync(_task ?? Task.CompletedTask, _cancellation);
+        }
+    }
+
+    private async Task CleanupAsync(Task aTask, CancellationTokenSource? aCancellation)
+    {
+        await aTask.ConfigureAwait(false);
+        aCancellation?.Dispose();
         _running.Dispose();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Dispose();
+        await _cleanup!.ConfigureAwait(false);
     }
 }

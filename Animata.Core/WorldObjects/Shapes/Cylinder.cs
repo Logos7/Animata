@@ -33,7 +33,7 @@ public sealed class Cylinder() : PhysicalStaticEntity(new Body())
 
     public override EntityCategory Category => EntityCategory.Obstacle;
 
-    protected override object Shape => (Body.Position, Radius, Height, Grip);
+    protected override StaticShapeState Shape => new(Body.Position, Quaternion.Identity, new Vector3(Radius, Height, 0), Grip);
 
     /// <summary>Pionowy walec stojący podstawą na Body.Position (walec Bepu leży wzdłuż Y — obrót o 90° wokół X).</summary>
     protected override StaticHandle Build(PhysicsWorld aPhysics)

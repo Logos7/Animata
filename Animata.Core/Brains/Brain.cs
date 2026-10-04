@@ -22,12 +22,17 @@ public class Brain
     /// <see cref="ActuatorModule"/> na aktuator (na końcu), na najwyższym poziomie grafu. Węzły sensorów i aktuatorów, których
     /// ciało już nie ma, znikają razem z połączeniami; połączenia z portów, których sensor albo aktuator już nie ma, też.
     /// Węzły nie są przechowywane (ani w pliku) — to widok ciała; Id ze slotu, więc połączenia do nich przeżywają odtworzenie.
-    /// Woła się po zmianie zestawu sensorów/aktuatorów (budowa stwora, wczytanie); samo Think robi to, gdy liczby się nie zgadzają.
+    /// Woła się po zmianie zestawu sensorów/aktuatorów (budowa stwora, wczytanie); samo Think robi to po zmianie kolekcji slotów.
     /// </summary>
     public void SyncBody()
     {
         if (Body is not { } body)
             return;
+        if (body.Sensors.Any(aSensor => string.IsNullOrWhiteSpace(aSensor.Slot)) ||
+            body.Actuators.Any(aActuator => string.IsNullOrWhiteSpace(aActuator.Slot)) ||
+            body.Sensors.Select(aSensor => aSensor.Slot).Distinct().Count() != body.Sensors.Count ||
+            body.Actuators.Select(aActuator => aActuator.Slot).Distinct().Count() != body.Actuators.Count)
+            throw new BrainException("Body slots must be non-empty and unique within sensors and actuators.");
         var graph = Graph;
         foreach (var module in graph.Modules.ToList())
             switch (module)
@@ -57,20 +62,21 @@ public class Brain
             (graph.Find(aLink.SourceId) is SensorModule source && !source.OutputPorts.Contains(aLink.SourcePort)) ||
             (graph.Find(aLink.TargetId) is ActuatorModule target && !target.InputPorts.Contains(aLink.TargetPort)));
         graph.Invalidate();
+        _synced = (body.Sensors.Revision, body.Actuators.Revision);
     }
 
     /// <summary>Sensory → logika. Świat nie jest zmieniany.</summary>
     public void Think(ActiveEntity aOwner, World aWorld, float aDelta)
     {
-        if (Body is { } body && _synced != (body.Sensors.Count, body.Actuators.Count))
+        if (Body is { } body && _synced != (body.Sensors.Revision, body.Actuators.Revision))
         {
             SyncBody();
-            _synced = (body.Sensors.Count, body.Actuators.Count);
+            _synced = (body.Sensors.Revision, body.Actuators.Revision);
         }
         Graph.Think(new BrainContext(aOwner, aWorld, aDelta));
     }
 
-    private (int Sensors, int Actuators) _synced = (-1, -1);
+    private (long Sensors, long Actuators) _synced = (-1, -1);
 
     /// <summary>Komendy → aktuatory.</summary>
     public void Act(ActiveEntity aOwner, World aWorld, float aDelta) =>

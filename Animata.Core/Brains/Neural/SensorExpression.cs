@@ -9,7 +9,7 @@ public sealed record CompiledExpression(
 
 /// <summary>
 /// Parser prostych wyrażeń: + - * /, unarne +/-, nawiasy, liczby (kropka dziesiętna) i zmienne
-/// (litera albo _, potem litery, cyfry, _ — także polskie litery, bo porty je mają: „Tułów”, „DłBiodrowyL”).
+/// (litera albo _, potem litery, cyfry, _ i kropki — także polskie litery, bo porty je mają: „Tułów”, „DłBiodrowyL”).
 /// Zmienne rozwiązywane są ze słownika przy ewaluacji.
 /// </summary>
 public static class SensorExpression
@@ -96,7 +96,7 @@ public static class SensorExpression
             if (char.IsLetter(aSource[Position]) || aSource[Position] == '_')
             {
                 var start = Position++;
-                while (!End && (char.IsLetterOrDigit(aSource[Position]) || aSource[Position] == '_')) Position++;
+                while (!End && (char.IsLetterOrDigit(aSource[Position]) || aSource[Position] is '_' or '.')) Position++;
                 var name = aSource[start..Position];
                 Variables.Add(name);
                 return aVars => aVars.TryGetValue(name, out var value) ? value

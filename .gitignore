@@ -11,3 +11,4 @@ publish/
 *.log
 *.zip
 repomix-output.*
+.avalonia-build-tasks/

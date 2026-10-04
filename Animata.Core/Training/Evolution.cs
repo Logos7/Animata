@@ -39,8 +39,8 @@ public sealed record EvolutionOptions
     public int Seed { get; init; } = 1;
 
     /// <summary>
-    /// Ile osobników oceniać naraz. Domyślnie o jeden rdzeń mniej niż ma komputer — rdzeń zostaje dla sceny i UI
-    /// (kilka stworów uczących się naraz nie zagłodzi symulacji). Wynik nie zależy od tej liczby.
+    /// Limit jednej populacji, dodatkowo ograniczony wspólnym budżetem TrainingScheduler.
+    /// Wynik nie zależy od tej liczby.
     /// </summary>
     public int MaxParallelism { get; init; } = Math.Max(1, Environment.ProcessorCount - 1);
 }
@@ -59,7 +59,7 @@ public interface IOptimizer
     float BestFitness { get; }
 
     /// <summary>Ocenia bieżące pokolenie i tworzy następne. Zwraca fitness najlepszego osobnika.</summary>
-    float NextGeneration(Func<float[], int, float> aFitness);
+    float NextGeneration(Func<float[], int, float> aFitness, CancellationToken aCancellation = default);
 }
 
 /// <summary>
@@ -99,14 +99,15 @@ public sealed class Evolution : IOptimizer
     public float[] Best { get; private set; }
     public float BestFitness { get; private set; } = float.NegativeInfinity;
 
-    public float NextGeneration(Func<float[], int, float> aFitness)
+    public float NextGeneration(Func<float[], int, float> aFitness, CancellationToken aCancellation = default)
     {
+        aCancellation.ThrowIfCancellationRequested();
         var generation = Generation;
-        Parallel.For(0, _population.Length, new ParallelOptions { MaxDegreeOfParallelism = _options.MaxParallelism }, aIndex =>
+        TrainingScheduler.For(_population.Length, _options.MaxParallelism, aIndex =>
         {
             var fitness = aFitness(_population[aIndex], generation);
             _fitness[aIndex] = float.IsFinite(fitness) ? fitness : float.NegativeInfinity;
-        });
+        }, aCancellation);
 
         var order = Enumerable.Range(0, _population.Length).OrderByDescending(aIndex => _fitness[aIndex]).ToArray();
         var elites = order.Take(_options.EliteCount).Select(aIndex => _population[aIndex]).ToArray();

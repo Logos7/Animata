@@ -16,11 +16,11 @@ namespace Animata.Core.Training;
 public sealed class TrainingController : IDisposable
 {
     private sealed class Session(ActiveEntity aCreature, Brain aBrain, BrainModule aModule, BackgroundTrainer aTrainer, string aRig,
-        string aSetup)
+        TrainingSetup aSetup)
     {
         public ActiveEntity Creature { get; } = aCreature;
         public Brain Brain { get; } = aBrain;
-        public string Setup { get; } = aSetup;
+        public TrainingSetup Setup { get; } = aSetup;
         public int SetupCheck;
         public BrainModule Module { get; } = aModule;
         public ITrainableModule Trainable { get; } = (ITrainableModule)aModule;
@@ -90,6 +90,7 @@ public sealed class TrainingController : IDisposable
         if (modules.Count == 0)
             return false;
 
+        LastStartError = null;
         var seed = aSeed ?? (Environment.TickCount ^ aCreature.Id.GetHashCode());
         _history.Capture(brain, "przed nauką", [.. modules]);
         var started = 0;
@@ -108,9 +109,11 @@ public sealed class TrainingController : IDisposable
                 continue;
             }
             var evolution = Evolution.Create(((ITrainableModule)module).GetParameters(), new EvolutionOptions { Seed = seed + started, Algorithm = rig.Algorithm });
-            var trainer = new BackgroundTrainer(evolution, task.Evaluate, _maxGenerations, task.Validate);
+            var trainer = new BackgroundTrainer(evolution,
+                (aParameters, aGeneration, aCancellation) => task.Evaluate(aParameters, aGeneration, aCancellation),
+                _maxGenerations, task.Validate);
             _sessions.Add(new Session(aCreature, brain, module, trainer, modules.Count > 1 ? $"{rig.Name} ({module.Name})" : rig.Name,
-                Setup(aCreature, module)));
+                new TrainingSetup(aCreature, module)));
             trainer.Paused = _paused;
             trainer.Start();
             started++;
@@ -186,7 +189,7 @@ public sealed class TrainingController : IDisposable
                 aMessage = StopSession(session, aSnapshot: false) ?? $"{session.Rig}: uczony moduł zniknął z mózgu — nauka zatrzymana";
                 changed = true;
             }
-            else if (Setup(session.Creature, session.Module) != session.Setup)
+            else if (!session.Setup.Matches())
             {
                 var error = Stop(session.Brain);
                 Start(session.Creature);
@@ -199,22 +202,6 @@ public sealed class TrainingController : IDisposable
 
     /// <summary>Co ile odpytań sprawdzać, czy warunki nauki się zmieniły (~3 razy na sekundę przy 30 Hz).</summary>
     private const int SetupCheckInterval = 10;
-
-    /// <summary>
-    /// Warunki nauki stwora jako tekst: rig, konfiguracja uczonego modułu bez parametrów (kształt, porty, wyrażenia)
-    /// i ustawienia zmysłów i napędów bez celów. Inny tekst = nauka uczy czegoś innego niż to, co jest w scenie.
-    /// </summary>
-    private static string Setup(ActiveEntity aCreature, BrainModule aModule)
-    {
-        var builder = new System.Text.StringBuilder(aCreature.TrainingRigFor(aModule)?.Name ?? aCreature.GetType().Name);
-        if (aModule.CaptureState() is { } state)
-            builder.Append('|').Append(state.CreateTrainable(new float[state.CountParameters()], aModule.Name).CaptureState()?.ToJson());
-        foreach (var (_, owner) in aCreature.Body.Slots)
-            foreach (var (name, value) in Settings.Capture(owner))
-                if (Settings.Find(owner, name)?.IsReference != true)
-                    builder.Append('|').Append(name).Append('=').Append(value.GetRawText());
-        return builder.ToString();
-    }
 
     /// <summary>Krótki opis nauk do paska tytułu, np. „autko gen 12, mistrz z gen 9 (-0,31)”.</summary>
     public string Summary() => string.Join(", ", _sessions.Select(aSession => aSession.Last is { } last
@@ -235,6 +222,8 @@ public sealed class TrainingController : IDisposable
     private static bool Poll(Session aSession)
     {
         if (!aSession.Trainer.TryGetProgress(ref aSession.Version, out var progress) || progress is null)
+            return false;
+        if (!aSession.Setup.Matches())
             return false;
         aSession.Last = progress;
         if (progress.ChampionGeneration != aSession.ShownChampion)

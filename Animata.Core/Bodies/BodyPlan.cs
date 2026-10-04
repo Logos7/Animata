@@ -165,6 +165,10 @@ public sealed record BodyPlan(IReadOnlyList<PartPlan> Parts, IReadOnlyList<Joint
 /// </summary>
 public sealed class BodyPlanBuilder
 {
+    private static bool Finite(Vector3 aValue) => float.IsFinite(aValue.X) && float.IsFinite(aValue.Y) && float.IsFinite(aValue.Z);
+
+    private static bool Rotation(Quaternion aValue) => float.IsFinite(aValue.LengthSquared()) && aValue.LengthSquared() > 1e-12f;
+
     private readonly List<PartPlan> _parts = [];
     private readonly List<JointPlan> _joints = [];
     private readonly List<MusclePlan> _muscles = [];
@@ -268,6 +272,10 @@ public sealed class BodyPlanBuilder
         {
             if (string.IsNullOrWhiteSpace(part.Name) || !names.Add(part.Name))
                 throw new ArgumentException($"Part name \"{part.Name}\" is empty or repeated.");
+            if (!Enum.IsDefined(part.Shape) || !float.IsFinite(part.Mass) || !Finite(part.Size) ||
+                !Finite(part.Position) || !Rotation(part.Orientation) || !float.IsFinite(part.Friction) ||
+                !float.IsFinite(part.LateralFriction) || !float.IsFinite(part.BackwardFriction))
+                throw new ArgumentException($"Part \"{part.Name}\" has invalid geometry or non-finite values.");
             if (!(part.Mass > 0) || !(part.Size.X > 0) || (part.Shape == PartShape.Box && !(part.Size.Y > 0 && part.Size.Z > 0)) ||
                 (part.Shape == PartShape.Capsule && !(part.Size.Y >= 0)) || (part.Shape == PartShape.Cylinder && !(part.Size.Y > 0)))
                 throw new ArgumentException($"Part \"{part.Name}\" needs a positive mass and size.");
@@ -287,6 +295,10 @@ public sealed class BodyPlanBuilder
                 throw new ArgumentException($"Joint \"{joint.Name}\": the root part \"{joint.Child}\" cannot have a parent.");
             if (!parents.TryAdd(joint.Child, joint.Parent))
                 throw new ArgumentException($"Part \"{joint.Child}\" has more than one parent.");
+            if (!Enum.IsDefined(joint.Kind) || !Finite(joint.Anchor) || !float.IsFinite(joint.MaxYaw) ||
+                !float.IsFinite(joint.MaxPitch) || !float.IsFinite(joint.YawMin) || !float.IsFinite(joint.PitchMin) ||
+                !float.IsFinite(joint.Strength) || !float.IsFinite(joint.Suspension) || !float.IsFinite(joint.SuspensionFrequency))
+                throw new ArgumentException($"Joint \"{joint.Name}\" has non-finite values.");
             if (joint.MaxYaw < 0 || joint.MaxPitch < 0 || joint.YawMin > 0 || joint.PitchMin > 0 || !(joint.Strength > 0))
                 throw new ArgumentException($"Joint \"{joint.Name}\" needs limits around the rest pose (min ≤ 0 ≤ max) and positive strength.");
             if (joint.Kind == JointKind.Wheel &&
@@ -313,12 +325,16 @@ public sealed class BodyPlanBuilder
                 throw new ArgumentException($"Muscle name \"{muscle.Name}\" is empty or repeated.");
             if (!names.Contains(muscle.Origin) || !names.Contains(muscle.Insertion) || muscle.Origin == muscle.Insertion)
                 throw new ArgumentException($"Muscle \"{muscle.Name}\" must connect two different existing parts.");
+            if (!Finite(muscle.OriginPoint) || !Finite(muscle.InsertionPoint) || !float.IsFinite(muscle.MaxForce) ||
+                !float.IsFinite(muscle.MaxVelocity) || muscle.OptimalLength is { } length && !float.IsFinite(length))
+                throw new ArgumentException($"Muscle \"{muscle.Name}\" has non-finite values.");
             if (!(muscle.MaxForce > 0) || muscle.OptimalLength is <= 0 || !(muscle.MaxVelocity > 0) ||
                 !(Vector3.Distance(muscle.OriginPoint, muscle.InsertionPoint) > 1e-3f))
                 throw new ArgumentException($"Muscle \"{muscle.Name}\" needs a positive force, length and speed.");
         }
 
-        return new BodyPlan([.. _parts], [.. _joints], _muscles.Count > 0 ? [.. _muscles] : null);
+        return new BodyPlan([.. _parts.Select(aPart => MathF.Abs(aPart.Orientation.LengthSquared() - 1) > 1e-3f
+            ? aPart with { Orientation = Quaternion.Normalize(aPart.Orientation) } : aPart)], [.. _joints], _muscles.Count > 0 ? [.. _muscles] : null);
     }
 }
 

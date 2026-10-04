@@ -5,7 +5,7 @@ namespace Animata.Core.Training;
 /// pokolenie to λ próbek x = m + σ · B · D · z (z ~ N(0, I)); μ najlepszych przesuwa średnią m, ścieżki ewolucji
 /// uczą kowariancję C = B · D² · Bᵀ i długość kroku σ. Do ok. 60 wymiarów pełna kowariancja (rozkład Jacobiego),
 /// powyżej — tylko przekątna (sep-CMA-ES, Ros i Hansen 2008), bo sieci mają tysiące wag.
-/// Najlepszy wynik to najlepsza próbka od początku (pierwsze pokolenie ocenia też punkt startowy).
+/// Best i BestFitness opisują zwycięzcę bieżącego pokolenia (pierwsze ocenia też punkt startowy).
 /// </summary>
 public sealed class CmaEs : IOptimizer
 {
@@ -90,8 +90,9 @@ public sealed class CmaEs : IOptimizer
     public double Sigma => _sigma;
 
     /// <summary>Jedno pokolenie: λ próbek, ocena (równoległa), aktualizacja rozkładu. Fitness — większy lepszy.</summary>
-    public float NextGeneration(Func<float[], int, float> aFitness)
+    public float NextGeneration(Func<float[], int, float> aFitness, CancellationToken aCancellation = default)
     {
+        aCancellation.ThrowIfCancellationRequested();
         var generation = Generation;
         var z = new double[_lambda][];
         var y = new double[_lambda][];
@@ -116,17 +117,14 @@ public sealed class CmaEs : IOptimizer
         }
 
         var fitness = new float[_lambda];
-        Parallel.For(0, _lambda, new ParallelOptions { MaxDegreeOfParallelism = _parallelism }, aIndex =>
+        TrainingScheduler.For(_lambda, _parallelism, aIndex =>
         {
             var value = aFitness(x[aIndex], generation);
             fitness[aIndex] = float.IsFinite(value) ? value : float.NegativeInfinity;
-        });
+        }, aCancellation);
         var order = Enumerable.Range(0, _lambda).OrderByDescending(aIndex => fitness[aIndex]).ToArray();
-        if (fitness[order[0]] > BestFitness)
-        {
-            BestFitness = fitness[order[0]];
-            Best = (float[])x[order[0]].Clone();
-        }
+        BestFitness = fitness[order[0]];
+        Best = (float[])x[order[0]].Clone();
 
         // Średnia i kierunek kroku.
         var yw = new double[_n];

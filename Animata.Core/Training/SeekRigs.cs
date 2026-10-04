@@ -330,10 +330,12 @@ public static class SeekRigs
     {
         if (EntityTypes.Of(aCreature) is not { IsCreature: true } type)
             return Disk;
+        var settings = Settings.Capture(aCreature);
         return new SeekRig(
             type.Name.ToLowerInvariant(),
             (aTargetId, aController) => new Spawn(type)
             {
+                Settings = aEntity => Settings.Apply(aEntity, settings),
                 Slots = Spawn.Aim(aTargetId),
                 Brain = Spawn.Controller(aController)
             }.Build<ActiveEntity>(),

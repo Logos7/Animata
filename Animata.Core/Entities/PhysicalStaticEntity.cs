@@ -1,3 +1,4 @@
+using System.Numerics;
 using Animata.Core.Bodies;
 using Animata.Core.Physics;
 using BepuPhysics;
@@ -12,10 +13,12 @@ namespace Animata.Core.Entities;
 public abstract class PhysicalStaticEntity(Body aBody) : StaticEntity(aBody), IPhysicalEntity
 {
     private StaticHandle? _static;
-    private object? _built;
+    private StaticShapeState _built;
 
     /// <summary>Wszystko, od czego zależy bryła (np. krotka pozycji i wymiarów) — porównywane przez Equals.</summary>
-    protected abstract object Shape { get; }
+    protected abstract StaticShapeState Shape { get; }
+
+    protected readonly record struct StaticShapeState(Vector3 Position, Quaternion Rotation, Vector3 Size, float Grip = 0);
 
     /// <summary>Dodaje bryłę do fizyki i zwraca jej uchwyt.</summary>
     protected abstract StaticHandle Build(PhysicsWorld aPhysics);
@@ -37,7 +40,7 @@ public abstract class PhysicalStaticEntity(Body aBody) : StaticEntity(aBody), IP
 
     void IPhysicalEntity.BeforePhysicsStep(PhysicsWorld aPhysics, float aDelta)
     {
-        if (Equals(_built, Shape))
+        if (_built == Shape)
             return;
         ((IPhysicalEntity)this).DetachPhysics(aPhysics);
         ((IPhysicalEntity)this).AttachPhysics(aPhysics);

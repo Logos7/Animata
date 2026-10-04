@@ -54,6 +54,24 @@ public sealed class NeuralNetworkModule : BrainModule, ITrainableModule
     public override IReadOnlyList<string> InputPorts => Ports;
     public override IReadOnlyList<string> OutputPorts => Outputs.Select(aOutput => aOutput.Port).ToArray();
 
+    public override Func<bool> CaptureConfigurationCheck()
+    {
+        var layers = Network.Layers.ToArray();
+        var ports = Ports.ToArray();
+        var expressions = Inputs.Select(aInput => aInput.Expression).ToArray();
+        var outputs = Outputs.ToArray();
+        return () =>
+        {
+            if (!layers.SequenceEqual(Network.Layers) || !ports.SequenceEqual(Ports) ||
+                !outputs.SequenceEqual(Outputs) || expressions.Length != Inputs.Count)
+                return false;
+            for (var index = 0; index < expressions.Length; index++)
+                if (expressions[index] != Inputs[index].Expression)
+                    return false;
+            return true;
+        };
+    }
+
     public override ModuleState CaptureState() => new NeuralNetworkState(
         Network.Layers.ToArray(),
         Network.CopyWeights(),

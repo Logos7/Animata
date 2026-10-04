@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Numerics;
 using Animata.Core.Actuators;
 using Animata.Core.Brains;
@@ -24,6 +23,9 @@ public sealed class SeekTargetTask
     private readonly ModuleState _template;
     private readonly string _moduleName;
     private readonly IReadOnlyList<SeekEpisode> _validation;
+    private readonly object _episodesGate = new();
+    private int _generation = -1;
+    private IReadOnlyList<SeekEpisode>? _episodes;
 
     /// <param name="aTemplate">
     /// Kształt uczonego modułu: stan sieci (warstwy, porty, wyrażenia) albo CPG (liczba stawów); parametry szablonu są pomijane.
@@ -45,7 +47,18 @@ public sealed class SeekTargetTask
 
     public int ParameterCount { get; }
 
-    public IReadOnlyList<SeekEpisode> EpisodesFor(int aGeneration) => CreateEpisodes(Options, aGeneration);
+    public IReadOnlyList<SeekEpisode> EpisodesFor(int aGeneration)
+    {
+        lock (_episodesGate)
+        {
+            if (_episodes is null || _generation != aGeneration)
+            {
+                _episodes = CreateEpisodes(Options, aGeneration);
+                _generation = aGeneration;
+            }
+            return _episodes;
+        }
+    }
 
     /// <summary>Stały zestaw prób walidacyjnych: zależy od ValidationSeed, ValidationEpisodes i parametrów tras, nie od Seed.</summary>
     public IReadOnlyList<SeekEpisode> ValidationEpisodes => _validation;
@@ -132,18 +145,27 @@ public sealed class SeekTargetTask
         return obstacles.ToArray();
     }
 
-    public float Evaluate(float[] aParameters, int aGeneration) => Evaluate(aParameters, EpisodesFor(aGeneration));
+    public float Evaluate(float[] aParameters, int aGeneration) => Evaluate(aParameters, aGeneration, default);
+
+    public float Evaluate(float[] aParameters, int aGeneration, CancellationToken aCancellation) =>
+        Evaluate(aParameters, EpisodesFor(aGeneration), aCancellation);
 
     /// <summary>Ocena na stałym zestawie prób walidacyjnych — porównywalna między pokoleniami i sesjami (do wyboru mistrza).</summary>
-    public float Validate(float[] aParameters) => Evaluate(aParameters, _validation);
+    public float Validate(float[] aParameters) => Validate(aParameters, default);
 
-    public float Evaluate(float[] aParameters, IReadOnlyList<SeekEpisode> aEpisodes) =>
-        Evaluate(CreateModule(aParameters), aEpisodes, Options, Rig);
+    public float Validate(float[] aParameters, CancellationToken aCancellation) => Evaluate(aParameters, _validation, aCancellation);
+
+    public float Evaluate(float[] aParameters, IReadOnlyList<SeekEpisode> aEpisodes, CancellationToken aCancellation = default)
+    {
+        aCancellation.ThrowIfCancellationRequested();
+        return Evaluate(CreateModule(aParameters), aEpisodes, Options, Rig, aCancellation);
+    }
 
     /// <summary>Fitness dowolnego sterownika (np. heurystyki) w danym ciele na tych samych próbach — do porównań.</summary>
-    public static float Evaluate(BrainModule aController, IReadOnlyList<SeekEpisode> aEpisodes, SeekTargetOptions aOptions, SeekRig aRig)
+    public static float Evaluate(BrainModule aController, IReadOnlyList<SeekEpisode> aEpisodes, SeekTargetOptions aOptions, SeekRig aRig,
+        CancellationToken aCancellation = default)
     {
-        var results = Run(aController, aEpisodes, aOptions, aRig);
+        var results = Run(aController, aEpisodes, aOptions, aRig, aCancellation);
         var total = 0f;
         foreach (var result in results)
             total += result.Cost;
@@ -156,15 +178,20 @@ public sealed class SeekTargetTask
     /// jak skończyła się poprzednia (także przez stan solvera fizyki).
     /// </summary>
     public static IReadOnlyList<EpisodeResult> Run(BrainModule aController, IReadOnlyList<SeekEpisode> aEpisodes,
-        SeekTargetOptions aOptions, SeekRig aRig)
+        SeekTargetOptions aOptions, SeekRig aRig, CancellationToken aCancellation = default)
     {
         if (aEpisodes.Count == 0)
             throw new ArgumentException("At least one episode is required.", nameof(aEpisodes));
 
-        var ticks = (int)MathF.Ceiling(aOptions.EpisodeSeconds / aOptions.Delta);
+        if (!float.IsFinite(aOptions.Delta) || aOptions.Delta <= 0 ||
+            !float.IsFinite(aOptions.EpisodeSeconds) || aOptions.EpisodeSeconds <= 0 ||
+            aOptions.EpisodeSeconds / (double)aOptions.Delta > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(aOptions), "Episode duration and timestep must be finite and positive.");
+        var ticks = (int)Math.Ceiling(aOptions.EpisodeSeconds / (double)aOptions.Delta);
         var results = new EpisodeResult[aEpisodes.Count];
         for (var index = 0; index < aEpisodes.Count; index++)
         {
+            aCancellation.ThrowIfCancellationRequested();
             var episode = aEpisodes[index];
             using var world = new World();
             aRig.PrepareWorld?.Invoke(world);
@@ -189,6 +216,7 @@ public sealed class SeekTargetTask
             world.Add(creature);
             var brain = creature.Brain!;
             var drives = brain.Graph.Modules.OfType<ActuatorModule>().ToArray();
+            var effort = new EffortReader(aRig, drives);
             brain.Reset();
 
             var initialGap = MathF.Max(Gap(creature, target), 1e-3f);
@@ -201,11 +229,12 @@ public sealed class SeekTargetTask
             var pushTick = episode.Push is null ? -1 : (int)MathF.Round(aOptions.PushAtSeconds / aOptions.Delta);
             for (var tick = 0; tick < ticks; tick++)
             {
+                aCancellation.ThrowIfCancellationRequested();
                 if (tick == pushTick && creature is ArticulatedCreature pushed)
                     pushed.Push(new Vector3(episode.Push!.Value, 0));
                 world.Update(aOptions.Delta);
                 distanceCost += MathF.Max(Gap(creature, target), 0) * aOptions.Delta;
-                energy += Effort(aRig, drives) * aOptions.Delta;
+                energy += effort.Read() * aOptions.Delta;
                 if (obstacles.Count > 0 && Touches(creature, obstacles))
                     contact += aOptions.Delta;
                 if (aRig.Posture is { } bad)
@@ -226,16 +255,31 @@ public sealed class SeekTargetTask
         return results;
     }
 
-    /// <summary>Wysiłek z komend wszystkich napędów (jeden napęd — wprost jego komenda).</summary>
-    private static float Effort(SeekRig aRig, ActuatorModule[] aDrives)
+    private sealed class EffortReader
     {
-        if (aDrives.Length == 1)
-            return aRig.Effort(aDrives[0].LastCommand);
-        var command = new Dictionary<string, float>();
-        foreach (var drive in aDrives)
-            foreach (var (port, value) in drive.LastCommand)
-                command[drive.Slot + "." + port] = value;
-        return aRig.Effort(command);
+        private readonly SeekRig _rig;
+        private readonly ActuatorModule[] _drives;
+        private readonly Dictionary<string, float> _command = [];
+        private readonly (ActuatorModule Drive, string Port, string Key)[] _ports;
+
+        public EffortReader(SeekRig aRig, ActuatorModule[] aDrives)
+        {
+            _rig = aRig;
+            _drives = aDrives;
+            _ports = aDrives.Length == 1 ? [] : [.. aDrives.SelectMany(aDrive =>
+                aDrive.InputPorts.Select(aPort => (aDrive, aPort, aDrive.Slot + "." + aPort)))];
+        }
+
+        public float Read()
+        {
+            if (_drives.Length == 1)
+                return _rig.Effort(_drives[0].LastCommand);
+            _command.Clear();
+            foreach (var (drive, port, key) in _ports)
+                if (drive.LastCommand.TryGetValue(port, out var value))
+                    _command[key] = value;
+            return _rig.Effort(_command);
+        }
     }
 
     private BrainModule CreateModule(float[] aParameters) => _template.CreateTrainable(aParameters, _moduleName);

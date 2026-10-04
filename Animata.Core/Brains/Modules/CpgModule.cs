@@ -84,6 +84,13 @@ public sealed class CpgModule : ParametricModule
         return _outputs;
     }
 
+    public override Func<bool> CaptureConfigurationCheck()
+    {
+        var joints = Joints;
+        var grip = Grip;
+        return () => Joints == joints && Grip == grip;
+    }
+
     public override void Reset() => _phase = 0;
 
     public override ModuleState CaptureState() =>
